@@ -1,0 +1,498 @@
+1000:    <div className="min-h-screen bg-[#050000] text-white font-sans relative overflow-x-hidden selection:bg-fuchsia-500/30 antialiased">
+1006:            className="absolute inset-0 bg-cover bg-center transition-all duration-700 scale-105"
+1015:            <div className="absolute inset-0 bg-live-gradient animate-color-shift bg-gradient-to-br from-[#120000] via-[#050010] to-[#0a001a] opacity-50"></div>
+1016:            <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-85 mix-blend-screen animate-pulse-slow"></div>
+1020:        <div className="absolute inset-0 bg-black/5 backdrop-blur-[0.5px]"></div>
+1021:        <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] bg-red-600/20 rounded-full blur-[140px] animate-float-slow"></div>
+1022:        <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-fuchsia-900/20 rounded-full blur-[140px] animate-float-medium"></div>
+1029:                key={`bg-${flower.id}`}
+1047:                    <radialGradient id={`flw-grad-bg-${flower.id}`} cx="50%" cy="50%" r="50%">
+1055:                  <g fill={`url(#flw-grad-bg-${flower.id})`}>
+1089:          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] transition-opacity"
+1095:      <div className={`fixed top-0 left-0 h-full w-72 bg-black/90 backdrop-blur-xl border-r border-white/10 z-[70] transform transition-transform duration-300 ease-in-out ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+1100:          <button onClick={() => setIsMenuOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+1121:              className="flex items-center gap-4 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors w-full text-left group"
+1131:      <div className="relative z-10 flex flex-col min-h-screen max-w-[360px] mx-auto bg-black/10 backdrop-blur-[2px] shadow-[0_0_50px_rgba(0,0,0,0.6)] border-x border-white/15 transform-gpu origin-top overflow-hidden">
+1134:        <header className="flex items-center justify-between p-4 bg-black/30 backdrop-blur-xl sticky top-0 z-50 border-b border-white/15 shadow-[0_4px_20px_rgba(0,0,0,0.4)] animate-color-shift">
+1136:            <button onClick={() => setIsMenuOpen(true)} className="p-1 hover:bg-white/10 rounded-md transition-colors">
+1142:          <div onClick={() => setCurrentView('addFund')} className="flex items-center gap-2 bg-[#0a1f24]/60 backdrop-blur-md border border-cyan-400/60 rounded-full px-3 py-1.5 shadow-[0_0_12px_rgba(0,229,255,0.3)] cursor-pointer hover:bg-[#0a1f24]/80 transition-colors">
+1160:                    className="flex items-center gap-2 bg-cyan-400/80 hover:bg-cyan-300/90 backdrop-blur-md border border-cyan-300 text-black px-4 py-2 rounded-md font-bold text-sm transition-all shadow-[0_0_20px_rgba(0,229,255,0.7)] hover:shadow-[0_0_30px_rgba(0,229,255,1)]"
+1168:                    <div className="absolute top-full right-0 mt-2 w-48 bg-[#0a1f24]/80 border border-cyan-400/40 rounded-xl shadow-[0_10px_40px_rgba(0,229,255,0.3)] backdrop-blur-xl overflow-hidden py-2 animate-in slide-in-from-top-2 duration-200 z-30">
+1185:                          className="w-full text-left px-4 py-2.5 text-sm font-bold text-gray-300 hover:text-cyan-400 hover:bg-cyan-400/20 transition-colors"
+1200:                <div className="absolute inset-0 bg-cyan-400/5 rounded-full blur-md group-focus-within:bg-cyan-400/20 transition-all"></div>
+1206:                  className="w-full bg-black/40 border border-cyan-500/40 rounded-full py-2.5 pl-10 pr-4 text-white focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,229,255,0.4)] transition-all placeholder:text-gray-400 relative z-10 backdrop-blur-md text-sm"
+1233:                  <div key={panel.id} className="relative rounded-2xl p-[2.5px] bg-live-gradient animate-color-shift bg-gradient-to-r from-red-500 via-yellow-400 via-emerald-400 via-cyan-400 via-fuchsia-500 to-pink-500 shadow-[0_0_35px_rgba(217,70,239,0.5)] group overflow-hidden mx-1 mb-5 transition-transform hover:scale-[1.01]">
+1234:                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 ease-in-out pointer-events-none"></div>
+1236:                    <div className="bg-[#03000d]/25 hover:bg-[#03000d]/15 rounded-[13px] p-3 flex flex-col gap-3 backdrop-blur-md h-full w-full relative z-10 shadow-[inset_0_1px_2px_rgba(255,255,255,0.4),0_10px_35px_rgba(0,0,0,0.3)] border border-white/25 transition-colors">
+1248:                        className="relative w-full h-48 sm:h-56 rounded-xl overflow-hidden border border-cyan-500/30 bg-black shadow-[0_0_20px_rgba(0,0,0,0.8)] cursor-pointer group/media"
+1273:                        <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/80 to-transparent pointer-events-none"></div>
+1277:                          <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/media:bg-black/10 transition-colors pointer-events-none z-10">
+1278:                            <div className="w-12 h-12 rounded-full bg-red-600/90 border-2 border-white shadow-[0_0_25px_rgba(220,38,38,0.9)] flex items-center justify-center transition-transform group-hover/media:scale-110">
+1286:                          <div className="absolute top-2.5 right-2 bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md backdrop-blur-md flex items-center gap-1 shadow-md border border-red-400/40 z-10">
+1301:                        <div className="absolute bottom-2 left-2 bg-black/80 border border-cyan-400/40 text-cyan-300 text-[10px] font-black px-2 py-0.5 rounded-md backdrop-blur-md flex items-center gap-1 shadow-md z-10">
+1317:                            className="bg-red-600 hover:bg-red-500 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-[0_0_15px_rgba(220,38,38,0.8)] transition-transform hover:scale-105"
+1335:                          <div key={idx} className="flex items-center gap-2 bg-black/30 border border-white/15 backdrop-blur-md rounded-md py-1.5 px-2.5 shrink-0">
+1346:                          className="p-1 hover:bg-fuchsia-500/10 rounded-full transition-colors flex items-center gap-1 text-[11px] text-fuchsia-400 font-bold"
+1374:                          className="flex items-center justify-center gap-1 border border-cyan-400/70 bg-cyan-950/40 hover:bg-cyan-900/60 text-white rounded-md py-2.5 text-[10px] font-bold tracking-wider transition-all backdrop-blur-md shadow-[0_0_15px_rgba(0,229,255,0.25)] hover:scale-[1.02] active:scale-[0.98]"
+1389:                          className="flex items-center justify-center gap-1 border border-red-500/70 bg-red-950/40 hover:bg-red-900/60 text-white rounded-md py-2.5 text-[10px] font-bold tracking-wider transition-all backdrop-blur-md shadow-[0_0_15px_rgba(239,68,68,0.25)] hover:scale-[1.02] active:scale-[0.98]"
+1400:                          className="w-full appearance-none bg-fuchsia-900/50 hover:bg-fuchsia-800/60 text-white font-bold rounded-md py-2 px-3 pr-8 focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all cursor-pointer text-[13px] backdrop-blur-md border border-fuchsia-400/60 shadow-[0_0_15px_rgba(217,70,239,0.3)]"
+1407:                            <option key={idx} value={plan.price} className="bg-[#0f021e] text-white">₹{plan.price} - {plan.label}</option>
+1425:                        className="relative w-full overflow-hidden bg-gradient-to-r from-violet-700/70 via-fuchsia-600/70 to-violet-700/70 hover:from-violet-600/80 hover:via-fuchsia-500/80 hover:to-violet-600/80 backdrop-blur-md text-white font-black text-[13px] py-2.5 rounded-md shadow-[0_0_20px_rgba(192,38,211,0.5)] transition-all hover:scale-[1.02] active:scale-[0.98] mt-0.5 border border-fuchsia-400/70"
+1427:                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
+1439:              <div className="w-20 h-20 bg-yellow-500/20 border-2 border-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(234,179,8,0.4)] animate-pulse">
+1452:                <div className="flex flex-col items-center gap-2 bg-black/60 border border-yellow-500/30 p-4 rounded-2xl w-full max-w-xs backdrop-blur-md">
+1459:                <div className="bg-green-500/20 border border-green-500/50 p-4 rounded-2xl text-green-400 font-bold text-xs w-full max-w-xs shadow-[0_0_20px_rgba(34,197,94,0.3)]">
+1466:                className="w-full max-w-xs bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-black py-3.5 rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.5)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 mt-2"
+1493:                    <button onClick={() => setCurrentView('home')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors backdrop-blur-md">
+1500:                  <button onClick={() => setCurrentView('home')} className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+1507:                    <div className="bg-[#050010]/70 border border-white/10 rounded-2xl p-8 text-center flex flex-col items-center shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
+1511:                      <button onClick={() => setCurrentView('home')} className="bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white font-black px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(217,70,239,0.5)]">
+1523:                            className="relative bg-[#0d011f]/90 border-2 border-purple-500/70 rounded-[22px] p-5 shadow-[0_0_30px_rgba(168,85,247,0.4)] backdrop-blur-2xl overflow-hidden flex flex-col gap-1 transition-all hover:border-purple-400"
+1525:                            <div className="absolute inset-0 bg-gradient-to-br from-red-950/20 via-purple-950/30 to-black pointer-events-none"></div>
+1546:                              <div className="bg-black/80 border border-amber-500/40 rounded-xl p-4 my-2 flex items-center justify-center gap-2 text-center shadow-[inset_0_0_20px_rgba(245,158,11,0.2)]">
+1557:                                className="w-full mt-1 border-2 border-amber-500 bg-amber-500/10 hover:bg-amber-500/25 text-amber-400 font-black py-3 rounded-xl flex items-center justify-center gap-2 uppercase tracking-wider text-xs shadow-[0_0_18px_rgba(245,158,11,0.5)] transition-all hover:scale-[1.01] active:scale-[0.99]"
+1569:                          className="relative bg-[#0d011f]/90 border-2 border-purple-500/70 rounded-[22px] p-5 shadow-[0_0_30px_rgba(168,85,247,0.4)] backdrop-blur-2xl overflow-hidden flex flex-col gap-1 transition-all hover:border-purple-400"
+1571:                          <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/20 via-purple-950/30 to-black pointer-events-none"></div>
+1587:                              <div className="bg-green-500/20 text-green-400 px-2.5 py-1 rounded-md font-black text-xs border border-green-500/50 flex items-center gap-1.5 shadow-[0_0_12px_rgba(34,197,94,0.4)]">
+1593:                            <div className="bg-black/85 border border-cyan-500/50 rounded-xl p-3 my-2 flex items-center justify-between gap-2 shadow-[0_0_20px_rgba(0,229,255,0.2)]">
+1604:                                className="bg-cyan-400 hover:bg-cyan-300 text-black font-black px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-[0_0_18px_rgba(0,229,255,0.7)] text-xs uppercase tracking-wider shrink-0 transition-all hover:scale-105 active:scale-95"
+1622:                                  className="w-full mt-1 border-2 border-emerald-400 bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-300 font-black py-3 rounded-xl flex items-center justify-center gap-2 uppercase tracking-wider text-xs shadow-[0_0_18px_rgba(16,185,129,0.5)] transition-all hover:scale-[1.01] active:scale-[0.99]"
+1647:              <div className="bg-gradient-to-r from-purple-900/80 via-fuchsia-950/80 to-pink-900/80 border-2 border-fuchsia-500/60 rounded-2xl p-4 shadow-[0_0_30px_rgba(217,70,239,0.35)] backdrop-blur-xl flex flex-col gap-3 text-left relative overflow-hidden">
+1648:                <div className="absolute top-0 right-0 w-32 h-32 bg-fuchsia-500/20 rounded-full blur-2xl pointer-events-none"></div>
+1652:                    <div className={`p-2.5 rounded-full shrink-0 ${isSpeakingGuide ? 'bg-fuchsia-500 text-white animate-bounce shadow-[0_0_20px_rgba(217,70,239,0.8)]' : 'bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/40'}`}>
+1659:                          <span className="text-[10px] bg-emerald-500 text-black font-extrabold px-2 py-0.5 rounded-full animate-pulse">
+1681:                        ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-500/40' 
+1682:                        : 'bg-gradient-to-r from-fuchsia-500 to-purple-600 hover:from-fuchsia-400 hover:to-purple-500 text-white shadow-fuchsia-500/50'
+1699:                <div className="bg-red-500/20 border border-red-500/50 rounded-xl p-3 flex items-start justify-between mb-3">
+1705:              <div className="bg-[#050010]/70 border border-white/10 rounded-[24px] p-4 sm:p-5 shadow-[0_0_40px_rgba(0,0,0,0.8)] backdrop-blur-2xl relative overflow-hidden flex flex-col items-center w-[92%] mx-auto mt-2">
+1712:                      <div className="relative w-56 h-56 rounded-3xl p-[3px] bg-gradient-to-tr from-red-500 via-orange-400 via-yellow-400 via-green-400 via-cyan-400 via-blue-500 to-purple-600 shadow-[0_0_20px_rgba(255,0,0,0.25),0_0_25px_rgba(0,255,100,0.25),0_0_30px_rgba(0,200,255,0.3)] flex items-center justify-center transition-all duration-300">
+1713:                        <div className="w-full h-full bg-[#030008] rounded-[22px] flex items-center justify-center relative overflow-hidden p-2">
+1722:                                <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-red-500/20 via-green-500/20 to-blue-500/20 flex items-center justify-center border border-white/20 shadow-inner">
+1734:                              <div className="relative w-24 h-24 rounded-full p-[3px] bg-gradient-to-tr from-red-500 via-orange-500 via-yellow-400 via-green-500 via-cyan-400 via-blue-600 to-purple-600 animate-spin shadow-[0_0_25px_rgba(255,0,128,0.5),0_0_30px_rgba(0,255,255,0.5)]">
+1735:                                <div className="w-full h-full bg-[#030008] rounded-full flex items-center justify-center relative overflow-hidden">
+1736:                                  <div className="absolute inset-0 bg-gradient-to-tr from-red-500/20 via-green-500/20 to-blue-500/20 animate-pulse"></div>
+1737:                                  <span className="relative z-10 text-3xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-yellow-300 via-green-300 via-cyan-300 to-purple-400 drop-shadow-[0_0_12px_rgba(255,255,255,0.9)]">
+1751:                            <div className="relative w-full h-full bg-white rounded-xl p-2.5 flex flex-col items-center justify-between shadow-[0_0_25px_rgba(255,255,255,0.9)] animate-in zoom-in-95 duration-300 border border-cyan-400 border-dashed">
+1754:                                  <span className="w-2 h-2 rounded-full bg-green-500"></span> ₹{amount || '80'} QR ACTIVE
+1761:                              <div className="w-36 h-36 flex items-center justify-center overflow-hidden rounded-lg bg-white p-1">
+1779:                    <div className="w-full bg-black/80 border border-cyan-400/50 rounded-2xl p-3 flex items-center justify-between shadow-[0_0_15px_rgba(0,229,255,0.2)]">
+1786:                        className="p-2 hover:bg-cyan-500/20 border border-cyan-500/40 rounded-xl transition-colors cursor-pointer flex-shrink-0 flex items-center gap-1 text-cyan-300 text-xs font-bold"
+1807:                          className="w-full bg-black/60 border border-cyan-500/50 rounded-2xl py-3.5 px-4 text-center text-xl font-black text-cyan-300 placeholder:text-gray-600 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_20px_rgba(0,229,255,0.4)] transition-all"
+1818:                      className="w-full bg-gradient-to-r from-cyan-400 via-teal-400 to-cyan-500 hover:from-cyan-300 hover:to-teal-300 disabled:opacity-50 disabled:cursor-not-allowed text-black font-black text-xs py-4 rounded-2xl shadow-[0_0_25px_rgba(0,229,255,0.7)] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+1828:                      className="w-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-400 text-black font-black text-sm py-4 rounded-2xl shadow-[0_0_30px_rgba(245,158,11,0.8)] transition-all flex items-center justify-center gap-2 uppercase tracking-wider active:scale-95 cursor-pointer"
+1840:                       <button onClick={() => setFundStep('generate')} className="p-2 hover:bg-white/10 rounded-full transition-colors -ml-2 text-cyan-400 font-bold flex items-center gap-1 text-xs">
+1845:                    <div className="w-16 h-16 bg-fuchsia-500/20 rounded-2xl flex items-center justify-center border border-fuchsia-500/40 shadow-[0_0_20px_rgba(217,70,239,0.5)]">
+1868:                          className="w-full bg-black/60 border border-white/20 rounded-xl py-3 px-4 text-center text-base font-bold text-white placeholder:text-gray-600 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all"
+1882:                          className="w-full bg-black/60 border border-white/20 rounded-xl py-3 px-4 text-center text-base font-bold text-white placeholder:text-gray-600 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all font-mono"
+1919:                      className="w-full mt-2 bg-gradient-to-r from-fuchsia-500 via-purple-600 to-pink-500 hover:from-fuchsia-400 hover:to-pink-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-sm py-3.5 rounded-xl shadow-[0_0_25px_rgba(217,70,239,0.7)] transition-all flex items-center justify-center gap-2 uppercase tracking-wider active:scale-95"
+1934:                          <div className="absolute inset-0 bg-green-500/30 rounded-full blur-2xl animate-pulse"></div>
+1935:                          <div className="w-16 h-16 bg-green-500/20 border-2 border-green-400 rounded-full flex items-center justify-center relative z-10 shadow-[0_0_25px_rgba(34,197,94,0.8)]">
+1948:                        <div className="bg-black/70 border border-green-500/40 rounded-xl p-3 text-xs w-full max-w-[260px] text-left space-y-1 mt-1 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
+1962:                          className="w-full max-w-[260px] mt-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-black font-black text-xs py-3 rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.6)] uppercase tracking-wider transition-all"
+1973:                        <div className="w-16 h-16 bg-red-500/20 border-2 border-red-500 rounded-full flex items-center justify-center shadow-[0_0_25px_rgba(239,68,68,0.8)]">
+1989:                          className="w-full max-w-[260px] mt-2 bg-red-600 hover:bg-red-500 text-white font-black text-xs py-3 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.6)] uppercase tracking-wider transition-all"
+2000:                        <div className="absolute inset-0 bg-yellow-400/20 rounded-full blur-xl animate-pulse"></div>
+2013:                        <div className="bg-black/70 border border-yellow-500/30 rounded-xl p-3 text-xs w-full max-w-[260px] text-left space-y-1 mt-1">
+2054:                        <div className="text-center text-gray-500 text-xs py-6 bg-black/40 rounded-xl border border-white/5">
+2066:                          className={`border-l-[4px] ${isSuccess ? 'border-green-500 bg-green-950/30 border-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.15)]' : isRejected ? 'border-red-500 bg-red-950/20 border-red-500/30' : 'border-yellow-500 bg-[#050010]/80 border-fuchsia-500/20'} rounded-r-xl rounded-l-sm p-3 relative overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.5)] backdrop-blur-md`}
+2071:                           <div className="absolute inset-0 bg-gradient-to-r from-fuchsia-500/5 to-transparent pointer-events-none"></div>
+2079:                               <div className="flex items-center gap-1.5 bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-[10px] font-black border border-green-500/50 shadow-[0_0_10px_rgba(34,197,94,0.3)] uppercase">
+2084:                               <div className="flex items-center gap-1.5 bg-red-500/20 text-red-400 px-3 py-1 rounded-full text-[10px] font-black border border-red-500/40 uppercase">
+2089:                               <div className="flex items-center gap-1.5 bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded-full text-[10px] font-black border border-yellow-500/40 shadow-[0_0_10px_rgba(234,179,8,0.2)] uppercase">
+2120:              <div className="bg-[#050010]/80 border border-purple-500/50 rounded-[24px] p-4 sm:p-5 shadow-[0_0_40px_rgba(168,85,247,0.4)] backdrop-blur-2xl relative overflow-hidden flex flex-col items-center w-[94%] mx-auto mt-2">
+2169:                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-gradient-to-r from-yellow-400 to-amber-500 rounded-full shadow-[0_0_15px_rgba(234,179,8,0.8)] border-2 border-white z-20 flex items-center justify-center">
+2186:                          <div className="mb-4 bg-amber-500/20 border border-amber-500/50 rounded-xl p-3 text-center text-amber-300 font-bold text-xs w-full animate-in zoom-in-95 backdrop-blur-md">
+2251:                          className="w-full relative z-10 bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-purple-600 hover:from-cyan-300 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-base py-3.5 rounded-xl shadow-[0_0_25px_rgba(217,70,239,0.6)] transition-all flex items-center justify-center gap-2 uppercase tracking-wider"
+2266:                     <div className="w-full mt-6 bg-black/50 border border-fuchsia-500/30 rounded-xl p-4">
+2271:                         <span className="text-[10px] text-amber-300 font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+2282:                             <div key={idx} className="bg-purple-950/40 border border-purple-500/30 rounded-lg p-2.5 flex justify-between items-center text-xs">
+2286:                                   <span className="text-[10px] bg-green-500/20 text-green-300 font-bold px-1.5 py-0.2 rounded border border-green-500/30">ACTIVE</span>
+2295:                                 className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold text-[11px] px-2.5 py-1 rounded flex items-center gap-1 shadow-[0_0_10px_rgba(217,70,239,0.5)]"
+2327:                <div className="bg-[#050010]/70 border border-yellow-500/50 rounded-[24px] p-5 sm:p-6 shadow-[0_0_40px_rgba(234,179,8,0.4)] backdrop-blur-2xl relative overflow-hidden flex flex-col items-center w-[92%] mx-auto mt-2">
+2338:                   <div className="w-full bg-black/60 border border-yellow-500/40 rounded-xl p-3.5 mb-4 relative z-10">
+2342:                      <div className="bg-black/80 border border-white/10 rounded-lg p-2.5 text-yellow-300 overflow-hidden whitespace-nowrap text-ellipsis text-xs font-mono font-bold shadow-inner">
+2355:                        className="bg-yellow-500 hover:bg-yellow-400 text-black font-black py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(234,179,8,0.4)] transition-all active:scale-95 text-xs uppercase"
+2364:                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all active:scale-95 text-xs uppercase"
+2371:                   <div className="w-full bg-black/40 border border-white/10 p-4 rounded-xl mb-6 relative z-10 text-left">
+2377:                        className="w-full bg-black/60 border border-white/20 rounded-lg p-2.5 text-xs font-bold text-white mb-2 focus:outline-none focus:border-yellow-400"
+2402:                        className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xs py-2.5 rounded-lg uppercase tracking-wider"
+2463:                      className={`relative rounded-xl p-[2px] bg-live-gradient animate-color-shift bg-gradient-to-r ${btn.color} shadow-[0_0_20px_rgba(0,0,0,0.5)] group overflow-hidden`}
+2465:                      <div className="bg-[#050010]/90 rounded-[10px] p-4 flex items-center gap-4 backdrop-blur-xl h-full w-full relative z-10 transition-colors group-hover:bg-[#050010]/70">
+2466:                         <div className={`p-3 rounded-lg bg-gradient-to-br ${btn.color} shadow-inner`}>
+2475:                              <div className="absolute w-5 h-5 bg-red-500 rounded-full animate-ping opacity-75"></div>
+2476:                              <div className="relative w-3.5 h-3.5 bg-red-600 rounded-full border border-white/30 shadow-[0_0_15px_rgba(220,38,38,1)]"></div>
+2484:                 <div className="mt-2 bg-[#050010]/80 border border-fuchsia-500/30 rounded-xl p-4 shadow-[0_0_30px_rgba(217,70,239,0.2)]">
+2490:                       <div className="bg-white/5 border border-white/10 rounded-lg p-2.5 text-xs text-gray-300 shadow-inner flex justify-between items-center">
+2494:                       <div className="bg-white/5 border border-white/10 rounded-lg p-2.5 text-xs text-gray-300 shadow-inner flex justify-between items-center">
+2498:                       <div className="bg-white/5 border border-white/10 rounded-lg p-2.5 text-xs text-gray-300 shadow-inner flex justify-between items-center">
+2511:                <button onClick={() => setCurrentView('admin')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors backdrop-blur-md">
+2548:                    <div key={idx} className="bg-[#050010]/85 border-l-4 border-cyan-400 rounded-r-xl rounded-l-sm p-4 relative overflow-hidden shadow-[0_4px_25px_rgba(0,0,0,0.6)] backdrop-blur-md flex flex-col gap-3 text-left">
+2575:                       <div className="grid grid-cols-2 gap-2 bg-black/50 p-2.5 rounded-lg border border-white/10 text-xs font-mono">
+2604:                           className="flex-1 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/40 hover:to-blue-500/40 text-cyan-400 border border-cyan-500/40 rounded-lg py-2.5 text-xs font-black transition-all flex items-center justify-center gap-1.5 uppercase shadow-[0_0_10px_rgba(0,229,255,0.2)] active:scale-95"
+2620:                           className="p-2.5 bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 rounded-lg transition-all active:scale-95"
+2633:                <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 overflow-y-auto animate-in fade-in">
+2634:                  <div className="bg-[#050010] border border-cyan-500/40 rounded-2xl max-w-md w-full max-h-[92vh] overflow-y-auto p-4 flex flex-col gap-4 shadow-[0_0_50px_rgba(0,229,255,0.3)] relative text-left my-auto">
+2646:                        className="p-1.5 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+2653:                    <div className="flex flex-col items-center gap-2 bg-black/40 p-3 rounded-xl border border-white/10">
+2663:                        <div className="absolute bottom-0 right-0 bg-cyan-500 text-black p-1 rounded-full shadow">
+2677:                          className="w-full bg-black/60 border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+2693:                          className="w-full bg-black/60 border border-white/20 rounded-lg p-2.5 text-xs font-bold text-white focus:outline-none focus:border-cyan-400"
+2707:                            className="w-full bg-black/60 border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+2719:                            className="w-full bg-black/60 border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+2734:                            className="w-full bg-black/60 border border-white/20 rounded-lg p-2.5 text-xs font-bold text-yellow-400 pr-10 focus:outline-none focus:border-cyan-400"
+2748:                    <div className="bg-gradient-to-br from-cyan-950/60 to-blue-950/60 p-3.5 rounded-xl border border-cyan-400/40 flex flex-col gap-2.5 shadow-[0_0_20px_rgba(0,229,255,0.15)]">
+2762:                          className="w-full bg-black/80 border border-cyan-400/60 rounded-lg p-2 text-lg font-black text-cyan-300 focus:outline-none focus:border-cyan-400"
+2771:                          className="bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 border border-emerald-500/40 px-2 py-1 rounded text-[10px] font-bold"
+2778:                          className="bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 border border-emerald-500/40 px-2 py-1 rounded text-[10px] font-bold"
+2785:                          className="bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 border border-emerald-500/40 px-2 py-1 rounded text-[10px] font-bold"
+2792:                          className="bg-red-500/20 hover:bg-red-500/40 text-red-300 border border-red-500/40 px-2 py-1 rounded text-[10px] font-bold"
+2799:                          className="bg-gray-500/20 hover:bg-gray-500/40 text-gray-300 border border-gray-500/40 px-2 py-1 rounded text-[10px] font-bold"
+2813:                            ? 'bg-cyan-500/20 text-cyan-400 border-b-2 border-cyan-400'
+2824:                            ? 'bg-cyan-500/20 text-cyan-400 border-b-2 border-cyan-400'
+2842:                            ? 'bg-cyan-500/20 text-cyan-400 border-b-2 border-cyan-400'
+2857:                      <div className="bg-black/40 p-3 rounded-xl border border-white/10 flex flex-col gap-2 text-xs font-mono">
+2906:                            <div key={k.id} className="bg-black/60 p-2.5 rounded-lg border border-white/10 text-xs flex flex-col gap-1">
+2912:                                <div className="text-yellow-400 font-mono text-[11px] bg-black/80 p-1 rounded border border-yellow-500/30 select-all">
+2937:                            <div key={p.id} className="bg-black/60 p-2.5 rounded-lg border border-white/10 text-xs flex flex-col gap-1">
+2941:                                  p.status === 'APPROVED' ? 'bg-green-500/20 text-green-400' :
+2942:                                  p.status === 'REJECTED' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'
+3001:                        className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black py-3 rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.4)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95"
+3021:                          className="flex-1 bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 rounded-lg py-2 text-xs font-bold transition-colors flex items-center justify-center gap-1 uppercase active:scale-95"
+3028:                          className="flex-1 bg-white/10 hover:bg-white/20 text-gray-300 rounded-lg py-2 text-xs font-bold transition-colors uppercase active:scale-95"
+3045:                <button onClick={() => setCurrentView('admin')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors backdrop-blur-md">
+3060:                  <div className="text-center text-gray-400 text-xs py-6 bg-[#050010]/60 border border-white/10 rounded-xl">
+3065:                     <div key={req.id} className="bg-[#050010]/90 border border-fuchsia-500/40 rounded-xl p-4 relative overflow-hidden shadow-[0_4px_25px_rgba(0,0,0,0.6)] backdrop-blur-md flex flex-col gap-3">
+3071:                          <span className="text-[10px] font-black px-2.5 py-1 rounded-md bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 flex items-center gap-1 uppercase">
+3077:                        <div className="bg-black/60 p-3 rounded-lg border border-white/10 text-xs font-mono flex flex-col gap-1.5">
+3110:                            className="flex-1 bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/40 rounded-lg py-2 text-xs font-black transition-all uppercase tracking-wider"
+3135:                            className="flex-1 bg-green-500 hover:bg-green-400 text-black shadow-[0_0_15px_rgba(34,197,94,0.5)] rounded-lg py-2 text-xs font-black transition-all uppercase tracking-wider"
+3152:                    <div key={req.id} className="bg-black/50 border border-white/10 rounded-xl p-3 flex justify-between items-center text-xs">
+3157:                      <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${req.status === 'SUCCESS' ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>
+3170:                <button onClick={() => setCurrentView('admin')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors backdrop-blur-md">
+3179:              <div className="bg-[#080218]/90 border border-purple-500/40 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)] backdrop-blur-md flex flex-col gap-3">
+3191:                    className="w-full bg-black/60 border border-white/20 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-purple-400"
+3200:                          className="text-[10px] bg-purple-950/60 hover:bg-purple-900 border border-purple-500/30 text-purple-300 px-2 py-0.5 rounded"
+3214:                    className="w-full bg-black/60 border border-white/20 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-purple-400"
+3230:                    className="w-full bg-black/60 border border-white/20 rounded-lg p-2.5 text-xs font-mono text-emerald-400 font-bold focus:outline-none focus:border-purple-400"
+3266:                  className="w-full mt-1 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 text-white font-black py-2.5 rounded-lg text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-all"
+3279:                  <div key={req.id} className="bg-[#050010]/80 border border-yellow-500/30 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)] backdrop-blur-md">
+3290:                        <div className="bg-black/60 border border-white/10 rounded-lg p-2.5 my-1.5 flex flex-col gap-1 text-xs">
+3310:                      <span className={`text-[10px] font-black px-2 py-1 rounded-md border uppercase ${req.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30 animate-pulse' : 'bg-green-500/20 text-green-400 border-green-500/30'}`}>
+3318:                          className="w-full bg-black/50 border border-white/20 rounded-lg py-2 px-3 text-sm font-bold text-emerald-400 font-mono focus:outline-none focus:border-yellow-400 transition-all resize-none h-20"
+3331:                          className="bg-yellow-500 hover:bg-yellow-400 text-black font-black py-2 rounded-lg shadow-[0_0_15px_rgba(234,179,8,0.4)] transition-colors w-full uppercase tracking-wider text-xs"
+3337:                      <div className="bg-black/60 border border-green-500/30 rounded-lg p-3 mt-2">
+3355:                <button onClick={() => setCurrentView('admin')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors backdrop-blur-md">
+3364:              <div className="bg-[#050010]/80 border border-fuchsia-500/40 rounded-2xl p-4 shadow-[0_0_25px_rgba(217,70,239,0.3)] backdrop-blur-md flex flex-col gap-3">
+3374:                    <div key={idx} className="bg-fuchsia-950/60 border border-fuchsia-400/50 rounded-lg px-3 py-1.5 flex items-center gap-2">
+3399:                    className="flex-1 bg-black/60 border border-white/20 rounded-lg py-2 px-3 text-xs font-bold text-white focus:outline-none focus:border-cyan-400"
+3416:                    className="bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs px-4 rounded-lg uppercase tracking-wider"
+3428:                  <div key={spin.id} className="bg-[#050010]/80 border border-green-500/30 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)] backdrop-blur-md flex flex-col gap-2">
+3434:                      <span className="text-[10px] font-black px-2 py-1 rounded-md border bg-green-500/20 text-green-400 border-green-500/30">
+3439:                    <div className="bg-black/50 p-2.5 rounded-lg border border-white/10 text-xs font-mono flex flex-col gap-1">
+3457:                  <button onClick={() => setCurrentView('admin')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors backdrop-blur-md">
+3467:              <div className="bg-[#050010]/90 border border-yellow-500/50 rounded-2xl p-5 shadow-[0_0_30px_rgba(234,179,8,0.2)] backdrop-blur-xl flex flex-col gap-4">
+3472:                  <span className="text-[10px] bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded border border-yellow-500/30 font-bold">
+3488:                        className="w-full bg-black/60 border border-yellow-500/40 rounded-xl py-3 px-3.5 pl-10 text-xs font-mono font-bold text-yellow-300 focus:outline-none focus:border-yellow-400 focus:shadow-[0_0_15px_rgba(234,179,8,0.3)]"
+3507:                        className="w-full bg-black/60 border border-yellow-500/40 rounded-xl py-2.5 px-3.5 text-xs font-bold text-white focus:outline-none focus:border-yellow-400"
+3519:                        className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-black py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(234,179,8,0.5)] transition-all active:scale-95"
+3527:                    <div className="bg-green-500/20 border border-green-500/40 rounded-lg p-2 text-green-300 text-xs font-bold text-center animate-in fade-in">
+3533:                  <div className="bg-black/40 border border-white/10 rounded-xl p-3 mt-1">
+3538:                      <span className="text-xs font-mono font-bold text-cyan-300 bg-black/70 p-2 rounded-lg border border-cyan-500/30 flex-1 overflow-hidden whitespace-nowrap text-ellipsis">
+3551:                        className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-[11px] font-bold px-3 py-2 rounded-lg shrink-0"
+3572:                    className="text-[11px] bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 font-bold px-2.5 py-1 rounded-lg flex items-center gap-1"
+3581:                  <div key={ref.id} className="bg-[#050010]/80 border border-yellow-500/30 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)] backdrop-blur-md flex flex-col gap-2">
+3588:                        <span className={`text-[10px] font-black px-2 py-1 rounded-md border ${ref.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-green-500/20 text-green-400 border-green-500/30'}`}>
+3603:                    <div className="bg-black/50 p-2.5 rounded-lg border border-white/10 text-xs font-mono flex flex-col gap-1 text-left">
+3617:                        className="bg-yellow-500 hover:bg-yellow-400 text-black font-black py-2 rounded-lg text-xs uppercase transition-colors"
+3628:                  <div className="text-center text-gray-400 text-sm mt-6 bg-black/40 p-6 rounded-xl border border-white/10">
+3645:                <div className="bg-[#050010]/70 border border-white/10 rounded-[24px] p-5 shadow-[0_0_40px_rgba(0,0,0,0.8)] backdrop-blur-2xl flex flex-col items-center w-full mt-4">
+3646:                  <div className="w-16 h-16 bg-fuchsia-500/20 rounded-full flex items-center justify-center border border-fuchsia-500/50 mb-4 shadow-[0_0_20px_rgba(217,70,239,0.3)]">
+3655:                    className="w-full bg-black/40 border border-white/20 rounded-xl py-3 px-4 mb-3 text-sm font-bold text-white placeholder:text-gray-500 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all"
+3662:                    className="w-full bg-black/40 border border-white/20 rounded-xl py-3 px-4 mb-3 text-sm font-bold text-white placeholder:text-gray-500 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all"
+3669:                    className="w-full bg-black/40 border border-white/20 rounded-xl py-3 px-4 mb-4 text-sm font-bold text-white placeholder:text-gray-500 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all"
+3756:                    className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-sm py-3.5 rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.4)] transition-all uppercase tracking-wider"
+3766:                <div className="bg-[#050010]/70 border border-green-500/30 rounded-[24px] p-5 shadow-[0_0_40px_rgba(34,197,94,0.2)] backdrop-blur-2xl text-center">
+3767:                  <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center border border-green-500/50 mx-auto mb-4">
+3803:                    className="w-full bg-red-500/20 hover:bg-red-500/40 text-red-400 font-bold py-2.5 rounded-lg transition-colors border border-red-500/30"
+3823:                  <button onClick={() => setCurrentView('login')} className="bg-cyan-500 text-black font-bold px-6 py-2 rounded-full">Go to Login</button>
+3826:                <div className="bg-[#050010]/80 border border-fuchsia-500/30 rounded-[24px] p-5 shadow-[0_0_40px_rgba(0,0,0,0.8)] backdrop-blur-2xl flex flex-col items-center w-full">
+3837:                    <label className="absolute bottom-0 right-0 bg-fuchsia-600 hover:bg-fuchsia-500 text-white p-2 rounded-full cursor-pointer shadow-lg border-2 border-black transition-all active:scale-95" title="Change Photo">
+3858:                  <span className="text-[11px] text-emerald-400 font-bold bg-emerald-500/20 px-3 py-1 rounded-full border border-emerald-500/30 mb-3 flex items-center gap-1">
+3863:                  <div className="w-full max-w-sm flex flex-col gap-2 mb-5 bg-black/40 p-3 rounded-xl border border-white/10">
+3864:                    <label className="w-full bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-black py-2.5 px-4 rounded-xl shadow-[0_0_15px_rgba(217,70,239,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer text-xs uppercase active:scale-95">
+3890:                        className="flex-1 bg-black/60 border border-white/20 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-fuchsia-400"
+3902:                        className="bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs px-3 py-1.5 rounded-lg uppercase"
+3913:                    <div className="bg-black/40 border border-white/5 rounded-xl p-3 flex flex-col items-center">
+3917:                    <div className="bg-black/40 border border-white/5 rounded-xl p-3 flex flex-col items-center">
+3922:                  <div className="w-full bg-black/40 border border-white/5 rounded-xl p-3 flex justify-between items-center mt-2">
+3952:                            <div key={req.id} className="bg-amber-950/30 border border-amber-500/50 rounded-xl p-3 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+3955:                                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+3967:                             <div key={req.id} className="bg-emerald-950/30 border border-emerald-500/50 rounded-xl p-3 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+3970:                                 <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+3975:                               <div className="flex justify-between items-center bg-black/60 border border-emerald-500/30 p-2.5 rounded-lg">
+3980:                                 }} className="text-black bg-emerald-400 hover:bg-emerald-300 p-2 rounded-md font-bold transition-colors shrink-0 flex items-center gap-1 text-xs">
+3988:                            <p className="text-gray-500 text-xs text-center py-4 bg-black/20 rounded-lg border border-white/5">No keys or pending orders yet for this account.</p>
+4007:              <div className="bg-[#050010]/70 border border-white/10 rounded-[24px] p-6 shadow-[0_0_40px_rgba(0,0,0,0.8)] backdrop-blur-2xl flex flex-col items-center w-full mt-4">
+4014:                  <a href={supportLinks.telegram} target="_blank" rel="noreferrer" className="w-full flex items-center justify-center gap-3 bg-[#0088cc] hover:bg-[#0077b3] text-white font-bold py-3.5 rounded-xl shadow-[0_0_20px_rgba(0,136,204,0.4)] transition-all">
+4017:                  <a href={supportLinks.whatsapp} target="_blank" rel="noreferrer" className="w-full flex items-center justify-center gap-3 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-3.5 rounded-xl shadow-[0_0_20px_rgba(37,211,102,0.4)] transition-all">
+4028:                <button onClick={() => setCurrentView('admin')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors backdrop-blur-md">
+4036:              <div className="bg-[#050010]/90 border border-sky-500/40 rounded-2xl p-5 shadow-[0_4px_25px_rgba(56,189,248,0.3)] backdrop-blur-md flex flex-col gap-4 text-left">
+4037:                <div className="flex items-center gap-3 bg-sky-500/10 p-3 rounded-xl border border-sky-500/30">
+4038:                  <div className="bg-[#0088cc] p-3 rounded-full text-white shadow-[0_0_15px_rgba(0,136,204,0.8)] shrink-0">
+4060:                    className="w-full bg-black/60 border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-sky-400 shadow-inner transition-all"
+4070:                  className="mt-2 w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-black py-3.5 rounded-xl shadow-[0_0_20px_rgba(56,189,248,0.5)] transition-all uppercase tracking-wider text-xs active:scale-95 flex items-center justify-center gap-2"
+4081:                <button onClick={() => setCurrentView('admin')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors backdrop-blur-md">
+4089:              <div className="bg-[#050010]/80 border border-white/10 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)] backdrop-blur-md">
+4095:                  className="w-full bg-black/40 border border-white/20 rounded-lg py-3 px-3 mb-4 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 transition-all"
+4102:                  className="w-full bg-black/40 border border-white/20 rounded-lg py-3 px-3 text-sm font-bold text-white focus:outline-none focus:border-green-400 transition-all"
+4104:                <button onClick={() => { alert('Links updated successfully!'); setCurrentView('admin'); }} className="mt-4 w-full bg-cyan-500 hover:bg-cyan-400 text-black font-black py-3 rounded-lg transition-colors">SAVE LINKS</button>
+4114:                <button onClick={() => setCurrentView('admin')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors backdrop-blur-md">
+4122:              <div className="bg-[#050010]/90 border border-emerald-500/40 rounded-2xl p-5 shadow-[0_4px_25px_rgba(16,185,129,0.2)] backdrop-blur-md flex flex-col gap-4 text-left">
+4123:                <p className="text-gray-300 text-xs font-medium bg-emerald-950/40 border border-emerald-500/30 p-3.5 rounded-xl">
+4127:                <div className="flex flex-col gap-1.5 bg-black/60 p-3.5 rounded-xl border border-emerald-500/30">
+4139:                    className="w-full bg-black/80 border border-white/20 rounded-lg py-3 px-3 text-sm font-bold text-white focus:outline-none focus:border-emerald-400 transition-all"
+4152:                  className="w-full mt-2 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-black py-3.5 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.5)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95"
+4164:              <div className="flex flex-col gap-3 bg-[#050010]/95 border border-fuchsia-500/40 p-4 rounded-2xl shadow-[0_0_30px_rgba(217,70,239,0.25)] backdrop-blur-xl text-left">
+4167:                    <button onClick={() => setCurrentView('home')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors backdrop-blur-md">
+4174:                      <span className="text-[10px] font-bold text-fuchsia-300 bg-fuchsia-500/20 px-2.5 py-0.5 rounded-full border border-fuchsia-500/30 uppercase tracking-widest inline-block mt-0.5">
+4181:                    className="px-3.5 py-1.5 bg-red-500/20 hover:bg-red-500/40 border border-red-500/40 rounded-xl text-red-300 text-xs font-black uppercase transition-all"
+4189:                  <div className="bg-black/60 border border-purple-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-lg">
+4194:                  <div className="bg-black/60 border border-emerald-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-lg">
+4199:                  <div className="bg-black/60 border border-cyan-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-lg">
+4204:                  <div className="bg-black/60 border border-amber-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-lg">
+4227:                          ? `bg-gradient-to-r ${tab.color} text-white shadow-[0_0_15px_rgba(217,70,239,0.5)] scale-105 border border-white/30`
+4228:                          : 'bg-black/50 text-gray-400 hover:text-white border border-white/10 hover:border-white/20'
+4240:                  <div className="bg-[#050010]/90 border border-white/10 rounded-2xl p-5 shadow-2xl backdrop-blur-xl flex flex-col gap-4 text-left">
+4251:                        className="bg-gradient-to-r from-pink-600 to-fuchsia-600 hover:from-pink-500 hover:to-fuchsia-500 p-4 rounded-xl text-white font-black text-sm uppercase flex items-center justify-between shadow-[0_0_20px_rgba(217,70,239,0.3)] transition-all hover:scale-[1.02]"
+4259:                        className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 p-4 rounded-xl text-white font-black text-sm uppercase flex items-center justify-between shadow-[0_0_20px_rgba(245,158,11,0.3)] transition-all hover:scale-[1.02]"
+4267:                        className="bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 p-4 rounded-xl text-white font-black text-sm uppercase flex items-center justify-between shadow-[0_0_20px_rgba(244,63,94,0.3)] transition-all hover:scale-[1.02]"
+4275:                        className="bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 p-4 rounded-xl text-white font-black text-sm uppercase flex items-center justify-between shadow-[0_0_20px_rgba(56,189,248,0.3)] transition-all hover:scale-[1.02]"
+4283:                        className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 p-4 rounded-xl text-white font-black text-sm uppercase flex items-center justify-between shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all hover:scale-[1.02]"
+4291:                        className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 p-4 rounded-xl text-white font-black text-sm uppercase flex items-center justify-between shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all hover:scale-[1.02] md:col-span-2"
+4303:                <div className="bg-[#050010]/90 border border-fuchsia-500/40 rounded-2xl p-5 shadow-2xl backdrop-blur-xl flex flex-col gap-4 text-left">
+4311:                  <div className="flex flex-col gap-3 bg-black/50 p-4 rounded-xl border border-white/10">
+4319:                        className="w-full bg-black/80 border border-white/20 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-fuchsia-400"
+4328:                        className="w-full bg-black/80 border border-white/20 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-fuchsia-400"
+4348:                          className="flex-1 bg-black/80 border border-white/20 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-fuchsia-400"
+4350:                        <label className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-bold px-3 py-2.5 rounded-xl cursor-pointer flex items-center gap-1 shrink-0">
+4378:                        className="w-full bg-black/80 border border-white/20 rounded-xl py-2.5 px-3 text-xs font-mono text-white focus:outline-none focus:border-fuchsia-400"
+4382:                    <div className="bg-black/60 border border-white/10 p-3 rounded-xl">
+4387:                          <input type="number" value={newPanelForm.price1} onChange={(e) => setNewPanelForm({ ...newPanelForm, price1: Number(e.target.value) })} className="w-full bg-black/80 border border-white/20 rounded-lg p-2 text-white" />
+4391:                          <input type="number" value={newPanelForm.price3} onChange={(e) => setNewPanelForm({ ...newPanelForm, price3: Number(e.target.value) })} className="w-full bg-black/80 border border-white/20 rounded-lg p-2 text-white" />
+4395:                          <input type="number" value={newPanelForm.price7} onChange={(e) => setNewPanelForm({ ...newPanelForm, price7: Number(e.target.value) })} className="w-full bg-black/80 border border-white/20 rounded-lg p-2 text-white" />
+4399:                          <input type="number" value={newPanelForm.price15} onChange={(e) => setNewPanelForm({ ...newPanelForm, price15: Number(e.target.value) })} className="w-full bg-black/80 border border-white/20 rounded-lg p-2 text-white" />
+4403:                          <input type="number" value={newPanelForm.price30} onChange={(e) => setNewPanelForm({ ...newPanelForm, price30: Number(e.target.value) })} className="w-full bg-black/80 border border-white/20 rounded-lg p-2 text-white" />
+4440:                      className="mt-2 w-full bg-gradient-to-r from-fuchsia-600 via-purple-600 to-pink-600 hover:from-fuchsia-500 hover:to-pink-500 text-white font-black py-3.5 rounded-xl shadow-[0_0_25px_rgba(217,70,239,0.5)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95"
+4450:                <div className="bg-[#050010]/90 border border-amber-500/40 rounded-2xl p-5 shadow-2xl backdrop-blur-xl flex flex-col gap-4 text-left">
+4460:                  <div className="flex flex-col gap-3 bg-black/60 p-4 rounded-xl border border-amber-500/30">
+4468:                        className="w-full bg-black/80 border border-white/20 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-amber-400"
+4478:                          className="w-full bg-black/80 border border-white/20 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-amber-400"
+4496:                            className="flex-1 bg-black/80 border border-white/20 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-amber-400"
+4498:                          <label className="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-3 py-2.5 rounded-xl cursor-pointer flex items-center gap-1 shrink-0">
+4521:                    <div className="bg-black/80 border border-white/10 p-3.5 rounded-xl flex flex-col gap-3">
+4531:                            className="w-full bg-black border border-white/20 rounded-lg p-2 text-xs text-white focus:border-sky-400"
+4541:                            className="w-full bg-black border border-white/20 rounded-lg p-2 text-xs text-white focus:border-green-400"
+4555:                        className="w-full bg-black/80 border border-white/20 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-amber-400"
+4567:                        className="w-full bg-black/80 border border-white/20 rounded-xl py-2.5 px-3 text-xs font-mono text-white focus:outline-none focus:border-amber-400"
+4572:                    <div className="bg-black/80 border border-amber-500/40 p-3.5 rounded-xl flex flex-col gap-2">
+4590:                          <div className="bg-black/60 p-2 rounded-lg border border-white/10">
+4596:                              className="w-full bg-black border border-white/20 rounded p-1.5 text-white font-bold"
+4599:                          <div className="bg-black/60 p-2 rounded-lg border border-white/10">
+4605:                              className="w-full bg-black border border-white/20 rounded p-1.5 text-white font-bold"
+4608:                          <div className="bg-black/60 p-2 rounded-lg border border-white/10">
+4614:                              className="w-full bg-black border border-white/20 rounded p-1.5 text-white font-bold"
+4617:                          <div className="bg-black/60 p-2 rounded-lg border border-white/10">
+4623:                              className="w-full bg-black border border-white/20 rounded p-1.5 text-white font-bold"
+4631:                    <div className="bg-black/80 border border-white/10 p-3.5 rounded-xl flex flex-col gap-2">
+4651:                            <input type="number" value={housePanelForm.price1d} onChange={(e) => setHousePanelForm({ ...housePanelForm, price1d: Number(e.target.value) })} className="w-full bg-black border border-white/20 rounded p-1.5 text-white" />
+4655:                            <input type="number" value={housePanelForm.price3d} onChange={(e) => setHousePanelForm({ ...housePanelForm, price3d: Number(e.target.value) })} className="w-full bg-black border border-white/20 rounded p-1.5 text-white" />
+4659:                            <input type="number" value={housePanelForm.price7d} onChange={(e) => setHousePanelForm({ ...housePanelForm, price7d: Number(e.target.value) })} className="w-full bg-black border border-white/20 rounded p-1.5 text-white" />
+4663:                            <input type="number" value={housePanelForm.price15d} onChange={(e) => setHousePanelForm({ ...housePanelForm, price15d: Number(e.target.value) })} className="w-full bg-black border border-white/20 rounded p-1.5 text-white" />
+4667:                            <input type="number" value={housePanelForm.price30d} onChange={(e) => setHousePanelForm({ ...housePanelForm, price30d: Number(e.target.value) })} className="w-full bg-black border border-white/20 rounded p-1.5 text-white" />
+4724:                      className="mt-2 w-full bg-gradient-to-r from-amber-500 via-orange-600 to-red-600 hover:from-amber-400 hover:to-red-500 text-white font-black py-3.5 rounded-xl shadow-[0_0_25px_rgba(245,158,11,0.5)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95"
+4735:                  <div className="bg-[#050010]/90 border border-red-500/40 rounded-2xl p-5 shadow-2xl backdrop-blur-xl flex flex-col gap-4">
+4741:                      <div className="bg-black/80 border border-cyan-400/50 p-4 rounded-xl flex flex-col gap-3">
+4749:                            className="w-full bg-black border border-white/20 rounded p-2 text-xs text-white"
+4758:                            className="w-full bg-black border border-white/20 rounded p-2 text-xs text-white"
+4767:                            className="w-full bg-black border border-white/20 rounded p-2 text-xs text-white"
+4777:                            className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs py-2 rounded uppercase"
+4783:                            className="bg-gray-700 hover:bg-gray-600 text-white font-bold text-xs px-4 py-2 rounded uppercase"
+4792:                          <div key={p.id} className="bg-black/60 border border-white/10 p-3.5 rounded-xl flex flex-col justify-between gap-3 shadow-lg hover:border-rose-500/40 transition-all">
+4803:                                <span className="text-xs font-bold text-fuchsia-400 bg-fuchsia-500/20 px-2 py-0.5 rounded border border-fuchsia-500/30 w-fit mb-1 uppercase">
+4816:                                className="flex-1 bg-cyan-500/20 hover:bg-cyan-500/40 text-cyan-300 border border-cyan-500/40 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1 uppercase transition-all"
+4827:                                className="flex-1 bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 border border-rose-500/40 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1 uppercase transition-all"
+4842:                <div className="bg-[#050010]/90 border border-sky-500/40 rounded-2xl p-5 shadow-2xl backdrop-blur-xl flex flex-col gap-4 text-left">
+4850:                  <div className="flex flex-col gap-3 bg-black/60 p-4 rounded-xl border border-white/10">
+4860:                        className="w-full bg-black/80 border border-white/20 rounded-xl py-3 px-3 text-xs font-bold text-white focus:outline-none focus:border-sky-400"
+4873:                        className="w-full bg-black/80 border border-white/20 rounded-xl py-3 px-3 text-xs font-bold text-white focus:outline-none focus:border-green-400"
+4882:                      className="mt-2 w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-black py-3.5 rounded-xl shadow-[0_0_20px_rgba(56,189,248,0.5)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95"
+4892:                <div className="bg-[#050010]/90 border border-purple-500/40 rounded-2xl p-5 shadow-2xl backdrop-blur-xl flex flex-col gap-4 text-left">
+4897:                    <span className="text-xs text-purple-300 bg-purple-500/20 px-3 py-1 rounded-full border border-purple-500/30 font-bold w-fit">
+4909:                      className="w-full bg-black/60 border border-white/20 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-400"
+4926:                          <div key={idx} className="bg-black/60 border border-white/10 p-4 rounded-xl flex flex-col gap-3 shadow-lg hover:border-purple-500/40 transition-all">
+4951:                            <div className="bg-black/80 p-2.5 rounded-lg border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+4965:                                  className="flex-1 sm:flex-none bg-purple-600 hover:bg-purple-500 text-white font-bold px-3 py-1 rounded text-[11px] uppercase"
+4976:                                  className="flex-1 sm:flex-none bg-red-600/30 hover:bg-red-600/60 text-red-300 border border-red-500/40 font-bold px-3 py-1 rounded text-[11px] uppercase"
+4991:                <div className="bg-[#050010]/90 border border-emerald-500/40 rounded-2xl p-5 shadow-2xl backdrop-blur-xl flex flex-col gap-4 text-left">
+5001:                    <div className="bg-emerald-500/20 border border-emerald-500/40 px-3 py-2 rounded-xl text-emerald-300 font-black text-sm flex items-center gap-2 w-fit">
+5014:                      className="w-full bg-black/60 border border-white/20 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-400"
+5035:                          <div key={p.id} className="bg-black/60 border border-white/10 p-4 rounded-xl flex flex-col gap-3 shadow-lg">
+5057:                                  isSuccess ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' :
+5058:                                  isPending ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' :
+5059:                                  'bg-red-500/20 text-red-400 border-red-500/40'
+5081:                                  className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-black text-xs py-2 rounded-xl uppercase shadow-md flex items-center justify-center gap-1 active:scale-95"
+5090:                                  className="bg-red-500/20 hover:bg-red-500/40 text-red-300 border border-red-500/40 font-bold text-xs px-4 py-2 rounded-xl uppercase transition-all"
+5108:                <button onClick={() => setCurrentView('admin')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors backdrop-blur-md">
+5116:              <div className="bg-[#050010]/80 border border-white/10 rounded-xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.5)] backdrop-blur-md flex flex-col items-center text-center">
+5118:                <div className="relative mb-4 w-36 h-36 bg-white rounded-xl flex items-center justify-center overflow-hidden border-2 border-dashed border-cyan-400/50">
+5137:                  <div className="absolute bottom-0 w-full bg-black/70 text-cyan-300 text-[10px] py-1 font-bold pointer-events-none">Tap to Upload Image</div>
+5147:                    className="w-full bg-black/40 border border-white/20 rounded-lg py-3 px-3 text-xs font-mono font-bold text-white focus:outline-none focus:border-cyan-400 transition-all truncate"
+5158:                    className="w-full bg-black/40 border border-white/20 rounded-lg py-3 px-3 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 transition-all"
+5166:                }} className="mt-6 w-full bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-black py-3 rounded-lg shadow-[0_0_15px_rgba(217,70,239,0.4)] transition-colors">SAVE PAYMENT DETAILS PERMANENTLY</button>
+5174:                <button onClick={() => setCurrentView('admin')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors backdrop-blur-md">
+5189:                      <div key={idx} className="bg-[#050010]/80 border-l-4 border-green-500 rounded-r-xl rounded-l-sm p-4 relative overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.5)] backdrop-blur-md flex flex-col gap-2">
+5207:                          <div className="bg-green-500/20 text-green-400 text-[10px] font-black px-2 py-1 rounded-md border border-green-500/30 shrink-0">REGISTERED</div>
+5209:                        <div className="mt-1 bg-black/50 p-2 rounded text-xs text-yellow-400 font-mono border border-white/10 text-left">
+5223:                <button onClick={() => setCurrentView('admin')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors backdrop-blur-md">
+5231:              <div className="bg-[#050010]/80 border border-white/10 rounded-xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.5)] backdrop-blur-md flex flex-col gap-4">
+5240:                      className="w-full bg-black/40 border border-white/20 rounded-lg py-3 px-3 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 transition-all"
+5242:                    <label className="bg-cyan-500 hover:bg-cyan-400 text-black font-black py-3 px-4 rounded-lg cursor-pointer transition-colors flex items-center justify-center shrink-0">
+5272:                    className="w-full bg-black/40 border border-white/20 rounded-lg py-3 px-3 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 transition-all"
+5280:                    className="w-full bg-black/60 border border-cyan-400/40 rounded-lg py-3 px-3 text-sm font-bold text-cyan-300 focus:outline-none focus:border-cyan-400 transition-all cursor-pointer"
+5282:                    <option value="ROOT" className="bg-black text-white">ROOT</option>
+5283:                    <option value="NON ROOT" className="bg-black text-white">NON ROOT</option>
+5284:                    <option value="STEAMER" className="bg-black text-white">STEAMER</option>
+5285:                    <option value="PC" className="bg-black text-white">PC</option>
+5286:                    <option value="BGMI" className="bg-black text-white">BGMI</option>
+5287:                    <option value="MOBA LEGEND" className="bg-black text-white">MOBA LEGEND</option>
+5296:                    className="w-full bg-black/40 border border-white/20 rounded-lg py-3 px-3 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 transition-all"
+5306:                    className="w-full bg-black/40 border border-white/20 rounded-lg py-3 px-3 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 transition-all"
+5317:                        <div className="mt-2 bg-red-950/60 border border-red-500/60 rounded-xl p-3 flex flex-col gap-2 animate-in fade-in">
+5322:                          <div className="flex items-center gap-3 bg-black/80 p-2 rounded-lg border border-white/10">
+5330:                                className="mt-1 bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-sm"
+5349:                    className="w-full bg-black/40 border border-white/20 rounded-lg py-2.5 px-3 text-xs font-mono font-semibold text-white focus:outline-none focus:border-cyan-400 transition-all resize-y"
+5353:                <div className="border border-white/10 p-3 rounded-lg bg-black/30">
+5358:                      <input type="number" value={newPanelForm.price1} onChange={(e) => setNewPanelForm({...newPanelForm, price1: Number(e.target.value)})} className="w-full bg-black/60 border border-white/20 rounded p-1 text-white text-xs focus:border-fuchsia-500" />
+5362:                      <input type="number" value={newPanelForm.price3} onChange={(e) => setNewPanelForm({...newPanelForm, price3: Number(e.target.value)})} className="w-full bg-black/60 border border-white/20 rounded p-1 text-white text-xs focus:border-fuchsia-500" />
+5366:                      <input type="number" value={newPanelForm.price7} onChange={(e) => setNewPanelForm({...newPanelForm, price7: Number(e.target.value)})} className="w-full bg-black/60 border border-white/20 rounded p-1 text-white text-xs focus:border-fuchsia-500" />
+5370:                      <input type="number" value={newPanelForm.price15} onChange={(e) => setNewPanelForm({...newPanelForm, price15: Number(e.target.value)})} className="w-full bg-black/60 border border-white/20 rounded p-1 text-white text-xs focus:border-fuchsia-500" />
+5374:                      <input type="number" value={newPanelForm.price30} onChange={(e) => setNewPanelForm({...newPanelForm, price30: Number(e.target.value)})} className="w-full bg-black/60 border border-white/20 rounded p-1 text-white text-xs focus:border-fuchsia-500" />
+5407:                }} className="mt-2 w-full bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-black py-3 rounded-lg shadow-[0_0_15px_rgba(217,70,239,0.4)] transition-colors">ADD PANEL</button>
+5415:                <button onClick={() => { setEditingPanel(null); setCurrentView('admin'); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors backdrop-blur-md">
+5424:                <div className="fixed inset-0 z-[10000] bg-black/90 backdrop-blur-xl p-5 overflow-y-auto">
+5425:                  <div className="max-w-[360px] mx-auto bg-[#050010]/90 border border-cyan-400/50 rounded-xl p-5 shadow-[0_4px_30px_rgba(0,229,255,0.3)] backdrop-blur-md flex flex-col gap-4">
+5432:                        className="text-gray-400 hover:text-white bg-white/10 p-1.5 rounded-lg transition-colors"
+5446:                        className="w-full bg-black/40 border border-white/20 rounded-lg py-3 px-3 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 transition-all"
+5448:                      <label className="bg-cyan-500 hover:bg-cyan-400 text-black font-black py-3 px-4 rounded-lg cursor-pointer transition-colors flex items-center justify-center shrink-0">
+5478:                      className="w-full bg-black/40 border border-white/20 rounded-lg py-3 px-3 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 transition-all"
+5487:                      className="w-full bg-black/60 border border-cyan-400/40 rounded-lg py-3 px-3 text-sm font-bold text-cyan-300 focus:outline-none focus:border-cyan-400 transition-all cursor-pointer"
+5489:                      <option value="ROOT" className="bg-black text-white">ROOT</option>
+5490:                      <option value="NON ROOT" className="bg-black text-white">NON ROOT</option>
+5491:                      <option value="STEAMER" className="bg-black text-white">STEAMER</option>
+5492:                      <option value="PC" className="bg-black text-white">PC</option>
+5493:                      <option value="BGMI" className="bg-black text-white">BGMI</option>
+5494:                      <option value="MOBA LEGEND" className="bg-black text-white">MOBA LEGEND</option>
+5505:                      className="w-full bg-black/40 border border-white/20 rounded-lg py-3 px-3 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 transition-all"
+5516:                          <div className="mt-2 bg-red-950/60 border border-red-500/60 rounded-xl p-3 flex flex-col gap-2 animate-in fade-in">
+5521:                            <div className="flex items-center gap-3 bg-black/80 p-2 rounded-lg border border-white/10">
+5529:                                  className="mt-1 bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-sm"
+5549:                      className="w-full bg-black/40 border border-white/20 rounded-lg py-3 px-3 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 transition-all"
+5559:                      className="w-full bg-black/40 border border-white/20 rounded-lg py-2.5 px-3 text-xs font-mono font-semibold text-white focus:outline-none focus:border-cyan-400 transition-all resize-y"
+5563:                  <div className="border border-white/10 p-3 rounded-lg bg-black/30">
+5568:                        <input type="number" value={editingPanel.price1} onChange={(e) => setEditingPanel({...editingPanel, price1: Number(e.target.value)})} className="w-full bg-black/60 border border-white/20 rounded p-1 text-white text-xs focus:border-fuchsia-500" />
+5572:                        <input type="number" value={editingPanel.price3} onChange={(e) => setEditingPanel({...editingPanel, price3: Number(e.target.value)})} className="w-full bg-black/60 border border-white/20 rounded p-1 text-white text-xs focus:border-fuchsia-500" />
+5576:                        <input type="number" value={editingPanel.price7} onChange={(e) => setEditingPanel({...editingPanel, price7: Number(e.target.value)})} className="w-full bg-black/60 border border-white/20 rounded p-1 text-white text-xs focus:border-fuchsia-500" />
+5580:                        <input type="number" value={editingPanel.price15} onChange={(e) => setEditingPanel({...editingPanel, price15: Number(e.target.value)})} className="w-full bg-black/60 border border-white/20 rounded p-1 text-white text-xs focus:border-fuchsia-500" />
+5584:                        <input type="number" value={editingPanel.price30} onChange={(e) => setEditingPanel({...editingPanel, price30: Number(e.target.value)})} className="w-full bg-black/60 border border-white/20 rounded p-1 text-white text-xs focus:border-fuchsia-500" />
+5592:                      className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-black py-3 rounded-lg transition-colors text-xs uppercase"
+5626:                      className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black py-3 rounded-lg shadow-[0_0_15px_rgba(0,229,255,0.4)] transition-colors text-xs uppercase"
+5636:                    <div className="text-center text-gray-400 text-sm mt-10 bg-black/40 p-6 rounded-xl border border-white/10">No active panels on website.</div>
+5639:                      <div key={p.id} className="bg-[#050010]/80 border border-white/10 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)] backdrop-blur-md flex flex-col gap-3">
+5641:                          <div className="w-16 h-16 rounded-lg bg-black/50 overflow-hidden shrink-0 border border-white/10 relative">
+5647:                            <span className="absolute bottom-0 right-0 bg-black/80 text-cyan-400 text-[8px] font-bold px-1 rounded-tl">
+5679:                            className="flex-1 bg-cyan-500/20 hover:bg-cyan-500/40 text-cyan-400 border border-cyan-500/30 rounded-lg py-2.5 text-xs font-black transition-all flex items-center justify-center gap-1.5 uppercase active:scale-95 shadow-[0_0_10px_rgba(0,229,255,0.2)]"
+5687:                            className="flex-1 bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 rounded-lg py-2.5 text-xs font-black transition-all flex items-center justify-center gap-1.5 uppercase active:scale-95 shadow-[0_0_10px_rgba(239,68,68,0.2)]"
+5703:                <button onClick={() => setCurrentView('admin')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors backdrop-blur-md">
+5712:              <div className="bg-[#050010]/90 border border-amber-500/40 rounded-xl p-4 shadow-[0_4px_25px_rgba(245,158,11,0.2)] backdrop-blur-md flex flex-col gap-3">
+5720:                <label className="w-full bg-gradient-to-r from-amber-500 via-orange-500 to-fuchsia-600 hover:from-amber-400 hover:to-fuchsia-500 text-black font-black py-3.5 px-4 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(245,158,11,0.4)] text-xs uppercase tracking-wider">
+5754:                    className="w-full bg-black/50 border border-white/20 rounded-lg py-2.5 px-3 text-xs font-semibold text-white focus:outline-none focus:border-amber-400 transition-all"
+5760:              <div className="bg-[#050010]/90 border border-white/10 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)] backdrop-blur-md flex flex-col gap-3">
+5779:                      <div className="absolute inset-0 bg-black/40 flex items-end p-1">
+5788:              <div className="bg-[#050010]/90 border border-fuchsia-500/40 rounded-xl p-4 shadow-[0_4px_25px_rgba(217,70,239,0.2)] backdrop-blur-md flex flex-col gap-3">
+5800:                    <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-fuchsia-600"></div>
+5814:                      className="w-full bg-black/60 border border-white/20 rounded-lg py-2 px-2 text-xs font-bold text-fuchsia-300 focus:outline-none focus:border-fuchsia-500"
+5816:                      <option value={0.6} className="bg-black text-white">Fast (Tez Girna)</option>
+5817:                      <option value={1} className="bg-black text-white">Normal (Smooth)</option>
+5818:                      <option value={1.8} className="bg-black text-white">Slow (Dheere Dheere)</option>
+5827:                      className="w-full bg-black/60 border border-white/20 rounded-lg py-2 px-2 text-xs font-bold text-cyan-300 focus:outline-none focus:border-cyan-500"
+5829:                      <option value={15} className="bg-black text-white">100% Bright (DSLR Clear)</option>
+5830:                      <option value={30} className="bg-black text-white">Medium Tint (Recommended)</option>
+5831:                      <option value={50} className="bg-black text-white">Darker Tint</option>
+5850:                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-xl transition-colors text-xs uppercase"
+5859:                  className="flex-1 bg-gradient-to-r from-amber-500 to-fuchsia-600 hover:from-amber-400 hover:to-fuchsia-500 text-black font-black py-3 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.5)] transition-all text-xs uppercase tracking-wider"
+5891:                  <button onClick={() => setCurrentView('home')} className="mt-4 px-6 py-2 border border-white/20 rounded-full text-white font-bold hover:bg-white/10 transition-colors">
+5896:                <div className="text-center bg-green-500/10 border border-green-500/30 p-6 rounded-2xl w-full max-w-sm">
+5897:                  <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-500/50 shadow-[0_0_20px_rgba(34,197,94,0.3)]">
+5902:                  <div className="bg-black/50 border border-white/10 p-4 rounded-lg mb-4 flex flex-col items-center justify-center relative">
+5914:                      className="absolute top-2 right-2 text-gray-400 hover:text-white transition-colors bg-white/10 p-1.5 rounded"
+5919:                  <button onClick={() => setCurrentView('profile')} className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold py-3 rounded-xl shadow-[0_0_15px_rgba(34,197,94,0.4)] transition-transform hover:scale-105">
+5932:        <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
+5933:          <div className="relative w-full max-w-2xl bg-[#080214] border border-cyan-500/40 rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(0,229,255,0.4)] flex flex-col max-h-[90vh]">
+5934:            <div className="p-4 border-b border-white/10 flex items-center justify-between bg-black/60">
+5938:                className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+5943:            <div className="p-3 flex-1 flex items-center justify-center overflow-auto bg-black flex-col">
+5949:                      <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.5)] bg-black">
+5959:                        <span className="text-cyan-400 font-bold text-xs flex items-center gap-1.5 bg-cyan-950/60 px-3 py-1.5 rounded-lg border border-cyan-500/30">
+5966:                          className="w-full sm:w-auto bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-black py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(220,38,38,0.8)] text-xs uppercase tracking-wider transition-all hover:scale-105 active:scale-95"
+6006:        className="fixed bottom-6 right-6 z-50 bg-[#0088cc] hover:bg-[#0099e6] p-4 rounded-full shadow-[0_0_20px_rgba(0,136,204,0.6)] transition-transform hover:scale-110 active:scale-95 flex items-center justify-center"
+6014:        <div className="fixed inset-0 z-[150] bg-[#030008] flex flex-col items-center justify-center p-6 text-center select-none overflow-hidden">
+6016:          <div className="absolute top-[20%] left-[20%] w-80 h-80 bg-fuchsia-600/30 rounded-full blur-[120px] animate-pulse"></div>
+6017:          <div className="absolute bottom-[20%] right-[20%] w-80 h-80 bg-cyan-500/30 rounded-full blur-[120px] animate-pulse"></div>
+6049:                <div className="absolute inset-6 rounded-full border border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-950/60 via-black to-cyan-950/60 shadow-[0_0_50px_rgba(217,70,239,0.5)] flex flex-col items-center justify-center p-4">
+6062:                <span className="text-xs font-black tracking-widest text-emerald-400 uppercase bg-emerald-950/80 border border-emerald-500/50 px-4 py-1.5 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.4)]">
+6069:              <div className="w-64 h-2 bg-black/80 border border-white/20 rounded-full overflow-hidden shadow-inner p-0.5">
+6071:                  className="h-full bg-rainbow-animated rounded-full transition-all duration-100 ease-out shadow-[0_0_15px_rgba(255,255,255,0.8)]"
+6079:              <div className="p-6 rounded-3xl bg-black/80 border-2 border-fuchsia-500 shadow-[0_0_60px_rgba(217,70,239,0.8)] text-center flex flex-col items-center">
+6095:        <div className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 animate-in fade-in zoom-in-95 duration-300 select-none">
+6097:          <div className="relative max-w-sm sm:max-w-md w-full bg-[#080214] border-4 rounded-[28px] animate-rainbow-border shadow-[0_0_60px_rgba(255,0,128,0.6)] overflow-hidden flex flex-col">
+6102:              className="absolute top-2 right-2 z-30 bg-black border-2 border-yellow-400 hover:border-yellow-300 text-yellow-400 hover:text-white rounded-full p-2 shadow-[0_0_20px_rgba(250,204,21,0.9)] transition-transform hover:scale-115 active:scale-90"
+6109:            <div className="relative w-full aspect-[16/10] bg-black overflow-hidden flex flex-col items-center justify-between p-4">
+6119:              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/60 pointer-events-none"></div>
+6131:                    className="text-cyan-300 hover:text-cyan-200 bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-400/40 px-2 py-0.5 rounded-full transition-all flex items-center gap-1 active:scale-95"
+6139:                    className="text-amber-400 hover:text-amber-300 bg-amber-950/60 hover:bg-amber-900/80 border border-amber-400/40 px-2 py-0.5 rounded-full transition-all flex items-center gap-1 active:scale-95"
+6148:                <h1 className="text-4xl sm:text-5xl font-black tracking-tight italic uppercase text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 via-amber-400 to-amber-600 drop-shadow-[0_4px_20px_rgba(0,0,0,1)] text-stroke-1 text-stroke-black">
+6151:                <h1 className="text-4xl sm:text-5xl font-black tracking-wider italic uppercase text-transparent bg-clip-text bg-gradient-to-b from-yellow-100 via-yellow-400 to-amber-500 drop-shadow-[0_4px_20px_rgba(245,158,11,0.9)] text-stroke-1 text-stroke-black">
+6158:                <div className="h-[1px] w-12 bg-gradient-to-r from-transparent via-amber-400 to-transparent"></div>
+6160:                <div className="h-[1px] w-12 bg-gradient-to-r from-transparent via-amber-400 to-transparent"></div>
+6165:            <div className="p-3 bg-black/90 border-t border-white/10 flex flex-col">
+6170:                className="w-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 hover:from-emerald-400 hover:to-teal-300 text-black font-black py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2.5 uppercase tracking-wider text-sm shadow-[0_0_30px_rgba(16,185,129,0.8)] transition-all hover:scale-[1.02] active:scale-[0.98]"
+6182:        <div className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 animate-in fade-in zoom-in-95 duration-300 select-none">
+6184:          <div className="relative max-w-sm sm:max-w-md w-full bg-[#080112] border-4 rounded-[28px] animate-rainbow-border shadow-[0_0_60px_rgba(0,229,255,0.6)] overflow-hidden flex flex-col p-5 gap-3.5 text-left">
+6208:              <p className="font-black text-white bg-white/5 border border-white/10 p-2.5 rounded-xl text-center">
+6214:                <div className="bg-emerald-950/50 border border-emerald-500/40 p-2.5 rounded-xl flex items-center gap-2 text-[11px] font-bold text-emerald-300">
+6217:                <div className="bg-cyan-950/50 border border-cyan-500/40 p-2.5 rounded-xl flex items-center gap-2 text-[11px] font-bold text-cyan-300">
+6227:                className="w-full bg-red-950/80 border border-red-600/60 hover:bg-red-900/90 text-amber-300 font-black py-2.5 rounded-xl flex items-center justify-center gap-2 text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-all"
+6240:              className="w-full bg-gradient-to-r from-pink-600 via-fuchsia-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-black py-3 rounded-2xl shadow-[0_0_20px_rgba(217,70,239,0.7)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-1.5 mt-1"
+6251:        <div className="fixed inset-0 z-[1000] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+6252:          <div className="w-full max-w-md bg-[#09021a] border-2 border-fuchsia-500/70 rounded-3xl p-5 shadow-[0_0_50px_rgba(217,70,239,0.5)] flex flex-col gap-4 relative overflow-hidden text-white">
+6255:              className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+6269:            <div className="bg-black/60 border border-purple-500/30 rounded-2xl p-4 flex flex-col gap-2">
+6310:                  className="flex-1 bg-black/60 border border-white/20 focus:border-fuchsia-500 rounded-xl px-3 py-2.5 text-xs font-mono font-bold text-yellow-300 placeholder:text-gray-500 uppercase focus:outline-none"
+6314:                  className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-black text-xs px-4 rounded-xl shadow-[0_0_15px_rgba(217,70,239,0.5)] transition-all uppercase"
+6335:                  <div className="mt-1 bg-purple-950/40 border border-purple-500/30 rounded-xl p-2.5 flex flex-col gap-1.5">
+6350:                          className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-mono text-[11px] font-bold px-2.5 py-1 rounded-lg border border-fuchsia-400/40 flex items-center gap-1 shadow-sm transition-transform active:scale-95"
+6363:            <div className="bg-purple-950/30 border border-purple-500/20 rounded-xl p-3 text-xs text-gray-300 flex justify-between items-center">
+6371:              className="w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-black text-sm py-3.5 rounded-2xl shadow-[0_0_25px_rgba(16,185,129,0.5)] transition-all uppercase tracking-wider flex items-center justify-center gap-2 mt-1"
+6385:        <div className="fixed inset-0 z-[1000] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+6386:          <div className="w-full max-w-sm bg-[#0a0014] border-2 border-cyan-400/80 rounded-[28px] p-6 shadow-[0_0_50px_rgba(0,229,255,0.6)] flex flex-col items-center text-center gap-5 relative overflow-hidden">
+6389:            <div className="w-20 h-20 bg-emerald-500/20 border-4 border-emerald-500 rounded-full flex items-center justify-center text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.8)]">
+6399:            <div className="w-full bg-black/70 border border-amber-500/40 rounded-2xl p-5 flex flex-col items-center text-center gap-3 backdrop-blur-md">
+6400:              <div className="w-12 h-12 bg-amber-500/20 rounded-full flex items-center justify-center text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.5)]">
+6428:                className="w-full bg-cyan-400 hover:bg-cyan-300 text-black font-black text-sm py-3.5 rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.6)] transition-all uppercase tracking-wider"
+6435:                className="w-full bg-black/60 border border-cyan-400/50 hover:bg-white/10 text-cyan-300 font-black text-xs py-3 rounded-xl transition-all uppercase tracking-wider"
+6447:        <div className="fixed inset-0 z-[1000] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+6448:          <div className="w-full max-w-sm bg-[#09021a] border-2 border-yellow-400/80 rounded-3xl p-6 shadow-[0_0_50px_rgba(234,179,8,0.6)] flex flex-col items-center text-center gap-4 relative overflow-hidden">
+6449:            <div className="w-16 h-16 bg-yellow-400/20 border-2 border-yellow-400 rounded-full flex items-center justify-center text-yellow-400 animate-bounce">
+6458:            <div className="w-full bg-black/80 border-2 border-dashed border-yellow-400/80 rounded-2xl p-4 flex flex-col items-center gap-2 my-1">
+6469:              className="w-full bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs py-3 rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.5)] transition-all uppercase tracking-wider flex items-center justify-center gap-2"
+6548:        .bg-rainbow-animated {

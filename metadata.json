@@ -1,0 +1,8 @@
+{
+  "name": "FFH4X VIP Store",
+  "description": "Premium VIP store for gaming panels and cheats",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
