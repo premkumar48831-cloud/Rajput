@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* 🌟 ULTRA HD 4K CRYSTAL-CLEAR DISPLAY ENGINE */
+*, *::before, *::after {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -8,6 +15,16 @@ html, body {
   min-height: 100%;
   width: 100%;
   -webkit-overflow-scrolling: touch;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+/* HD High-Resolution Quality for All Images, Videos, Avatars & Canvases */
+img, video, canvas {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
 }
 
 /* 100% Fixed Background Image - Never moves, scrolls or shifts */
@@ -151,46 +168,46 @@ html, body {
   background: rgba(217, 70, 239, 0.4);
   border-radius: 4px;
 }
-/* 2-Second Live Sato-Rang (7 Colors) Rainbow Border for All 4 Corners & Sides */
+/* 1-Second Live Sato-Rang (7 Colors) Rainbow Border for All 4 Corners & Sides */
 @keyframes satorang-border-cycle-2s {
   0% {
     border-color: #ff0055;
-    box-shadow: 0 0 20px rgba(255, 0, 85, 0.75), inset 0 0 10px rgba(255, 0, 85, 0.15);
+    box-shadow: 0 0 40px rgba(255, 0, 85, 0.95), inset 0 0 25px rgba(255, 0, 85, 0.4);
   }
   14% {
     border-color: #ff6600;
-    box-shadow: 0 0 20px rgba(255, 102, 0, 0.75), inset 0 0 10px rgba(255, 102, 0, 0.15);
+    box-shadow: 0 0 40px rgba(255, 102, 0, 0.95), inset 0 0 25px rgba(255, 102, 0, 0.4);
   }
   28% {
     border-color: #ffdd00;
-    box-shadow: 0 0 20px rgba(255, 221, 0, 0.75), inset 0 0 10px rgba(255, 221, 0, 0.15);
+    box-shadow: 0 0 40px rgba(255, 221, 0, 0.95), inset 0 0 25px rgba(255, 221, 0, 0.4);
   }
   42% {
     border-color: #00e676;
-    box-shadow: 0 0 20px rgba(0, 230, 118, 0.75), inset 0 0 10px rgba(0, 230, 118, 0.15);
+    box-shadow: 0 0 40px rgba(0, 230, 118, 0.95), inset 0 0 25px rgba(0, 230, 118, 0.4);
   }
   57% {
     border-color: #00e5ff;
-    box-shadow: 0 0 20px rgba(0, 229, 255, 0.75), inset 0 0 10px rgba(0, 229, 255, 0.15);
+    box-shadow: 0 0 40px rgba(0, 229, 255, 0.95), inset 0 0 25px rgba(0, 229, 255, 0.4);
   }
   71% {
     border-color: #7c4dff;
-    box-shadow: 0 0 20px rgba(124, 77, 255, 0.75), inset 0 0 10px rgba(124, 77, 255, 0.15);
+    box-shadow: 0 0 40px rgba(124, 77, 255, 0.95), inset 0 0 25px rgba(124, 77, 255, 0.4);
   }
   85% {
     border-color: #f50057;
-    box-shadow: 0 0 20px rgba(245, 0, 87, 0.75), inset 0 0 10px rgba(245, 0, 87, 0.15);
+    box-shadow: 0 0 40px rgba(245, 0, 87, 0.95), inset 0 0 25px rgba(245, 0, 87, 0.4);
   }
   100% {
     border-color: #ff0055;
-    box-shadow: 0 0 20px rgba(255, 0, 85, 0.75), inset 0 0 10px rgba(255, 0, 85, 0.15);
+    box-shadow: 0 0 40px rgba(255, 0, 85, 0.95), inset 0 0 25px rgba(255, 0, 85, 0.4);
   }
 }
 
 .animate-satorang-border {
-  border-width: 2px;
+  border-width: 3px;
   border-style: solid;
-  animation: satorang-border-cycle-2s 2s linear infinite;
+  animation: satorang-border-cycle-2s 1s linear infinite;
 }
 
 @keyframes rainbow-conic-spin {
@@ -234,4 +251,913 @@ html, body {
   background: rgba(0, 0, 0, 0.15);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+}
+
+@keyframes satorang-text-cycle-1s {
+  0% { color: #ff0055; text-shadow: 0 0 10px rgba(255, 0, 85, 0.8); }
+  14% { color: #ff6600; text-shadow: 0 0 10px rgba(255, 102, 0, 0.8); }
+  28% { color: #ffdd00; text-shadow: 0 0 10px rgba(255, 221, 0, 0.8); }
+  42% { color: #00e676; text-shadow: 0 0 10px rgba(0, 230, 118, 0.8); }
+  57% { color: #00e5ff; text-shadow: 0 0 10px rgba(0, 229, 255, 0.8); }
+  71% { color: #7c4dff; text-shadow: 0 0 10px rgba(124, 77, 255, 0.8); }
+  85% { color: #f50057; text-shadow: 0 0 10px rgba(245, 0, 87, 0.8); }
+  100% { color: #ff0055; text-shadow: 0 0 10px rgba(255, 0, 85, 0.8); }
+}
+
+.animate-satorang-text {
+  animation: satorang-text-cycle-1s 1s linear infinite;
+}
+@import "tailwindcss";
+
+/* 🌟 ULTRA HD 4K CRYSTAL-CLEAR DISPLAY ENGINE */
+*, *::before, *::after {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #05070e;
+  color: white;
+  min-height: 100%;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+/* HD High-Resolution Quality for All Images, Videos, Avatars & Canvases */
+img, video, canvas {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+/* 100% Fixed Background Image - Never moves, scrolls or shifts */
+.fixed-bg-wallpaper {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background-attachment: fixed !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+
+/* Floating Telegram Logo on Top Layer with z-index 9999 */
+.floating-telegram-btn {
+  position: fixed !important;
+  z-index: 9999 !important;
+}
+
+@keyframes live-gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .6; }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(5deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
+}
+
+@keyframes bokeh-drift {
+  0% { transform: translate(0px, 0px) scale(1); opacity: 0.35; }
+  33% { transform: translate(25px, -35px) scale(1.15); opacity: 0.6; }
+  66% { transform: translate(-20px, -20px) scale(0.9); opacity: 0.4; }
+  100% { transform: translate(0px, 0px) scale(1); opacity: 0.35; }
+}
+
+.bg-live-gradient {
+  background-size: 200% 200%;
+  animation: live-gradient 8s ease infinite;
+}
+
+.animate-bokeh-slow {
+  animation: bokeh-drift 12s ease-in-out infinite;
+}
+
+.animate-bokeh-medium {
+  animation: bokeh-drift 8s ease-in-out infinite reverse;
+}
+
+.animate-bokeh-fast {
+  animation: bokeh-drift 6s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float 8s ease-in-out infinite;
+}
+.animate-float-medium {
+  animation: float 6s ease-in-out infinite;
+}
+.animate-float-fast {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-spin-slow {
+  animation: spin 3s linear infinite;
+}
+
+@keyframes color-shift {
+  0% { filter: hue-rotate(0deg); }
+  50% { filter: hue-rotate(180deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+.animate-color-shift {
+  animation: color-shift 4s linear infinite;
+}
+
+@keyframes fall-sway {
+  0% {
+    transform: translateY(-80px) rotate(0deg) scale(0.85) translateX(0px);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(50vh) rotate(180deg) scale(1.25) translateX(40px);
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(105vh) rotate(360deg) scale(0.9) translateX(-35px);
+    opacity: 0;
+  }
+}
+
+.animate-fall-flower {
+  animation: fall-sway linear infinite;
+  will-change: transform, opacity;
+}
+
+/* DSLR Optical Glass & Depth Vignette */
+.dslr-lens-vignette {
+  background: radial-gradient(ellipse at center, transparent 35%, rgba(5, 7, 14, 0.65) 75%, rgba(2, 3, 6, 0.95) 100%);
+  pointer-events: none;
+}
+
+.dslr-glass-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(15, 23, 42, 0.45) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(217, 70, 239, 0.4);
+  border-radius: 4px;
+}
+/* 1-Second Live Sato-Rang (7 Colors) Rainbow Border for All 4 Corners & Sides */
+@keyframes satorang-border-cycle-2s {
+  0% {
+    border-color: #ff0055;
+    box-shadow: 0 0 40px rgba(255, 0, 85, 0.95), inset 0 0 25px rgba(255, 0, 85, 0.4);
+  }
+  14% {
+    border-color: #ff6600;
+    box-shadow: 0 0 40px rgba(255, 102, 0, 0.95), inset 0 0 25px rgba(255, 102, 0, 0.4);
+  }
+  28% {
+    border-color: #ffdd00;
+    box-shadow: 0 0 40px rgba(255, 221, 0, 0.95), inset 0 0 25px rgba(255, 221, 0, 0.4);
+  }
+  42% {
+    border-color: #00e676;
+    box-shadow: 0 0 40px rgba(0, 230, 118, 0.95), inset 0 0 25px rgba(0, 230, 118, 0.4);
+  }
+  57% {
+    border-color: #00e5ff;
+    box-shadow: 0 0 40px rgba(0, 229, 255, 0.95), inset 0 0 25px rgba(0, 229, 255, 0.4);
+  }
+  71% {
+    border-color: #7c4dff;
+    box-shadow: 0 0 40px rgba(124, 77, 255, 0.95), inset 0 0 25px rgba(124, 77, 255, 0.4);
+  }
+  85% {
+    border-color: #f50057;
+    box-shadow: 0 0 40px rgba(245, 0, 87, 0.95), inset 0 0 25px rgba(245, 0, 87, 0.4);
+  }
+  100% {
+    border-color: #ff0055;
+    box-shadow: 0 0 40px rgba(255, 0, 85, 0.95), inset 0 0 25px rgba(255, 0, 85, 0.4);
+  }
+}
+
+.animate-satorang-border {
+  border-width: 3px;
+  border-style: solid;
+  animation: satorang-border-cycle-2s 1s linear infinite;
+}
+
+@keyframes rainbow-conic-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.rainbow-box-container {
+  position: relative;
+  border-radius: 26px;
+  padding: 2px;
+  overflow: hidden;
+  box-shadow: 0 0 25px rgba(0, 229, 255, 0.35), 0 0 40px rgba(255, 0, 85, 0.25);
+}
+
+.rainbow-box-container::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    #ff0055, 
+    #ff6600, 
+    #ffdd00, 
+    #00e676, 
+    #00e5ff, 
+    #7c4dff, 
+    #f50057, 
+    #ff0055
+  );
+  animation: rainbow-conic-spin 2s linear infinite;
+  z-index: 0;
+}
+
+.rainbow-box-content {
+  position: relative;
+  z-index: 1;
+  border-radius: 24px;
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+@keyframes satorang-text-cycle-1s {
+  0% { color: #ff0055; text-shadow: 0 0 10px rgba(255, 0, 85, 0.8); }
+  14% { color: #ff6600; text-shadow: 0 0 10px rgba(255, 102, 0, 0.8); }
+  28% { color: #ffdd00; text-shadow: 0 0 10px rgba(255, 221, 0, 0.8); }
+  42% { color: #00e676; text-shadow: 0 0 10px rgba(0, 230, 118, 0.8); }
+  57% { color: #00e5ff; text-shadow: 0 0 10px rgba(0, 229, 255, 0.8); }
+  71% { color: #7c4dff; text-shadow: 0 0 10px rgba(124, 77, 255, 0.8); }
+  85% { color: #f50057; text-shadow: 0 0 10px rgba(245, 0, 87, 0.8); }
+  100% { color: #ff0055; text-shadow: 0 0 10px rgba(255, 0, 85, 0.8); }
+}
+
+.animate-satorang-text {
+  animation: satorang-text-cycle-1s 1s linear infinite;
+}
+
+
+/* 🌟 ULTRA HD DSLR CRYSTAL CLEAR TEXT & MODALS */
+.dslr-hd-card {
+  background: #090b10 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.95), inset 0 0 20px rgba(255, 255, 255, 0.03) !important;
+}
+
+@keyframes satorang-all-cycle {
+  0% { border-color: #ff0055; color: #ff0055; filter: hue-rotate(0deg); }
+  14% { border-color: #ff6600; color: #ff6600; filter: hue-rotate(50deg); }
+  28% { border-color: #ffdd00; color: #ffdd00; filter: hue-rotate(100deg); }
+  42% { border-color: #00e676; color: #00e676; filter: hue-rotate(180deg); }
+  57% { border-color: #00e5ff; color: #00e5ff; filter: hue-rotate(220deg); }
+  71% { border-color: #7c4dff; color: #7c4dff; filter: hue-rotate(280deg); }
+  85% { border-color: #f50057; color: #f50057; filter: hue-rotate(320deg); }
+  100% { border-color: #ff0055; color: #ff0055; filter: hue-rotate(360deg); }
+}
+
+.animate-satorang-live {
+  animation: satorang-all-cycle 1s linear infinite;
+}
+@import "tailwindcss";
+
+/* 🌟 ULTRA HD 4K CRYSTAL-CLEAR DISPLAY ENGINE */
+*, *::before, *::after {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #05070e;
+  color: white;
+  min-height: 100%;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+/* HD High-Resolution Quality for All Images, Videos, Avatars & Canvases */
+img, video, canvas {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+/* 100% Fixed Background Image - Never moves, scrolls or shifts */
+.fixed-bg-wallpaper {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background-attachment: fixed !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+
+/* Floating Telegram Logo on Top Layer with z-index 9999 */
+.floating-telegram-btn {
+  position: fixed !important;
+  z-index: 9999 !important;
+}
+
+@keyframes live-gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .6; }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(5deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
+}
+
+@keyframes bokeh-drift {
+  0% { transform: translate(0px, 0px) scale(1); opacity: 0.35; }
+  33% { transform: translate(25px, -35px) scale(1.15); opacity: 0.6; }
+  66% { transform: translate(-20px, -20px) scale(0.9); opacity: 0.4; }
+  100% { transform: translate(0px, 0px) scale(1); opacity: 0.35; }
+}
+
+.bg-live-gradient {
+  background-size: 200% 200%;
+  animation: live-gradient 8s ease infinite;
+}
+
+.animate-bokeh-slow {
+  animation: bokeh-drift 12s ease-in-out infinite;
+}
+
+.animate-bokeh-medium {
+  animation: bokeh-drift 8s ease-in-out infinite reverse;
+}
+
+.animate-bokeh-fast {
+  animation: bokeh-drift 6s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float 8s ease-in-out infinite;
+}
+.animate-float-medium {
+  animation: float 6s ease-in-out infinite;
+}
+.animate-float-fast {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-spin-slow {
+  animation: spin 3s linear infinite;
+}
+
+@keyframes color-shift {
+  0% { filter: hue-rotate(0deg); }
+  50% { filter: hue-rotate(180deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+.animate-color-shift {
+  animation: color-shift 4s linear infinite;
+}
+
+@keyframes fall-sway {
+  0% {
+    transform: translateY(-80px) rotate(0deg) scale(0.85) translateX(0px);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(50vh) rotate(180deg) scale(1.25) translateX(40px);
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(105vh) rotate(360deg) scale(0.9) translateX(-35px);
+    opacity: 0;
+  }
+}
+
+.animate-fall-flower {
+  animation: fall-sway linear infinite;
+  will-change: transform, opacity;
+}
+
+/* DSLR Optical Glass & Depth Vignette */
+.dslr-lens-vignette {
+  background: radial-gradient(ellipse at center, transparent 35%, rgba(5, 7, 14, 0.65) 75%, rgba(2, 3, 6, 0.95) 100%);
+  pointer-events: none;
+}
+
+.dslr-glass-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(15, 23, 42, 0.45) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(217, 70, 239, 0.4);
+  border-radius: 4px;
+}
+/* 1-Second Live Sato-Rang (7 Colors) Rainbow Border for All 4 Corners & Sides */
+@keyframes satorang-border-cycle-2s {
+  0% {
+    border-color: #ff0055;
+    box-shadow: 0 0 40px rgba(255, 0, 85, 0.95), inset 0 0 25px rgba(255, 0, 85, 0.4);
+  }
+  14% {
+    border-color: #ff6600;
+    box-shadow: 0 0 40px rgba(255, 102, 0, 0.95), inset 0 0 25px rgba(255, 102, 0, 0.4);
+  }
+  28% {
+    border-color: #ffdd00;
+    box-shadow: 0 0 40px rgba(255, 221, 0, 0.95), inset 0 0 25px rgba(255, 221, 0, 0.4);
+  }
+  42% {
+    border-color: #00e676;
+    box-shadow: 0 0 40px rgba(0, 230, 118, 0.95), inset 0 0 25px rgba(0, 230, 118, 0.4);
+  }
+  57% {
+    border-color: #00e5ff;
+    box-shadow: 0 0 40px rgba(0, 229, 255, 0.95), inset 0 0 25px rgba(0, 229, 255, 0.4);
+  }
+  71% {
+    border-color: #7c4dff;
+    box-shadow: 0 0 40px rgba(124, 77, 255, 0.95), inset 0 0 25px rgba(124, 77, 255, 0.4);
+  }
+  85% {
+    border-color: #f50057;
+    box-shadow: 0 0 40px rgba(245, 0, 87, 0.95), inset 0 0 25px rgba(245, 0, 87, 0.4);
+  }
+  100% {
+    border-color: #ff0055;
+    box-shadow: 0 0 40px rgba(255, 0, 85, 0.95), inset 0 0 25px rgba(255, 0, 85, 0.4);
+  }
+}
+
+.animate-satorang-border {
+  border-width: 3px;
+  border-style: solid;
+  animation: satorang-border-cycle-2s 1s linear infinite;
+}
+
+@keyframes rainbow-conic-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.rainbow-box-container {
+  position: relative;
+  border-radius: 26px;
+  padding: 2px;
+  overflow: hidden;
+  box-shadow: 0 0 25px rgba(0, 229, 255, 0.35), 0 0 40px rgba(255, 0, 85, 0.25);
+}
+
+.rainbow-box-container::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    #ff0055, 
+    #ff6600, 
+    #ffdd00, 
+    #00e676, 
+    #00e5ff, 
+    #7c4dff, 
+    #f50057, 
+    #ff0055
+  );
+  animation: rainbow-conic-spin 2s linear infinite;
+  z-index: 0;
+}
+
+.rainbow-box-content {
+  position: relative;
+  z-index: 1;
+  border-radius: 24px;
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+@keyframes satorang-text-cycle-1s {
+  0% { color: #ff0055; text-shadow: 0 0 10px rgba(255, 0, 85, 0.8); }
+  14% { color: #ff6600; text-shadow: 0 0 10px rgba(255, 102, 0, 0.8); }
+  28% { color: #ffdd00; text-shadow: 0 0 10px rgba(255, 221, 0, 0.8); }
+  42% { color: #00e676; text-shadow: 0 0 10px rgba(0, 230, 118, 0.8); }
+  57% { color: #00e5ff; text-shadow: 0 0 10px rgba(0, 229, 255, 0.8); }
+  71% { color: #7c4dff; text-shadow: 0 0 10px rgba(124, 77, 255, 0.8); }
+  85% { color: #f50057; text-shadow: 0 0 10px rgba(245, 0, 87, 0.8); }
+  100% { color: #ff0055; text-shadow: 0 0 10px rgba(255, 0, 85, 0.8); }
+}
+
+.animate-satorang-text {
+  animation: satorang-text-cycle-1s 1s linear infinite;
+}
+@import "tailwindcss";
+
+/* 🌟 ULTRA HD 4K CRYSTAL-CLEAR DISPLAY ENGINE */
+*, *::before, *::after {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #05070e;
+  color: white;
+  min-height: 100%;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+/* HD High-Resolution Quality for All Images, Videos, Avatars & Canvases */
+img, video, canvas {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+/* 100% Fixed Background Image - Never moves, scrolls or shifts */
+.fixed-bg-wallpaper {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background-attachment: fixed !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+
+/* Floating Telegram Logo on Top Layer with z-index 9999 */
+.floating-telegram-btn {
+  position: fixed !important;
+  z-index: 9999 !important;
+}
+
+@keyframes live-gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .6; }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(5deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
+}
+
+@keyframes bokeh-drift {
+  0% { transform: translate(0px, 0px) scale(1); opacity: 0.35; }
+  33% { transform: translate(25px, -35px) scale(1.15); opacity: 0.6; }
+  66% { transform: translate(-20px, -20px) scale(0.9); opacity: 0.4; }
+  100% { transform: translate(0px, 0px) scale(1); opacity: 0.35; }
+}
+
+.bg-live-gradient {
+  background-size: 200% 200%;
+  animation: live-gradient 8s ease infinite;
+}
+
+.animate-bokeh-slow {
+  animation: bokeh-drift 12s ease-in-out infinite;
+}
+
+.animate-bokeh-medium {
+  animation: bokeh-drift 8s ease-in-out infinite reverse;
+}
+
+.animate-bokeh-fast {
+  animation: bokeh-drift 6s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float 8s ease-in-out infinite;
+}
+.animate-float-medium {
+  animation: float 6s ease-in-out infinite;
+}
+.animate-float-fast {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-spin-slow {
+  animation: spin 3s linear infinite;
+}
+
+@keyframes color-shift {
+  0% { filter: hue-rotate(0deg); }
+  50% { filter: hue-rotate(180deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+.animate-color-shift {
+  animation: color-shift 4s linear infinite;
+}
+
+@keyframes fall-sway {
+  0% {
+    transform: translateY(-80px) rotate(0deg) scale(0.85) translateX(0px);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(50vh) rotate(180deg) scale(1.25) translateX(40px);
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(105vh) rotate(360deg) scale(0.9) translateX(-35px);
+    opacity: 0;
+  }
+}
+
+.animate-fall-flower {
+  animation: fall-sway linear infinite;
+  will-change: transform, opacity;
+}
+
+/* DSLR Optical Glass & Depth Vignette */
+.dslr-lens-vignette {
+  background: radial-gradient(ellipse at center, transparent 35%, rgba(5, 7, 14, 0.65) 75%, rgba(2, 3, 6, 0.95) 100%);
+  pointer-events: none;
+}
+
+.dslr-glass-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(15, 23, 42, 0.45) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(217, 70, 239, 0.4);
+  border-radius: 4px;
+}
+/* 1-Second Live Sato-Rang (7 Colors) Rainbow Border for All 4 Corners & Sides */
+@keyframes satorang-border-cycle-2s {
+  0% {
+    border-color: #ff0055;
+    box-shadow: 0 0 40px rgba(255, 0, 85, 0.95), inset 0 0 25px rgba(255, 0, 85, 0.4);
+  }
+  14% {
+    border-color: #ff6600;
+    box-shadow: 0 0 40px rgba(255, 102, 0, 0.95), inset 0 0 25px rgba(255, 102, 0, 0.4);
+  }
+  28% {
+    border-color: #ffdd00;
+    box-shadow: 0 0 40px rgba(255, 221, 0, 0.95), inset 0 0 25px rgba(255, 221, 0, 0.4);
+  }
+  42% {
+    border-color: #00e676;
+    box-shadow: 0 0 40px rgba(0, 230, 118, 0.95), inset 0 0 25px rgba(0, 230, 118, 0.4);
+  }
+  57% {
+    border-color: #00e5ff;
+    box-shadow: 0 0 40px rgba(0, 229, 255, 0.95), inset 0 0 25px rgba(0, 229, 255, 0.4);
+  }
+  71% {
+    border-color: #7c4dff;
+    box-shadow: 0 0 40px rgba(124, 77, 255, 0.95), inset 0 0 25px rgba(124, 77, 255, 0.4);
+  }
+  85% {
+    border-color: #f50057;
+    box-shadow: 0 0 40px rgba(245, 0, 87, 0.95), inset 0 0 25px rgba(245, 0, 87, 0.4);
+  }
+  100% {
+    border-color: #ff0055;
+    box-shadow: 0 0 40px rgba(255, 0, 85, 0.95), inset 0 0 25px rgba(255, 0, 85, 0.4);
+  }
+}
+
+.animate-satorang-border {
+  border-width: 3px;
+  border-style: solid;
+  animation: satorang-border-cycle-2s 1s linear infinite;
+}
+
+@keyframes rainbow-conic-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.rainbow-box-container {
+  position: relative;
+  border-radius: 26px;
+  padding: 2px;
+  overflow: hidden;
+  box-shadow: 0 0 25px rgba(0, 229, 255, 0.35), 0 0 40px rgba(255, 0, 85, 0.25);
+}
+
+.rainbow-box-container::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    #ff0055, 
+    #ff6600, 
+    #ffdd00, 
+    #00e676, 
+    #00e5ff, 
+    #7c4dff, 
+    #f50057, 
+    #ff0055
+  );
+  animation: rainbow-conic-spin 2s linear infinite;
+  z-index: 0;
+}
+
+.rainbow-box-content {
+  position: relative;
+  z-index: 1;
+  border-radius: 24px;
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+@keyframes satorang-text-cycle-1s {
+  0% { color: #ff0055; text-shadow: 0 0 10px rgba(255, 0, 85, 0.8); }
+  14% { color: #ff6600; text-shadow: 0 0 10px rgba(255, 102, 0, 0.8); }
+  28% { color: #ffdd00; text-shadow: 0 0 10px rgba(255, 221, 0, 0.8); }
+  42% { color: #00e676; text-shadow: 0 0 10px rgba(0, 230, 118, 0.8); }
+  57% { color: #00e5ff; text-shadow: 0 0 10px rgba(0, 229, 255, 0.8); }
+  71% { color: #7c4dff; text-shadow: 0 0 10px rgba(124, 77, 255, 0.8); }
+  85% { color: #f50057; text-shadow: 0 0 10px rgba(245, 0, 87, 0.8); }
+  100% { color: #ff0055; text-shadow: 0 0 10px rgba(255, 0, 85, 0.8); }
+}
+
+.animate-satorang-text {
+  animation: satorang-text-cycle-1s 1s linear infinite;
+}
+
+
+/* 🌟 ULTRA HD DSLR CRYSTAL CLEAR TEXT & MODALS */
+.dslr-hd-card {
+  background: #090b10 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.95), inset 0 0 20px rgba(255, 255, 255, 0.03) !important;
+}
+
+@keyframes satorang-all-cycle {
+  0% { border-color: #ff0055; color: #ff0055; filter: hue-rotate(0deg); }
+  14% { border-color: #ff6600; color: #ff6600; filter: hue-rotate(50deg); }
+  28% { border-color: #ffdd00; color: #ffdd00; filter: hue-rotate(100deg); }
+  42% { border-color: #00e676; color: #00e676; filter: hue-rotate(180deg); }
+  57% { border-color: #00e5ff; color: #00e5ff; filter: hue-rotate(220deg); }
+  71% { border-color: #7c4dff; color: #7c4dff; filter: hue-rotate(280deg); }
+  85% { border-color: #f50057; color: #f50057; filter: hue-rotate(320deg); }
+  100% { border-color: #ff0055; color: #ff0055; filter: hue-rotate(360deg); }
+}
+
+.animate-satorang-live {
+  animation: satorang-all-cycle 1s linear infinite;
+}
+
+
+/* 🌟 8K ULTRA-HD ULTRA-SHARP FRESH CRYSTAL CLEAR DISPLAY FOR ENTIRE WEBSITE */
+*, *::before, *::after {
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: geometricPrecision !important;
+  letter-spacing: 0.015em !important;
+}
+
+body, html, input, button, select, textarea, span, p, h1, h2, h3, h4, h5, h6 {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 1px rgba(255, 255, 255, 0.2) !important;
+}
+
+button, a, select, input, .card, div {
+  image-rendering: -webkit-optimize-contrast !important;
+  image-rendering: crisp-edges !important;
+}
+
+/* 8K Ultra Sharp Glowing Borders & Crispness */
+button {
+  font-weight: 900 !important;
+  letter-spacing: 0.05em !important;
+  box-shadow: 0 0 25px rgba(0, 229, 255, 0.3), inset 0 0 12px rgba(255, 255, 255, 0.15) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+button:hover {
+  filter: brightness(1.25) contrast(1.1) !important;
+  transform: translateY(-1px) scale(1.02) !important;
+}
+
+.bg-rainbow-animated {
+  background: linear-gradient(90deg, #ff0055, #ff6600, #ffdd00, #00e676, #00e5ff, #7c4dff, #ff0055);
+  background-size: 200% 100%;
+  animation: live-gradient 1s linear infinite;
 }

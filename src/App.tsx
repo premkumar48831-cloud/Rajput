@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import lordPremThrone from './assets/images/lord_prem_throne_1786425782320.jpg';
 import { LiveNotifications } from './components/LiveNotifications';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, push, onDisconnect, remove } from 'firebase/database';
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+import emailjs from '@emailjs/browser';
 import {
   Menu,
   Wallet,
@@ -38,6 +40,8 @@ import {
   Sparkles,
   Palette,
   CheckCircle,
+  CheckCircle2,
+  UserPlus,
   ExternalLink,
   FolderDown,
   MessageCircle,
@@ -54,7 +58,14 @@ import {
   EyeOff,
   Home,
   Volume2,
-  VolumeX
+  VolumeX,
+  ShieldCheck,
+  Users,
+  Percent,
+  Award,
+  Mail,
+  AlertCircle,
+  AlertTriangle
 } from 'lucide-react';
 
 export function formatExternalUrl(url?: string | null): string {
@@ -82,30 +93,26 @@ export function processAsyncMediaUpload(
 
   const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|avi|3gp|m4v)$/i.test(file.name);
 
-  // Instant Object URL creation - 0ms execution time, 0 main-thread CPU blocking
-  const objectUrl = URL.createObjectURL(file);
-
-  // Asynchronous non-blocking task queue execution
+  // Preserve 100% Ultra HD resolution & clarity for all photos
   setTimeout(() => {
     if (isVideo) {
+      const objectUrl = URL.createObjectURL(file);
       if (onFinishLoading) onFinishLoading(objectUrl, true);
     } else {
-      if (file.size < 2 * 1024 * 1024) {
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          if (evt.target?.result && onFinishLoading) {
-            onFinishLoading(evt.target.result as string, false);
-          }
-        };
-        reader.onerror = () => {
-          if (onFinishLoading) onFinishLoading(objectUrl, false);
-        };
-        reader.readAsDataURL(file);
-      } else {
-        if (onFinishLoading) onFinishLoading(objectUrl, false);
-      }
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const rawResult = evt.target?.result as string;
+        if (rawResult && onFinishLoading) {
+          onFinishLoading(rawResult, false);
+        }
+      };
+      reader.onerror = () => {
+        const fallbackUrl = URL.createObjectURL(file);
+        if (onFinishLoading) onFinishLoading(fallbackUrl, false);
+      };
+      reader.readAsDataURL(file);
     }
-  }, 30);
+  }, 20);
 }
 
 export function sanitizeForFirebase<T>(obj: T): T {
@@ -162,16 +169,16 @@ export function getYouTubeInfo(url: string | undefined | null) {
   return null;
 }
 
-// PASTE YOUR FIREBASE CONFIG HERE
+// FIREBASE GOOGLE LOGIN & DATABASE CONFIG (ffh4ckjodvip)
 const firebaseConfig = {
-  apiKey: "AIzaSyBgiGI6QYhUHnz6HrUOw5NEJ5tWG3_x0ew",
-  authDomain: "riyajroyx.firebaseapp.com",
-  databaseURL: "https://riyajroyx-default-rtdb.firebaseio.com",
-  projectId: "riyajroyx",
-  storageBucket: "riyajroyx.firebasestorage.app",
-  messagingSenderId: "338558331104",
-  appId: "1:338558331104:web:89b3ffc8f6722164d3c885",
-  measurementId: "G-VSQPG05BF1"
+  apiKey: "AIzaSyBy8u8SYI79TVaOetb-fYljejSjEP6UlAw",
+  authDomain: "ffh4ckjodvip.firebaseapp.com",
+  projectId: "ffh4ckjodvip",
+  storageBucket: "ffh4ckjodvip.firebasestorage.app",
+  messagingSenderId: "532017699520",
+  appId: "1:532017699520:web:f329492297cd927270ab25",
+  measurementId: "G-V0QZ7W0V3S",
+  databaseURL: "https://ffh4ckjodvip-default-rtdb.firebaseio.com"
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
@@ -180,10 +187,416 @@ const database = getDatabase(firebaseApp);
 export default function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentView, setCurrentView] = useState<'home' | 'addFund' | 'spinWin' | 'referEarn' | 'admin' | 'adminUserHistory' | 'adminPayment' | 'adminKeys' | 'adminSpin' | 'adminRefer' | 'login' | 'profile' | 'customerSupport' | 'adminSupport' | 'adminPaymentSettings' | 'adminLogins' | 'adminAddPanel' | 'adminDeletePanel' | 'adminBgImage' | 'adminAccessFiles' | 'keyPending' | 'adminOwner' | 'staff'>('home');
-  const [staffTab, setStaffTab] = useState<'overview' | 'addPanel' | 'house' | 'managePanels' | 'supportLinks' | 'users' | 'payments' | 'userBanner' | 'fullHistory' | 'pendingKeys' | 'colorTheme'>('overview');
+  const [staffTab, setStaffTab] = useState<'overview' | 'addPanel' | 'house' | 'managePanels' | 'supportLinks' | 'users' | 'payments' | 'userBanner' | 'fullHistory' | 'pendingKeys' | 'colorTheme' | 'resellers' | 'emailKey' | 'refundPanel'>('overview');
   const [staffSearchUser, setStaffSearchUser] = useState('');
   const [staffSearchPayment, setStaffSearchPayment] = useState('');
   const [staffEditingPanel, setStaffEditingPanel] = useState<any | null>(null);
+  const [staffPassword, setStaffPassword] = useState('');
+  const [showAdminAuthModal, setShowAdminAuthModal] = useState(false);
+  const [adminAuthPass, setAdminAuthPass] = useState('');
+
+  // Reseller System State (Google Auth & Differential Pricing)
+  const [showSecretAdminToast, setShowSecretAdminToast] = useState(false);
+  const [showResellerModal, setShowResellerModal] = useState(false);
+  const [isSigningInGoogle, setIsSigningInGoogle] = useState(false);
+  const [resellerLoginEmail, setResellerLoginEmail] = useState('');
+  const [resellerLoginPass, setResellerLoginPass] = useState('');
+  const [searchResellerQuery, setSearchResellerQuery] = useState('');
+  const [newResellerForm, setNewResellerForm] = useState({
+    email: '',
+    name: '',
+    phone: '',
+    balance: 500,
+    isApproved: true
+  });
+
+  const [resellerUser, setResellerUser] = useState<{
+    isLoggedIn: boolean;
+    email: string;
+    name: string;
+    phone?: string;
+    balance: number;
+    isApproved: boolean;
+  }>(() => {
+    const saved = localStorage.getItem('app_resellerUser');
+    return saved ? JSON.parse(saved) : {
+      isLoggedIn: false,
+      email: '',
+      name: '',
+      balance: 0,
+      isApproved: false
+    };
+  });
+
+  useEffect(() => {
+    localStorage.setItem('app_resellerUser', JSON.stringify(resellerUser));
+  }, [resellerUser]);
+
+  const [approvedResellers, setApprovedResellers] = useState<{
+    email: string;
+    name?: string;
+    phone?: string;
+    balance: number;
+    isApproved: boolean;
+    discountPercent?: number;
+    createdAt: string;
+  }[]>(() => {
+    const saved = localStorage.getItem('app_approvedResellers');
+    return saved ? JSON.parse(saved) : [
+      {
+        email: 'pramk9992@gmail.com',
+        name: 'Pramod Kumar (Main VIP Reseller)',
+        phone: '9876543210',
+        balance: 1500,
+        isApproved: true,
+        discountPercent: 35,
+        createdAt: '2026-08-01 10:00:00'
+      },
+      {
+        email: 'reseller1@gmail.com',
+        name: 'Apex VIP Reseller',
+        phone: '9812345678',
+        balance: 500,
+        isApproved: true,
+        discountPercent: 30,
+        createdAt: '2026-08-10 14:30:00'
+      }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('app_approvedResellers', JSON.stringify(approvedResellers));
+  }, [approvedResellers]);
+
+  const handleGoogleResellerSignIn = async () => {
+    try {
+      setIsSigningInGoogle(true);
+      const auth = getAuth(firebaseApp);
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      if (user && user.email) {
+        const cleanEmail = user.email.toLowerCase().trim();
+        const existing = approvedResellers.find(r => r.email.toLowerCase() === cleanEmail);
+        if (existing) {
+          setResellerUser({
+            isLoggedIn: true,
+            email: existing.email,
+            name: existing.name || user.displayName || 'Reseller VIP',
+            phone: existing.phone || '',
+            balance: existing.balance || 0,
+            isApproved: existing.isApproved !== false
+          });
+          alert(`üéâ Welcome back, ${user.displayName || cleanEmail}!\nReseller VIP Access Activated with ‚Çπ${existing.balance} Wallet Balance.`);
+        } else {
+          // Auto register new Google account as approved reseller
+          const newReseller = {
+            email: cleanEmail,
+            name: user.displayName || 'Google Verified Reseller',
+            phone: '',
+            balance: 500,
+            isApproved: true,
+            discountPercent: 35,
+            createdAt: new Date().toLocaleString()
+          };
+          setApprovedResellers(prev => [newReseller, ...prev]);
+          setResellerUser({
+            isLoggedIn: true,
+            email: cleanEmail,
+            name: user.displayName || 'Google Verified Reseller',
+            balance: 500,
+            isApproved: true
+          });
+          alert(`üéâ Google Sign-in Verified!\nApproved Reseller VIP profile activated for: ${cleanEmail}`);
+        }
+      }
+    } catch (err: any) {
+      console.warn("Google Auth popup issue or blocked in iframe, offering instant direct fallback:", err);
+      const manualEmail = prompt("Google Sign-In popup restricted in preview. Enter your Reseller Gmail ID to verify VIP access:", "pramk9992@gmail.com");
+      if (manualEmail && manualEmail.includes('@')) {
+        const cleanEmail = manualEmail.toLowerCase().trim();
+        const existing = approvedResellers.find(r => r.email.toLowerCase() === cleanEmail);
+        if (existing) {
+          setResellerUser({
+            isLoggedIn: true,
+            email: existing.email,
+            name: existing.name || 'Verified Reseller',
+            phone: existing.phone || '',
+            balance: existing.balance || 0,
+            isApproved: existing.isApproved !== false
+          });
+          alert(`üéâ Logged in as Approved Reseller: ${cleanEmail} (Wallet: ‚Çπ${existing.balance})`);
+        } else {
+          const newReseller = {
+            email: cleanEmail,
+            name: 'Verified Reseller',
+            phone: '',
+            balance: 500,
+            isApproved: true,
+            discountPercent: 35,
+            createdAt: new Date().toLocaleString()
+          };
+          setApprovedResellers(prev => [newReseller, ...prev]);
+          setResellerUser({
+            isLoggedIn: true,
+            email: cleanEmail,
+            name: 'Verified Reseller',
+            balance: 500,
+            isApproved: true
+          });
+          alert(`üéâ Reseller VIP Account Activated for ${cleanEmail}!`);
+        }
+      }
+    } finally {
+      setIsSigningInGoogle(false);
+    }
+  };
+
+  const handleManualResellerLogin = () => {
+    const emailVal = resellerLoginEmail.toLowerCase().trim();
+    if (!emailVal || !emailVal.includes('@')) {
+      alert("Kripya valid Reseller Gmail ID enter karein!");
+      return;
+    }
+    const existing = approvedResellers.find(r => r.email.toLowerCase() === emailVal);
+    if (existing) {
+      if (!existing.isApproved) {
+        alert("‚ö†Ô∏è Aapka Reseller Account abhi Admin dwara PENDING hai. Admin dwara approve hone ke baad VIP rates milenge.");
+        return;
+      }
+      setResellerUser({
+        isLoggedIn: true,
+        email: existing.email,
+        name: existing.name || 'Verified Reseller',
+        phone: existing.phone || '',
+        balance: existing.balance || 0,
+        isApproved: true
+      });
+      alert(`üéâ Reseller Login Successful! Welcome ${existing.name || emailVal}. Wallet: ‚Çπ${existing.balance}`);
+      setResellerLoginEmail('');
+      setResellerLoginPass('');
+    } else {
+      // Auto-create and approve
+      const newReseller = {
+        email: emailVal,
+        name: 'Verified Reseller',
+        phone: '',
+        balance: 500,
+        isApproved: true,
+        discountPercent: 35,
+        createdAt: new Date().toLocaleString()
+      };
+      setApprovedResellers(prev => [newReseller, ...prev]);
+      setResellerUser({
+        isLoggedIn: true,
+        email: emailVal,
+        name: 'Verified Reseller',
+        balance: 500,
+        isApproved: true
+      });
+      alert(`üéâ Reseller Account created and VIP activated for ${emailVal}!`);
+      setResellerLoginEmail('');
+      setResellerLoginPass('');
+    }
+  };
+
+  // EMAILJS KEY SENDER SYSTEM (Configured with User's Exact IDs)
+  const EMAILJS_PUBLIC_KEY = 'huTOpMHbOaE_WYEpW';
+  const EMAILJS_SERVICE_ID = 'service_v7djd5d';
+  const EMAILJS_TEMPLATE_ID = 'template_5g45pm3';
+
+  const [emailJsConfig, setEmailJsConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('satorang_emailjs_config');
+      if (saved) {
+         const parsed = JSON.parse(saved);
+         if (parsed.serviceId !== 'service_58soxwr') return parsed;
+      }
+    } catch (e) {}
+    return {
+      publicKey: EMAILJS_PUBLIC_KEY,
+      serviceId: EMAILJS_SERVICE_ID,
+      templateId: EMAILJS_TEMPLATE_ID
+    };
+  });
+
+  const [showEmailJsConfigSettings, setShowEmailJsConfigSettings] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (emailJsConfig.publicKey) {
+        emailjs.init(emailJsConfig.publicKey.trim());
+      }
+    } catch (e) {
+      console.warn('EmailJS init warning:', e);
+    }
+  }, [emailJsConfig.publicKey]);
+
+  const [sendKeyEmailForm, setSendKeyEmailForm] = useState({
+    userEmail: '',
+    keyValue: '',
+    adminMessage: ''
+  });
+
+  const [emailSendingStatus, setEmailSendingStatus] = useState<{
+    loading: boolean;
+    status: 'idle' | 'sending' | 'success' | 'error';
+    message: string;
+  }>({
+    loading: false,
+    status: 'idle',
+    message: ''
+  });
+
+  const handleSendKeyToUser = async (targetEmail?: string, targetKey?: string, targetMsg?: string) => {
+    // 1. ‡§á‡§®‡§™‡•Å‡§ü ‡§´‡§º‡•Ä‡§≤‡•ç‡§°‡•ç‡§∏ ‡§∏‡•á ‡§°‡•á‡§ü‡§æ ‡§™‡•ç‡§∞‡§æ‡§™‡•ç‡§§ ‡§ï‡§∞‡§®‡§æ
+    const emailElem = document.getElementById("userEmail") as HTMLInputElement | null;
+    const keyElem = document.getElementById("keyValue") as HTMLInputElement | null;
+    const msgElem = document.getElementById("adminMessage") as HTMLTextAreaElement | null;
+    const statusElem = document.getElementById("statusMessage");
+
+    const rawEmail = (targetEmail || (emailElem ? emailElem.value : sendKeyEmailForm.userEmail) || '').trim();
+    const cleanEmail = rawEmail.replace(/[\u200B-\u200D\uFEFF\u00A0\r\n\t]/g, '').trim();
+    const key = (targetKey || (keyElem ? keyElem.value : sendKeyEmailForm.keyValue) || '').trim();
+    const message = (targetMsg !== undefined ? targetMsg : (msgElem ? msgElem.value : sendKeyEmailForm.adminMessage) || '').trim();
+
+    // 2. ‡§Ö‡§ó‡§∞ ‡§à‡§Æ‡•á‡§≤ ‡§Ø‡§æ ‡§ï‡•Ä ‡§ñ‡§æ‡§≤‡•Ä ‡§π‡•à, ‡§§‡•ã ‡§´‡•â‡§∞‡•ç‡§Æ ‡§∏‡§¨‡§Æ‡§ø‡§ü ‡§® ‡§π‡•ã‡§®‡•á ‡§¶‡•á‡§Ç (‡§ñ‡§æ‡§≤‡•Ä ‡§à‡§Æ‡•á‡§≤ ‡§∏‡•á 422 ‡§è‡§∞‡§∞ ‡§Ü‡§§‡§æ ‡§π‡•à)
+    if (!cleanEmail || !key) {
+      if (statusElem) {
+        statusElem.innerText = "‡§ï‡•É‡§™‡§Ø‡§æ ‡§∏‡§π‡•Ä Email ‡§î‡§∞ Key ‡§¶‡•ã‡§®‡•ã‡§Ç ‡§≠‡§∞‡•á‡§Ç!";
+        statusElem.style.color = "red";
+      }
+      setEmailSendingStatus({
+        loading: false,
+        status: 'error',
+        message: '‡§ï‡•É‡§™‡§Ø‡§æ ‡§∏‡§π‡•Ä Email ‡§î‡§∞ Key ‡§¶‡•ã‡§®‡•ã‡§Ç ‡§≠‡§∞‡•á‡§Ç!'
+      });
+      alert('‡§ï‡•É‡§™‡§Ø‡§æ ‡§∏‡§π‡•Ä Email ‡§î‡§∞ Key ‡§¶‡•ã‡§®‡•ã‡§Ç ‡§≠‡§∞‡•á‡§Ç!');
+      return false;
+    }
+
+    if (statusElem) {
+      statusElem.innerText = "‡§≠‡•á‡§ú‡§æ ‡§ú‡§æ ‡§∞‡§π‡§æ ‡§π‡•à...";
+      statusElem.style.color = "blue";
+    }
+
+    setEmailSendingStatus({
+      loading: true,
+      status: 'sending',
+      message: `‡§≠‡•á‡§ú‡§æ ‡§ú‡§æ ‡§∞‡§π‡§æ ‡§π‡•à (${cleanEmail})... ‡§ï‡•É‡§™‡§Ø‡§æ ‡§™‡•ç‡§∞‡§§‡•Ä‡§ï‡•ç‡§∑‡§æ ‡§ï‡§∞‡•á‡§Ç‡•§`
+    });
+
+    // 3. ‡§ü‡•á‡§Æ‡•ç‡§™‡•ç‡§≤‡•á‡§ü ‡§µ‡•á‡§∞‡§ø‡§è‡§¨‡§≤‡•ç‡§∏ (EmailJS ‡§°‡•à‡§∂‡§¨‡•ã‡§∞‡•ç‡§° template_5g45pm3 ‡§∏‡•á 100% ‡§Æ‡•à‡§ö)
+    const templateParams: Record<string, string> = {
+      user_email: cleanEmail,    // EmailJS ‡§ï‡•á "To Email" {{user_email}} ‡§ï‡•á ‡§≤‡§ø‡§è
+      to_email: cleanEmail,      // ‡§¨‡•à‡§ï‡§Ö‡§™ {{to_email}} ‡§ï‡•á ‡§≤‡§ø‡§è
+      email: cleanEmail,         // ‡§¨‡•à‡§ï‡§Ö‡§™ {{email}} ‡§ï‡•á ‡§≤‡§ø‡§è
+      to: cleanEmail,            // ‡§¨‡•à‡§ï‡§Ö‡§™ {{to}} ‡§ï‡•á ‡§≤‡§ø‡§è
+      key_value: key,            // {{key_value}} ‡§ï‡•á ‡§≤‡§ø‡§è
+      key: key,                  // ‡§¨‡•à‡§ï‡§Ö‡§™ {{key}} ‡§ï‡•á ‡§≤‡§ø‡§è
+      admin_message: message,    // {{admin_message}} ‡§ï‡•á ‡§≤‡§ø‡§è
+      message: message           // ‡§¨‡•à‡§ï‡§Ö‡§™ {{message}} ‡§ï‡•á ‡§≤‡§ø‡§è
+    };
+
+    const sId = (emailJsConfig.serviceId || EMAILJS_SERVICE_ID).trim();
+    const tId = (emailJsConfig.templateId || EMAILJS_TEMPLATE_ID).trim();
+    const pKey = (emailJsConfig.publicKey || EMAILJS_PUBLIC_KEY).trim();
+
+    try {
+      emailjs.init(pKey);
+      
+      let sentSuccess = false;
+      let responseDetails = '';
+
+      try {
+        const response = await emailjs.send(sId, tId, templateParams, pKey);
+        console.log('SUCCESS!', response.status, response.text);
+        sentSuccess = response.status === 200 || response.text === 'OK';
+        responseDetails = response.text || 'OK';
+      } catch (sdkError: any) {
+        console.warn('SDK send error, fallback to direct EmailJS endpoint...', sdkError);
+        const restRes = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            service_id: sId,
+            template_id: tId,
+            user_id: pKey,
+            template_params: templateParams
+          })
+        });
+
+        if (restRes.ok) {
+          sentSuccess = true;
+          responseDetails = await restRes.text();
+        } else {
+          const errText = await restRes.text();
+          console.warn('Direct EmailJS REST failed, trying backend /api/send-email...', errText);
+          const srvRes = await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(templateParams)
+          });
+          if (srvRes.ok) {
+            sentSuccess = true;
+            responseDetails = 'Delivered via server-side gateway';
+          } else {
+            throw new Error(errText || `HTTP ${restRes.status}`);
+          }
+        }
+      }
+
+      if (sentSuccess) {
+        if (statusElem) {
+          statusElem.innerText = "‡§∏‡§´‡§≤‡§§‡§æ‡§™‡•Ç‡§∞‡•ç‡§µ‡§ï ‡§à‡§Æ‡•á‡§≤ ‡§≠‡•á‡§ú ‡§¶‡§ø‡§Ø‡§æ ‡§ó‡§Ø‡§æ ‡§π‡•à!";
+          statusElem.style.color = "green";
+        }
+
+        setEmailSendingStatus({
+          loading: false,
+          status: 'success',
+          message: `‡§∏‡§´‡§≤‡§§‡§æ‡§™‡•Ç‡§∞‡•ç‡§µ‡§ï ‡§à‡§Æ‡•á‡§≤ (${cleanEmail}) ‡§™‡§∞ Key ‡§≠‡•á‡§ú ‡§¶‡§ø‡§Ø‡§æ ‡§ó‡§Ø‡§æ ‡§π‡•à!`
+        });
+
+        // ‡§´‡•â‡§∞‡•ç‡§Æ ‡§∏‡§æ‡§´‡§º ‡§ï‡§∞‡§®‡§æ
+        if (emailElem) emailElem.value = "";
+        if (keyElem) keyElem.value = "";
+        if (msgElem) msgElem.value = "";
+
+        setSendKeyEmailForm({
+          userEmail: '',
+          keyValue: '',
+          adminMessage: ''
+        });
+
+        alert(`‚úÖ ‡§∏‡§´‡§≤‡§§‡§æ‡§™‡•Ç‡§∞‡•ç‡§µ‡§ï ‡§à‡§Æ‡•á‡§≤ (${cleanEmail}) ‡§™‡§∞ Key ‡§≠‡•á‡§ú ‡§¶‡§ø‡§Ø‡§æ ‡§ó‡§Ø‡§æ ‡§π‡•à!`);
+        return true;
+      }
+      return false;
+    } catch (error: any) {
+      console.log('FAILED...', error);
+      const errorMsg = "Error " + (error?.status || '422') + ": ‡§°‡•á‡§ü‡§æ ‡§Æ‡•à‡§ö ‡§®‡§π‡•Ä‡§Ç ‡§π‡•Å‡§Ü ‡§Ø‡§æ ‡§ñ‡§æ‡§≤‡•Ä ‡§π‡•à‡•§";
+      
+      if (statusElem) {
+        statusElem.innerText = errorMsg;
+        statusElem.style.color = "red";
+      }
+
+      setEmailSendingStatus({
+        loading: false,
+        status: 'error',
+        message: errorMsg
+      });
+
+      alert(`‚ùå ${errorMsg}\n\n‡§°‡§ø‡§ü‡•á‡§≤‡•ç‡§∏: ${error?.text || error?.message || 'EmailJS Template ‡§Æ‡•á‡§Ç To Email ‡§ï‡•ã {{user_email}} ‡§™‡§∞ ‡§∏‡•á‡§ü ‡§ï‡§∞‡•á‡§Ç‡•§'}`);
+      return false;
+    }
+  };
+
+  // Expose sendKeyToUser globally on window for direct script execution
+  useEffect(() => {
+    (window as any).sendKeyToUser = () => handleSendKeyToUser();
+  }, [emailJsConfig, sendKeyEmailForm]);
 
   // Dedicated House / 24Ghanta Private Panel Form State
   const [housePanelForm, setHousePanelForm] = useState({
@@ -228,7 +641,14 @@ export default function App() {
   };
 
   // Admin Configurable Spin Rewards (e.g., 5, 10, 20, 30, 50)
-  const [spinRewards, setSpinRewards] = useState<number[]>([5, 10, 20, 30, 50]);
+  const [spinRewards, setSpinRewards] = useState<number[]>(() => {
+    try {
+      const saved = localStorage.getItem('app_spinRewards');
+      return saved ? JSON.parse(saved) : [5, 10, 20, 30, 50];
+    } catch (e) {
+      return [5, 10, 20, 30, 50];
+    }
+  });
 
   useEffect(() => {
     localStorage.setItem('app_spinRewards', JSON.stringify(spinRewards));
@@ -264,7 +684,57 @@ export default function App() {
   // Voice Payment Guidance State & Web Speech Synthesis
   const [isSpeakingGuide, setIsSpeakingGuide] = useState(false);
 
-  const voiceGuideText = "Doston, Is tarike se payment kijiye taki aapka payment ruk Na jaaye aur aapko pareshani Na Ho. To jo main bata raha hun ISI step ko follow kariye. Sabse pahle to amount choose kariye kitna rupya dalna chahte ho tum. Uske bad generate QR code per click karke QR code generate kar sakte ho, and us QR code ka screenshot lekar payment karke, I have paid proceed pe click karke apna UTR number and transaction ID donon mein se koi dal sakte ho. Jab aap sab kuchh acche se dal dete ho details, to sabse niche button hai, us button per click kariye Submit Payment. Is button per click karke thodi der wait karna, admin aapka wallet mein Paisa add kar dega. Thank you doston.";
+  // üå∏ Female Voice Engine for "Welcome to Prem Store"
+  const [hasPlayedIntroVoice, setHasPlayedIntroVoice] = useState(false);
+
+  const playWelcomeVoice = () => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const text = "Welcome to Prem Store";
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.pitch = 1.18; // Sweet, crisp female voice pitch
+      utterance.rate = 0.95;  // Clear, natural cadence
+      utterance.volume = 1.0; // High clarity
+
+      const voices = window.speechSynthesis.getVoices();
+      // Prioritize female voices (Hindi or English)
+      const femaleVoice = voices.find(v => 
+        (v.name.toLowerCase().includes('female') || 
+         v.name.toLowerCase().includes('zira') || 
+         v.name.toLowerCase().includes('samantha') || 
+         v.name.toLowerCase().includes('kavya') ||
+         v.name.toLowerCase().includes('swara') ||
+         v.name.toLowerCase().includes('heera') ||
+         v.name.toLowerCase().includes('victoria') ||
+         v.name.toLowerCase().includes('karen')) &&
+        (v.lang.startsWith('hi') || v.lang.startsWith('en'))
+      ) || voices.find(v => v.name.toLowerCase().includes('female')) ||
+        voices.find(v => v.lang === 'hi-IN' || v.lang === 'en-IN') ||
+        voices[0];
+
+      if (femaleVoice) {
+        utterance.voice = femaleVoice;
+      }
+
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.warn("Speech synthesis note:", err);
+    }
+  };
+
+  // Trigger when the website is fully opened (all initial loading & modals dismissed)
+  useEffect(() => {
+    if (!isAppLoading && !showLordPremModal && !showImportantNoticeModal && !hasPlayedIntroVoice) {
+      setHasPlayedIntroVoice(true);
+      const timer = setTimeout(() => {
+        playWelcomeVoice();
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [isAppLoading, showLordPremModal, showImportantNoticeModal, hasPlayedIntroVoice]);
+
+  const voiceGuideText = "Welcome! Paise add karne ki prakriya behad aasan hai. Step 1: Apna manpasand amount select karein. Step 2: Niche Generate QR Code par click karein. Step 3: Screen par dikh rahe QR code ka screenshot lein aur payment karein. Step 4: Payment ke baad mile 12-digit ke UTR number ko save karein. Step 5: App mein niche I Have Paid par click karein. Step 6: Apna 12-digit ka UTR number enter karein aur Submit Payment par click karein. Aapka transaction surakshit roop se submit ho gaya hai. Thank you!";
 
   const playPaymentVoiceGuide = () => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
@@ -411,16 +881,58 @@ export default function App() {
   }, [userProfile]);
 
   // Account-Specific Spin Timestamps, Coupon Used Timestamps, and Account Coupons
-  const [userSpinTimestamps, setUserSpinTimestamps] = useState<Record<string, number>>({});
-  const [userCouponUsedTimestamps, setUserCouponUsedTimestamps] = useState<Record<string, number>>({});
-  const [userAccountCoupons, setUserAccountCoupons] = useState<Record<string, any[]>>({});
+  const [userSpinTimestamps, setUserSpinTimestamps] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('app_userSpinTimestamps');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('app_userSpinTimestamps', JSON.stringify(userSpinTimestamps));
+  }, [userSpinTimestamps]);
+
+  const [userCouponUsedTimestamps, setUserCouponUsedTimestamps] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('app_userCouponUsedTimestamps');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('app_userCouponUsedTimestamps', JSON.stringify(userCouponUsedTimestamps));
+  }, [userCouponUsedTimestamps]);
+
+  const [userAccountCoupons, setUserAccountCoupons] = useState<Record<string, any[]>>(() => {
+    try {
+      const saved = localStorage.getItem('app_userAccountCoupons');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('app_userAccountCoupons', JSON.stringify(userAccountCoupons));
+  }, [userAccountCoupons]);
 
   const activeAccKey = getAccountKey(userProfile.email, userProfile.phone);
   const lastSpinTimestamp = userProfile.isLoggedIn ? (userSpinTimestamps[activeAccKey] || 0) : 0;
   const lastCouponUsedTimestamp = userProfile.isLoggedIn ? (userCouponUsedTimestamps[activeAccKey] || 0) : 0;
   const userCoupons = userProfile.isLoggedIn ? (userAccountCoupons[activeAccKey] || []) : [];
 
-  const [userWallets, setUserWallets] = useState<Record<string, number>>({});
+  const [userWallets, setUserWallets] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('app_userWallets');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
 
   useEffect(() => {
     localStorage.setItem('app_userWallets', JSON.stringify(userWallets));
@@ -442,6 +954,15 @@ export default function App() {
   });
 
   useEffect(() => {
+    if (userProfile.isLoggedIn) {
+      const activeKey = getAccountKey(userProfile.email, userProfile.phone);
+      if (userWallets[activeKey] !== undefined && userWallets[activeKey] !== userBalance) {
+        setUserBalance(userWallets[activeKey]);
+      }
+    }
+  }, [userWallets, userProfile.isLoggedIn, userProfile.email, userProfile.phone]);
+
+  useEffect(() => {
     localStorage.setItem('app_userBalance', userBalance.toString());
     if (userProfile.isLoggedIn) {
       const key = getAccountKey(userProfile.email, userProfile.phone);
@@ -455,11 +976,18 @@ export default function App() {
   }, [userBalance, userProfile.isLoggedIn, userProfile.email, userProfile.phone]);
 
   const [paymentSettings, setPaymentSettings] = useState(() => {
-    const saved = null;
-    return saved ? JSON.parse(saved) : {
-      qrImage: 'https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg',
-      upiId: '9876543210@paytm'
-    };
+    try {
+      const saved = localStorage.getItem('app_paymentSettings');
+      return saved ? JSON.parse(saved) : {
+        qrImage: 'https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg',
+        upiId: '9876543210@paytm'
+      };
+    } catch (e) {
+      return {
+        qrImage: 'https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg',
+        upiId: '9876543210@paytm'
+      };
+    }
   });
 
   useEffect(() => {
@@ -467,12 +995,20 @@ export default function App() {
   }, [paymentSettings]);
 
   const [supportLinks, setSupportLinks] = useState(() => {
-    const saved = null;
-    return saved ? JSON.parse(saved) : {
-      telegram: 'https://t.me/yourchannel',
-      whatsapp: 'https://wa.me/1234567890',
-      ownerTelegram: 'https://t.me/Premjodvip'
-    };
+    try {
+      const saved = localStorage.getItem('app_supportLinks');
+      return saved ? JSON.parse(saved) : {
+        telegram: 'https://t.me/yourchannel',
+        whatsapp: 'https://wa.me/1234567890',
+        ownerTelegram: 'https://t.me/Premjodvip'
+      };
+    } catch (e) {
+      return {
+        telegram: 'https://t.me/yourchannel',
+        whatsapp: 'https://wa.me/1234567890',
+        ownerTelegram: 'https://t.me/Premjodvip'
+      };
+    }
   });
 
   useEffect(() => {
@@ -480,16 +1016,28 @@ export default function App() {
   }, [supportLinks]);
 
   const [accessFileSteps, setAccessFileSteps] = useState(() => {
-    const saved = null;
-    return saved ? JSON.parse(saved) : {
-      step1Title: 'Step 1: Watch YouTube Video Tutorial',
-      step1Url: 'https://www.youtube.com',
-      step2Title: 'Step 2: Join Telegram Channel For Files',
-      step2Url: 'https://t.me/yourchannel',
-      step3Title: 'Step 3: Join WhatsApp Group For Support',
-      step3Url: 'https://wa.me/1234567890',
-      directFileUrl: 'https://t.me/yourchannel'
-    };
+    try {
+      const saved = localStorage.getItem('app_accessFileSteps');
+      return saved ? JSON.parse(saved) : {
+        step1Title: 'Step 1: Watch YouTube Video Tutorial',
+        step1Url: 'https://www.youtube.com',
+        step2Title: 'Step 2: Join Telegram Channel For Files',
+        step2Url: 'https://t.me/yourchannel',
+        step3Title: 'Step 3: Join WhatsApp Group For Support',
+        step3Url: 'https://wa.me/1234567890',
+        directFileUrl: 'https://t.me/yourchannel'
+      };
+    } catch (e) {
+      return {
+        step1Title: 'Step 1: Watch YouTube Video Tutorial',
+        step1Url: 'https://www.youtube.com',
+        step2Title: 'Step 2: Join Telegram Channel For Files',
+        step2Url: 'https://t.me/yourchannel',
+        step3Title: 'Step 3: Join WhatsApp Group For Support',
+        step3Url: 'https://wa.me/1234567890',
+        directFileUrl: 'https://t.me/yourchannel'
+      };
+    }
   });
 
   useEffect(() => {
@@ -499,9 +1047,17 @@ export default function App() {
   const [showAccessFilesModal, setShowAccessFilesModal] = useState(false);
   const [activePanelFileUrl, setActivePanelFileUrl] = useState('');
 
-  const [panels, setPanels] = useState(() => {
-    const saved = null;
-    return saved ? JSON.parse(saved) : [
+  const [panels, setPanels] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('app_panels');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return [
       {
         id: 1,
         title: "A,XYZ MAIN ID FF PROXY NONROOT",
@@ -628,8 +1184,12 @@ export default function App() {
     date: string;
     status: string;
   }[]>(() => {
-    const saved = null;
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('app_spinRequests');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
   });
 
   useEffect(() => {
@@ -647,8 +1207,12 @@ export default function App() {
     date: string;
     status: string;
   }[]>(() => {
-    const saved = null;
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('app_referRequests');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
   });
 
   useEffect(() => {
@@ -657,8 +1221,12 @@ export default function App() {
 
   // Admin Configurable Referral Website Link & Bonus Amount
   const [referWebsiteLink, setReferWebsiteLink] = useState<string>(() => {
-    const saved = null;
-    return saved || 'https://website.com';
+    try {
+      const saved = localStorage.getItem('app_referWebsiteLink');
+      return saved || 'https://website.com';
+    } catch (e) {
+      return 'https://website.com';
+    }
   });
 
   useEffect(() => {
@@ -666,8 +1234,12 @@ export default function App() {
   }, [referWebsiteLink]);
 
   const [referBonusAmount, setReferBonusAmount] = useState<number>(() => {
-    const saved = null;
-    return saved ? Number(saved) : 50;
+    try {
+      const saved = localStorage.getItem('app_referBonusAmount');
+      return saved ? Number(saved) : 50;
+    } catch (e) {
+      return 50;
+    }
   });
 
   useEffect(() => {
@@ -695,8 +1267,12 @@ export default function App() {
     date: string;
     exceptFileLink?: string;
   }[]>(() => {
-    const saved = null;
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('app_keyRequests');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
   });
 
   useEffect(() => {
@@ -711,18 +1287,30 @@ export default function App() {
   });
 
   const [registeredUsers, setRegisteredUsers] = useState<{name?: string, email: string, phone: string, password: string, avatar?: string, joinDate: string}[]>(() => {
-    const saved = null;
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('app_registeredUsers');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
   });
 
   const [bannedUsers, setBannedUsers] = useState<string[]>(() => {
-    const saved = null;
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('app_bannedUsers');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
   });
 
   const [authStats, setAuthStats] = useState(() => {
-    const saved = null;
-    return saved ? JSON.parse(saved) : { logins: 0, logouts: 0 };
+    try {
+      const saved = localStorage.getItem('app_authStats');
+      return saved ? JSON.parse(saved) : { logins: 0, logouts: 0 };
+    } catch (e) {
+      return { logins: 0, logouts: 0 };
+    }
   });
 
   useEffect(() => {
@@ -792,6 +1380,310 @@ export default function App() {
     alert("‚úÖ Aapki Profile Photo permanent save ho gayi hai!");
   };
 
+  const [isSigningInUserGoogle, setIsSigningInUserGoogle] = useState(false);
+  const [userAuthTab, setUserAuthTab] = useState<'login' | 'register'>('login');
+  const [userLoginForm, setUserLoginForm] = useState({ identifier: '', password: '' });
+  const [userRegisterForm, setUserRegisterForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
+  const [userAuthError, setUserAuthError] = useState('');
+  const [showGoogleLoginModal, setShowGoogleLoginModal] = useState(false);
+  const [googleModalEmail, setGoogleModalEmail] = useState('');
+  const [googleModalName, setGoogleModalName] = useState('');
+  const [googleModalPass, setGoogleModalPass] = useState('');
+  const [googleModalError, setGoogleModalError] = useState('');
+
+  const validateEmailFormat = (email: string) => {
+    const re = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return re.test(String(email).toLowerCase().trim());
+  };
+
+  const validatePhoneFormat = (phone: string) => {
+    const cleanDigits = phone.replace(/[\s\-\+]/g, '').slice(-10);
+    return /^[6-9]\d{9}$/.test(cleanDigits);
+  };
+
+  const processSuccessfulGoogleLogin = (emailVal: string, displayName: string, photoVal: string, phoneVal: string) => {
+    const cleanEmail = emailVal.trim().toLowerCase();
+    const cleanPhone = phoneVal ? phoneVal.replace(/[\s\-\+]/g, '').slice(-10) : '';
+    const name = displayName || cleanEmail.split('@')[0] || 'Google User';
+    const avatar = photoVal || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop';
+    const accKey = getAccountKey(cleanEmail, cleanPhone);
+
+    const isExistingInWallets = accKey in userWallets;
+    const existingUser = registeredUsers.find(u => getAccountKey(u.email, u.phone) === accKey);
+
+    if (isExistingInWallets || existingUser) {
+      const savedBal = userWallets[accKey] ?? 0;
+      const savedAccProfile = userAccountProfiles[accKey];
+      setUserBalance(savedBal);
+      setUserProfile({
+        ...userProfile,
+        isLoggedIn: true,
+        email: cleanEmail,
+        phone: cleanPhone || existingUser?.phone || '',
+        password: 'GoogleLoginVerified',
+        avatar: avatar || savedAccProfile?.avatar || existingUser?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
+        keysBought: savedAccProfile?.keysBought ?? 0,
+        totalAdded: savedAccProfile?.totalAdded ?? 0,
+        joinDate: savedAccProfile?.joinDate || existingUser?.joinDate || new Date().toLocaleString()
+      });
+      alert("üéâ ‡§∏‡•ç‡§µ‡§æ‡§ó‡§§ ‡§π‡•à " + name + "!\nGoogle Login ‡§∏‡§´‡§≤ ‡§π‡•Å‡§Ü‡•§ ‡§Ü‡§™‡§ï‡§æ Wallet Balance: ‚Çπ" + savedBal);
+    } else {
+      setUserWallets(prev => ({ ...prev, [accKey]: 0 }));
+      setUserBalance(0);
+      const joinDateStr = new Date().toLocaleString();
+      setUserAccountProfiles(prev => ({
+        ...prev,
+        [accKey]: {
+          avatar,
+          keysBought: 0,
+          totalAdded: 0,
+          joinDate: joinDateStr
+        }
+      }));
+      setUserProfile({
+        ...userProfile,
+        isLoggedIn: true,
+        email: cleanEmail,
+        phone: cleanPhone,
+        password: 'GoogleLoginVerified',
+        avatar,
+        keysBought: 0,
+        totalAdded: 0,
+        joinDate: joinDateStr
+      });
+      const newUser = {
+        name,
+        email: cleanEmail,
+        phone: cleanPhone,
+        password: 'GoogleLoginVerified',
+        avatar,
+        joinDate: joinDateStr
+      };
+      setRegisteredUsers(prev => [newUser, ...prev]);
+      setUnreadLogins(prev => prev + 1);
+
+      try {
+        const rtdbRef = ref(database, 'registeredUsers');
+        set(rtdbRef, [newUser, ...registeredUsers]);
+      } catch (e) {}
+
+      alert("üéâ ‡§∏‡•ç‡§µ‡§æ‡§ó‡§§ ‡§π‡•à " + name + "!\n‡§®‡§Ø‡§æ Google Account ‡§∏‡§´‡§≤‡§§‡§æ‡§™‡•Ç‡§∞‡•ç‡§µ‡§ï ‡§¨‡§® ‡§ó‡§Ø‡§æ ‡§π‡•à (Wallet Balance: ‚Çπ0)‡•§");
+    }
+    setShowGoogleLoginModal(false);
+    setCurrentView('home');
+  };
+
+  const handleGoogleUserSignIn = async () => {
+    try {
+      setIsSigningInUserGoogle(true);
+      const auth = getAuth(firebaseApp);
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      if (user && user.email) {
+        processSuccessfulGoogleLogin(user.email, user.displayName || '', user.photoURL || '', user.phoneNumber || '');
+      } else {
+        setShowGoogleLoginModal(true);
+      }
+    } catch (err: any) {
+      console.warn("Google Auth popup issue or blocked in iframe:", err);
+      setShowGoogleLoginModal(true);
+      setGoogleModalError('');
+    } finally {
+      setIsSigningInUserGoogle(false);
+    }
+  };
+
+  const handleUserLoginSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setUserAuthError('');
+    const rawId = userLoginForm.identifier.trim();
+    const pass = userLoginForm.password.trim();
+
+    if (!rawId) {
+      setUserAuthError('‚ùå ‡§ï‡•É‡§™‡§Ø‡§æ ‡§Ö‡§™‡§®‡§æ Registered Email ID ‡§Ø‡§æ 10-‡§Ö‡§Ç‡§ï‡•ã‡§Ç ‡§ï‡§æ Mobile Number ‡§¶‡§∞‡•ç‡§ú ‡§ï‡§∞‡•á‡§Ç!');
+      return;
+    }
+    if (!pass) {
+      setUserAuthError('‚ùå ‡§ï‡•É‡§™‡§Ø‡§æ ‡§Ö‡§™‡§®‡§æ Password ‡§¶‡§∞‡•ç‡§ú ‡§ï‡§∞‡•á‡§Ç!');
+      return;
+    }
+
+    const isEmail = rawId.includes('@');
+    let cleanEmail = '';
+    let cleanPhone = '';
+
+    if (isEmail) {
+      if (!validateEmailFormat(rawId)) {
+        setUserAuthError('‚ùå ‡§Ö‡§Æ‡§æ‡§®‡•ç‡§Ø Email Format! ‡§ï‡•É‡§™‡§Ø‡§æ ‡§∏‡§π‡•Ä Email ID (‡§â‡§¶‡§æ. name@gmail.com) ‡§¶‡§∞‡•ç‡§ú ‡§ï‡§∞‡•á‡§Ç‡•§');
+        return;
+      }
+      cleanEmail = rawId.toLowerCase();
+    } else {
+      const digits = rawId.replace(/[\s\-\+]/g, '').slice(-10);
+      if (!validatePhoneFormat(digits)) {
+        setUserAuthError('‚ùå ‡§Ö‡§Æ‡§æ‡§®‡•ç‡§Ø Mobile Number! ‡§ï‡•É‡§™‡§Ø‡§æ 10 ‡§Ö‡§Ç‡§ï‡•ã‡§Ç ‡§ï‡§æ ‡§µ‡•à‡§ß ‡§Æ‡•ã‡§¨‡§æ‡§á‡§≤ ‡§®‡§Ç‡§¨‡§∞ ‡§¶‡§∞‡•ç‡§ú ‡§ï‡§∞‡•á‡§Ç (‡§â‡§¶‡§æ. 9876543210)‡•§');
+        return;
+      }
+      cleanPhone = digits;
+    }
+
+    // Strict validation against registeredUsers
+    const user = registeredUsers.find(u => {
+      if (cleanEmail && u.email && u.email.toLowerCase() === cleanEmail) return true;
+      if (cleanPhone && u.phone && u.phone.replace(/[\s\-\+]/g, '').slice(-10) === cleanPhone) return true;
+      return false;
+    });
+
+    if (!user) {
+      setUserAuthError('‚ùå ‡§Ø‡§π Account ‡§Æ‡•å‡§ú‡•Ç‡§¶ ‡§®‡§π‡•Ä‡§Ç ‡§π‡•à! ‡§ï‡•ã‡§à ‡§≠‡•Ä ‡§ó‡§≤‡§§ ‡§Ø‡§æ ‡§´‡§∞‡•ç‡§ú‡•Ä ‡§ú‡§æ‡§®‡§ï‡§æ‡§∞‡•Ä ‡§∏‡•á ‡§≤‡•â‡§ó‡§ø‡§® ‡§®‡§π‡•Ä‡§Ç ‡§π‡•ã ‡§∏‡§ï‡§§‡§æ‡•§ ‡§ï‡•É‡§™‡§Ø‡§æ ‡§™‡§π‡§≤‡•á "‡§®‡§Ø‡§æ ‡§Ö‡§ï‡§æ‡§â‡§Ç‡§ü ‡§¨‡§®‡§æ‡§è‡§Ç (Register)" ‡§ü‡•à‡§¨ ‡§∏‡•á ‡§Ö‡§∏‡§≤‡•Ä Email & Phone ‡§¶‡•á‡§ï‡§∞ ‡§∞‡§ú‡§ø‡§∏‡•ç‡§ü‡§∞ ‡§ï‡§∞‡•á‡§Ç‡•§');
+      return;
+    }
+
+    if (user.password !== pass && user.password !== 'GoogleLoginVerified') {
+      setUserAuthError('‚ùå ‡§ó‡§≤‡§§ ‡§™‡§æ‡§∏‡§µ‡§∞‡•ç‡§° (Incorrect Password)! ‡§Ü‡§™‡§®‡•á ‡§ú‡•ã ‡§™‡§æ‡§∏‡§µ‡§∞‡•ç‡§° ‡§°‡§æ‡§≤‡§æ ‡§π‡•à ‡§µ‡§π ‡§á‡§∏ ‡§Ö‡§ï‡§æ‡§â‡§Ç‡§ü ‡§∏‡•á ‡§Æ‡•á‡§≤ ‡§®‡§π‡•Ä‡§Ç ‡§ñ‡§æ‡§§‡§æ ‡§π‡•à‡•§ ‡§ï‡•É‡§™‡§Ø‡§æ ‡§∏‡§π‡•Ä ‡§™‡§æ‡§∏‡§µ‡§∞‡•ç‡§° ‡§°‡§æ‡§≤‡•á‡§Ç‡•§');
+      return;
+    }
+
+    const accKey = getAccountKey(user.email, user.phone);
+    const savedBal = userWallets[accKey] ?? 0;
+    const savedAccProfile = userAccountProfiles[accKey];
+
+    setUserBalance(savedBal);
+    setUserProfile({
+      ...userProfile,
+      isLoggedIn: true,
+      email: user.email || '',
+      phone: user.phone || '',
+      password: user.password,
+      avatar: savedAccProfile?.avatar || user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
+      keysBought: savedAccProfile?.keysBought ?? 0,
+      totalAdded: savedAccProfile?.totalAdded ?? 0,
+      joinDate: savedAccProfile?.joinDate || user.joinDate || new Date().toLocaleString()
+    });
+
+    alert("üéâ ‡§∏‡•ç‡§µ‡§æ‡§ó‡§§ ‡§π‡•à " + (user.name || user.email || user.phone) + "!\n‡§≤‡•â‡§ó‡§ø‡§® ‡§∏‡§´‡§≤ ‡§π‡•Å‡§Ü‡•§ ‡§Ü‡§™‡§ï‡§æ Wallet Balance: ‚Çπ" + savedBal);
+    setCurrentView('home');
+  };
+
+  const handleUserRegisterSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setUserAuthError('');
+    const name = userRegisterForm.name.trim();
+    const email = userRegisterForm.email.trim().toLowerCase();
+    const rawPhone = userRegisterForm.phone.replace(/[\s\-\+]/g, '').slice(-10);
+    const pass = userRegisterForm.password.trim();
+    const confirmPass = userRegisterForm.confirmPassword.trim();
+
+    if (!name || name.length < 3) {
+      setUserAuthError('‚ùå ‡§ï‡•É‡§™‡§Ø‡§æ ‡§Ö‡§™‡§®‡§æ ‡§Ö‡§∏‡§≤‡•Ä ‡§®‡§æ‡§Æ (‡§ï‡§Æ ‡§∏‡•á ‡§ï‡§Æ 3 ‡§Ö‡§ï‡•ç‡§∑‡§∞) ‡§¶‡§∞‡•ç‡§ú ‡§ï‡§∞‡•á‡§Ç!');
+      return;
+    }
+    if (!email || !validateEmailFormat(email)) {
+      setUserAuthError('‚ùå ‡§ï‡•É‡§™‡§Ø‡§æ ‡§Ö‡§∏‡§≤‡•Ä ‡§è‡§µ‡§Ç ‡§µ‡•à‡§ß Email ID ‡§¶‡§∞‡•ç‡§ú ‡§ï‡§∞‡•á‡§Ç (‡§â‡§¶‡§æ. yourname@gmail.com)! ‡§ï‡•ã‡§à ‡§≠‡•Ä ‡§´‡§∞‡•ç‡§ú‡•Ä ‡§Ü‡§à‡§°‡•Ä ‡§∏‡•ç‡§µ‡•Ä‡§ï‡§æ‡§∞ ‡§®‡§π‡•Ä‡§Ç ‡§π‡•ã‡§ó‡•Ä‡•§');
+      return;
+    }
+    if (!rawPhone || !validatePhoneFormat(rawPhone)) {
+      setUserAuthError('‚ùå ‡§ï‡•É‡§™‡§Ø‡§æ 10 ‡§Ö‡§Ç‡§ï‡•ã‡§Ç ‡§ï‡§æ Real Mobile Number ‡§¶‡§∞‡•ç‡§ú ‡§ï‡§∞‡•á‡§Ç (‡§â‡§¶‡§æ. 9876543210)!');
+      return;
+    }
+    if (!pass || pass.length < 6) {
+      setUserAuthError('‚ùå Password ‡§ï‡§Æ ‡§∏‡•á ‡§ï‡§Æ 6 ‡§Ö‡§ï‡•ç‡§∑‡§∞‡•ã‡§Ç ‡§ï‡§æ ‡§π‡•ã‡§®‡§æ ‡§Ö‡§®‡§ø‡§µ‡§æ‡§∞‡•ç‡§Ø ‡§π‡•à!');
+      return;
+    }
+    if (pass !== confirmPass) {
+      setUserAuthError('‚ùå ‡§¶‡•ã‡§®‡•ã‡§Ç Password ‡§Ü‡§™‡§∏ ‡§Æ‡•á‡§Ç ‡§Æ‡•á‡§≤ ‡§®‡§π‡•Ä‡§Ç ‡§ñ‡§æ ‡§∞‡§π‡•á ‡§π‡•à‡§Ç! ‡§ï‡•É‡§™‡§Ø‡§æ ‡§∏‡§π‡•Ä Confirm Password ‡§¶‡§∞‡•ç‡§ú ‡§ï‡§∞‡•á‡§Ç‡•§');
+      return;
+    }
+
+    const emailExists = registeredUsers.some(u => u.email && u.email.toLowerCase() === email);
+    if (emailExists) {
+      setUserAuthError("‚ùå ‡§Ø‡§π Email ID (" + email + ") ‡§™‡§π‡§≤‡•á ‡§∏‡•á ‡§∞‡§ú‡§ø‡§∏‡•ç‡§ü‡§∞‡•ç‡§° ‡§π‡•à! ‡§ï‡•É‡§™‡§Ø‡§æ ‡§∏‡•Ä‡§ß‡•á Login ‡§ü‡•à‡§¨ ‡§™‡§∞ ‡§ú‡§æ‡§è‡§Ç‡•§");
+      return;
+    }
+
+    const phoneExists = registeredUsers.some(u => u.phone && u.phone.replace(/[\s\-\+]/g, '').slice(-10) === rawPhone);
+    if (phoneExists) {
+      setUserAuthError("‚ùå ‡§Ø‡§π Mobile Number (" + rawPhone + ") ‡§™‡§π‡§≤‡•á ‡§∏‡•á ‡§∞‡§ú‡§ø‡§∏‡•ç‡§ü‡§∞‡•ç‡§° ‡§π‡•à! ‡§ï‡•É‡§™‡§Ø‡§æ ‡§∏‡•Ä‡§ß‡•á Login ‡§ü‡•à‡§¨ ‡§™‡§∞ ‡§ú‡§æ‡§è‡§Ç‡•§");
+      return;
+    }
+
+    const joinDateStr = new Date().toLocaleString();
+    const freshAvatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop';
+    const accKey = getAccountKey(email, rawPhone);
+
+    setUserWallets(prev => ({ ...prev, [accKey]: 0 }));
+    setUserBalance(0);
+
+    setUserAccountProfiles(prev => ({
+      ...prev,
+      [accKey]: {
+        avatar: freshAvatar,
+        keysBought: 0,
+        totalAdded: 0,
+        joinDate: joinDateStr
+      }
+    }));
+
+    const newUser = {
+      name,
+      email,
+      phone: rawPhone,
+      password: pass,
+      avatar: freshAvatar,
+      joinDate: joinDateStr
+    };
+
+    setRegisteredUsers(prev => [newUser, ...prev]);
+    setUnreadLogins(prev => prev + 1);
+
+    setUserProfile({
+      ...userProfile,
+      isLoggedIn: true,
+      email,
+      phone: rawPhone,
+      password: pass,
+      avatar: freshAvatar,
+      keysBought: 0,
+      totalAdded: 0,
+      joinDate: joinDateStr
+    });
+
+    try {
+      const rtdbRef = ref(database, 'registeredUsers');
+      set(rtdbRef, [newUser, ...registeredUsers]);
+    } catch (err) {
+      console.warn("RTDB sync:", err);
+    }
+
+    alert("üéâ ‡§¨‡§ß‡§æ‡§à ‡§π‡•ã " + name + "!\n‡§Ü‡§™‡§ï‡§æ ‡§®‡§Ø‡§æ ‡§Ö‡§ï‡§æ‡§â‡§Ç‡§ü ‡§Ö‡§∏‡§≤‡•Ä Email (" + email + ") & Mobile (" + rawPhone + ") ‡§ï‡•á ‡§∏‡§æ‡§• ‡§∏‡§´‡§≤‡§§‡§æ‡§™‡•Ç‡§∞‡•ç‡§µ‡§ï ‡§¨‡§® ‡§ó‡§Ø‡§æ ‡§π‡•à‡•§\nWallet Balance: ‚Çπ0 (‡§ï‡•É‡§™‡§Ø‡§æ Add Fund ‡§∏‡•á ‡§™‡•à‡§∏‡•á ‡§ú‡•ã‡§°‡§º‡•á‡§Ç)‡•§");
+    setCurrentView('home');
+  };
+
+  const handleGoogleModalSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setGoogleModalError('');
+    const emailVal = googleModalEmail.trim().toLowerCase();
+    const nameVal = googleModalName.trim();
+
+    if (!emailVal) {
+      setGoogleModalError('‚ùå ‡§ï‡•É‡§™‡§Ø‡§æ ‡§Ö‡§™‡§®‡§æ Google (Gmail) ID ‡§¶‡§∞‡•ç‡§ú ‡§ï‡§∞‡•á‡§Ç!');
+      return;
+    }
+    if (!validateEmailFormat(emailVal)) {
+      setGoogleModalError('‚ùå ‡§Ö‡§Æ‡§æ‡§®‡•ç‡§Ø Email Format! ‡§ï‡•É‡§™‡§Ø‡§æ ‡§µ‡•à‡§ß Google Email ID (‡§ú‡•à‡§∏‡•á name@gmail.com) ‡§¶‡§∞‡•ç‡§ú ‡§ï‡§∞‡•á‡§Ç‡•§');
+      return;
+    }
+
+    processSuccessfulGoogleLogin(
+      emailVal,
+      nameVal || emailVal.split('@')[0],
+      'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
+      ''
+    );
+  };
+
   useEffect(() => {
     const q = searchQuery.trim();
     if (q === 'PREM74') {
@@ -832,30 +1724,46 @@ export default function App() {
     }
   }, [currentView]);
 
-  const handleOpenCheckout = (price: number, panelTitle: string) => {
-    if (userBalance < price) {
-      const msg = new SpeechSynthesisUtterance("Doston kripya kijiye apna wallet check Karen and Paisa add Karen Uske bad aap yahan se panel khareed sakte ho thank you");
-      msg.lang = 'hi-IN';
-      window.speechSynthesis?.speak(msg);
-      alert(`Wallet balance kam hai! Panel Price: ‚Çπ${price}, Aapka Wallet Balance: ‚Çπ${userBalance}. Kripya pehle wallet me fund add karein.`);
-      setCurrentView('addFund');
+  const handleOpenCheckout = (price: any, panelTitle: string, explicitResellerPrice?: number) => {
+    const isResellerActive = resellerUser.isLoggedIn && resellerUser.isApproved;
+    const panelObj = panels.find(p => p.title === panelTitle);
+    const planObj = panelObj?.pricing.find(pr => pr.price == price || (explicitResellerPrice && (pr as any).resellerPrice === explicitResellerPrice));
+    
+    // Completely secure Out of Stock check
+    const isOutOfStock = !planObj || isNaN(Number(planObj.price)) || Number(planObj.price) < 0 || (planObj.label && planObj.label.toLowerCase().includes('stock')) || (typeof planObj.price === 'string' && planObj.price.toLowerCase().includes('stock'));
+    
+    if (isOutOfStock) {
+      alert(`Is panel ko abhi nahin khareed sakte hain (Out of Stock). Kripya dropdown se dusra plan select karein.`);
+      return; // Do not open checkout modal
+    }
+    
+    const numPrice = Number(planObj.price);
+    // Differential Pricing calculation
+    const effectiveResellerPrice = explicitResellerPrice !== undefined 
+      ? explicitResellerPrice 
+      : (planObj && (planObj as any).resellerPrice !== undefined ? (planObj as any).resellerPrice : Math.round(numPrice * 0.65));
+    
+    const activeChargePrice = isResellerActive ? effectiveResellerPrice : numPrice;
+    const activeWalletBal = isResellerActive ? (resellerUser.balance > 0 ? resellerUser.balance : userBalance) : userBalance;
+
+    if (activeWalletBal < activeChargePrice) {
+      alert(`Insufficient balance! Your wallet balance is ‚Çπ${activeWalletBal} but panel price is ‚Çπ${activeChargePrice}. Redirecting to add funds...`);
+      setCurrentView("addFund");
       return;
     }
 
-    const panelObj = panels.find(p => p.title === panelTitle);
-    const planObj = panelObj?.pricing.find(pr => pr.price === price);
-    const planLabel = planObj?.label ? `${planObj.label} nonroot` : '1 DAY nonroot';
+    const planLabel = planObj?.label ? `${planObj.label} nonroot` : "1 DAY nonroot";
 
     setCheckoutData({
       panelTitle: panelTitle,
-      planLabel: planLabel,
-      originalPrice: price,
+      planLabel: isResellerActive ? `${planLabel} [üëë RESELLER VIP RATE]` : planLabel,
+      originalPrice: activeChargePrice,
       panelObj: panelObj
     });
     setAppliedCoupon(null);
-    setCouponInputCode('');
-    setCouponErrorMsg('');
-    setCouponSuccessMsg('');
+    setCouponInputCode("");
+    setCouponErrorMsg("");
+    setCouponSuccessMsg("");
   };
 
   const handleApplyCoupon = () => {
@@ -901,23 +1809,34 @@ export default function App() {
   const handleRequestKey = () => {
     if (!checkoutData) return;
 
+    const isResellerActive = resellerUser.isLoggedIn && resellerUser.isApproved;
     const originalPrice = checkoutData.originalPrice;
     const discount = appliedCoupon ? appliedCoupon.discount : 0;
     const finalPrice = Math.max(0, originalPrice - discount);
 
-    if (userBalance >= finalPrice) {
-      setUserBalance(prev => prev - finalPrice);
+    const activeBal = isResellerActive ? (resellerUser.balance > 0 ? resellerUser.balance : userBalance) : userBalance;
+
+    if (activeBal >= finalPrice) {
+      if (isResellerActive && resellerUser.balance >= finalPrice) {
+        // Deduct from Reseller Wallet
+        const newBal = resellerUser.balance - finalPrice;
+        setResellerUser(prev => ({ ...prev, balance: newBal }));
+        setApprovedResellers(prev => prev.map(r => r.email.toLowerCase() === resellerUser.email.toLowerCase() ? { ...r, balance: newBal } : r));
+      } else {
+        setUserBalance(prev => prev - finalPrice);
+      }
+
       setUserProfile(prev => ({ ...prev, keysBought: prev.keysBought + 1 }));
       setUnreadKeys(prev => prev + 1);
 
-      const curEmail = userProfile.email || '';
+      const curEmail = (isResellerActive ? resellerUser.email : userProfile.email) || '';
       const curPhone = userProfile.phone || '';
       const curPassword = userProfile.password || '';
       const accKey = getAccountKey(curEmail, curPhone);
 
       const newRequest = {
         id: Date.now(),
-        user: curEmail || curPhone || 'Guest',
+        user: curEmail || curPhone || (isResellerActive ? 'Reseller VIP' : 'Guest'),
         userEmail: curEmail,
         userPhone: curPhone,
         userPassword: curPassword,
@@ -955,9 +1874,110 @@ export default function App() {
       const msg = new SpeechSynthesisUtterance("Doston kripya kijiye apna wallet check Karen and Paisa add Karen Uske bad aap yahan se panel khareed sakte ho thank you");
       msg.lang = 'hi-IN';
       window.speechSynthesis.speak(msg);
-      alert(`Balance kam hai! Needed: ‚Çπ${finalPrice}, Wallet Balance: ‚Çπ${userBalance}. Kripya wallet me fund add karein.`);
-      setCurrentView('addFund');
+      alert(`Balance kam hai! Needed: ‚Çπ${finalPrice}, Wallet Balance: ‚Çπ${activeBal}. Kripya wallet me fund add karein.`);
+      if (isResellerActive) {
+        setShowResellerModal(true);
+      } else {
+        setCurrentView('addFund');
+      }
     }
+  };
+
+
+  const handleSendRefundEmailToUser = async (targetEmail: string, refundAmount: number, reason: string) => {
+    const sId = 'service_v7djd5d';
+    const tId = 'template_srpbzgk';
+    const pKey = 'huTOpMHbOaE_WYEpW';
+    const templateParams = {
+      user_email: targetEmail.trim(),
+      refund_amount: String(refundAmount),
+      reason_message: reason || "‡§Ü‡§™‡§ï‡§æ ‡§ë‡§∞‡•ç‡§°‡§∞ ‡§∞‡§ø‡§ú‡•á‡§ï‡•ç‡§ü ‡§ï‡§∞ ‡§¶‡§ø‡§Ø‡§æ ‡§ó‡§Ø‡§æ ‡§π‡•à ‡§î‡§∞ ‡§™‡•à‡§∏‡•á ‡§Ü‡§™‡§ï‡•á ‡§µ‡•â‡§≤‡•á‡§ü ‡§Æ‡•á‡§Ç ‡§∞‡§ø‡§´‡§º‡§Ç‡§° ‡§ï‡§∞ ‡§¶‡§ø‡§è ‡§ó‡§è ‡§π‡•à‡§Ç‡•§"
+    };
+    try {
+      emailjs.init(pKey);
+      const response = await emailjs.send(sId, tId, templateParams, pKey);
+      return response.status === 200 || response.text === 'OK';
+    } catch (sdkError) {
+      console.warn('SDK send error for refund, fallback to direct EmailJS endpoint...', sdkError);
+      try {
+        const restRes = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            service_id: sId,
+            template_id: tId,
+            user_id: pKey,
+            template_params: templateParams
+          })
+        });
+        return restRes.ok;
+      } catch (err) {
+        return false;
+      }
+    }
+  };
+
+  const handleRejectAndRefundKey = async (req: any, customReason?: string) => {
+    if (!req) return;
+    // Removed prompt and confirm so it directly refunds when clicked
+    const refundAmount = Number(req.price) || 0;
+    
+    let tEmail = req.userEmail;
+    let tPhone = req.userPhone;
+    if (!tEmail && !tPhone && req.user) {
+      if (req.user.includes('@')) tEmail = req.user;
+      else if (/^\d+$/.test(req.user)) tPhone = req.user;
+    }
+    const targetAccKey = req.userAccountKey || getAccountKey(tEmail, tPhone);
+    const targetEmail = (tEmail || '').trim();
+
+    // 1. Update userWallets in global state
+    setUserWallets(prev => {
+      const currentVal = Number(prev[targetAccKey]) || 0;
+      return {
+        ...prev,
+        [targetAccKey]: currentVal + refundAmount
+      };
+    });
+
+    // 2. If the current logged-in user is this user, update active userBalance immediately
+    const currentActiveAccKey = getAccountKey(userProfile.email, userProfile.phone);
+    if (userProfile.isLoggedIn && (currentActiveAccKey === targetAccKey || (targetEmail && userProfile.email?.toLowerCase() === targetEmail.toLowerCase()))) {
+      setUserBalance(prev => prev + refundAmount);
+    }
+
+    // 3. If it's an approved reseller, update reseller balance
+    if (targetEmail) {
+      setApprovedResellers(prev => prev.map(r => r.email.toLowerCase() === targetEmail.toLowerCase() ? { ...r, balance: (Number(r.balance) || 0) + refundAmount } : r));
+      if (resellerUser.isLoggedIn && resellerUser.email.toLowerCase() === targetEmail.toLowerCase()) {
+        setResellerUser(prev => ({ ...prev, balance: (Number(prev.balance) || 0) + refundAmount }));
+      }
+    }
+
+    // 4. Update keyRequests status to 'REJECTED'
+    const rejectReasonText = customReason ? customReason.trim() : 'Out of stock / Server maintenance';
+    setKeyRequests(prev => prev.map(r => r.id === req.id ? {
+      ...r,
+      status: 'REJECTED',
+      deliveredKey: `REFUNDED ‚Çπ${refundAmount} TO WALLET`
+    } : r));
+
+    // 5. Send notification email if email exists
+    let emailSent = false;
+    if (targetEmail) {
+      try {
+        const emailReason = `Namaste ${req.user},\n\nAapka ${req.panel} (${req.planLabel || 'Key'}) ka order reject kar diya gaya hai aur ‚Çπ${refundAmount} aapke wallet me turant refund kar diye gaye hain.\n\nReason: ${rejectReasonText}\n\nAap wallet balance se store se dusra key buy kar sakte hain.`;
+        emailSent = await handleSendRefundEmailToUser(
+          targetEmail,
+          refundAmount,
+          emailReason
+        );
+      } catch (err) {
+        console.warn('Refund email error:', err);
+      }
+    }
+
+    alert(`‚úÖ Order Reject ho gaya hai aur ‚Çπ${refundAmount} user (${req.user}) ke wallet me turant refund ho gaya hai!${emailSent ? ' Email notification bhi bhej diya gaya hai.' : ''}`);
   };
 
   const [fundStep, setFundStep] = useState<'generate' | 'confirm' | 'checking'>('generate');
@@ -989,8 +2009,12 @@ export default function App() {
     userPassword?: string;
     userAccountKey?: string;
   }[]>(() => {
-    const saved = null;
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('app_paymentHistory');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
   });
 
   useEffect(() => {
@@ -1201,6 +2225,8 @@ export default function App() {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
+
+
 
   return (
     <div 
@@ -1514,44 +2540,53 @@ export default function App() {
                   PREMIUM <span className="text-fuchsia-400 drop-shadow-[0_0_15px_rgba(217,70,239,1)] animate-pulse-slow">STORE</span>
                 </h2>
                 <div className="relative">
-                  <button 
-                    onClick={() => setIsCategoryOpen(!isCategoryOpen)}
-                    className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-400 to-cyan-300 hover:from-cyan-300 hover:to-cyan-200 border border-cyan-300 text-black px-3 py-1.5 rounded-lg font-bold text-xs transition-all shadow-[0_0_15px_rgba(0,229,255,0.5)] hover:shadow-[0_0_25px_rgba(0,229,255,0.8)] active:scale-95"
-                  >
-                    <Filter size={14} className="fill-black" />
-                    {selectedCategory}
-                  </button>
+                  {/* Category Button with 7-Color Live Satorang Animated Border */}
+                  <div className="relative p-0.5 rounded-xl animate-satorang-border shadow-[0_0_25px_rgba(255,0,128,0.7)]">
+                    <button 
+                      onClick={() => setIsCategoryOpen(!isCategoryOpen)}
+                      className="relative w-full flex items-center gap-2 bg-black/95 backdrop-blur-2xl text-white px-3.5 py-2 rounded-[10px] font-black text-xs transition-all hover:bg-black active:scale-95"
+                    >
+                      <Filter size={14} className="animate-satorang-text" />
+                      <span className="animate-satorang-text tracking-wide uppercase font-black">{selectedCategory}</span>
+                    </button>
+                  </div>
 
-                  {/* Category Dropdown */}
+                  {/* Category Dropdown with 7-Color Live Satorang Animated Border & Live Color Cycling */}
                   {isCategoryOpen && (
-                    <div className="absolute top-full right-0 mt-2 w-44 bg-[#0a0f1d]/95 backdrop-blur-2xl border border-cyan-400/50 rounded-xl shadow-[0_10px_35px_rgba(0,0,0,0.9)] overflow-hidden py-1.5 animate-in slide-in-from-top-2 duration-200 z-50">
-                      {[
-                        "All",
-                        "24ghanta",
-                        "Root",
-                        "Non root",
-                        "Steamer",
-                        "Pc",
-                        "Bgmi",
-                        "Moba legend"
-                      ].map((cat, idx) => (
-                        <button
-                          key={`cat-${cat}-${idx}`}
-                          onClick={() => {
-                            setSelectedCategory(cat);
-                            setIsCategoryOpen(false);
-                          }}
-                          className="w-full text-left px-3.5 py-2 text-xs font-bold text-gray-300 hover:text-cyan-400 hover:bg-cyan-400/20 transition-colors"
-                        >
-                          {cat}
-                        </button>
-                      ))}
+                    <div className="absolute top-full right-0 mt-2.5 w-52 p-0.5 rounded-2xl animate-satorang-border shadow-[0_20px_50px_rgba(0,0,0,0.95)] z-50">
+                      <div className="bg-black/95 backdrop-blur-2xl rounded-[14px] overflow-hidden p-2 flex flex-col gap-1.5">
+                        <div className="px-2 py-1 text-[10px] font-black uppercase tracking-widest animate-satorang-text border-b border-white/10 mb-1 text-center">
+                          ‚ú¶ SELECT CATEGORY ‚ú¶
+                        </div>
+                        {[
+                          "All",
+                          "24ghanta",
+                          "Root",
+                          "Non root",
+                          "Steamer",
+                          "Pc",
+                          "Bgmi",
+                          "Moba legend"
+                        ].map((cat, idx) => (
+                          <button
+                            key={`cat-${cat}-${idx}`}
+                            onClick={() => {
+                              setSelectedCategory(cat);
+                              setIsCategoryOpen(false);
+                            }}
+                            className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider text-white bg-black/80 hover:bg-white/15 transition-all flex items-center justify-between group border border-white/10 hover:border-white/30"
+                          >
+                            <span className="animate-satorang-text group-hover:scale-105 transition-transform">{cat}</span>
+                            <span className="w-2 h-2 rounded-full bg-rainbow-animated shadow-[0_0_10px_rgba(255,255,255,0.8)]"></span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Search Bar */}
+              {/* Search Bar with Hidden Admin & Reseller Triggers */}
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-20">
                   <Search size={15} className="text-cyan-400 group-focus-within:text-cyan-300 transition-colors" />
@@ -1560,7 +2595,41 @@ export default function App() {
                 <input
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const clean = val.toLowerCase().trim();
+                    setSearchQuery(val);
+
+                    if (clean === 'premadmin' || clean === '#adminaccess' || clean === 'adminaccess' || clean === '#admin') {
+                      setSearchQuery('');
+                      setCurrentView('staff');
+                      playSuccessChime();
+                      setShowSecretAdminToast(true);
+                      setTimeout(() => setShowSecretAdminToast(false), 4500);
+                    } else if (clean === 'premreseller' || clean === '#reselleraccess' || clean === 'reselleraccess' || clean === 'reseller' || clean === '#reseller') {
+                      setSearchQuery('');
+                      setShowResellerModal(true);
+                      playSuccessChime();
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const clean = searchQuery.toLowerCase().trim();
+                      if (clean === 'premadmin' || clean === '#adminaccess' || clean === 'adminaccess' || clean === '#admin') {
+                        e.preventDefault();
+                        setSearchQuery('');
+                        setCurrentView('staff');
+                        playSuccessChime();
+                        setShowSecretAdminToast(true);
+                        setTimeout(() => setShowSecretAdminToast(false), 4500);
+                      } else if (clean === 'premreseller' || clean === '#reselleraccess' || clean === 'reselleraccess' || clean === 'reseller' || clean === '#reseller') {
+                        e.preventDefault();
+                        setSearchQuery('');
+                        setShowResellerModal(true);
+                        playSuccessChime();
+                      }
+                    }
+                  }}
                   placeholder="Search panels..."
                   className="w-full bg-black/40 backdrop-blur-md border border-cyan-500/30 focus:border-cyan-400 rounded-xl py-1.5 pl-9 pr-3 text-white focus:outline-none focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all placeholder:text-gray-400 relative z-10 text-xs"
                 />
@@ -1574,6 +2643,29 @@ export default function App() {
           
           {currentView === 'home' && (
             <>
+              {/* Reseller VIP Live Floating Status Badge (When logged in as Reseller) */}
+              {resellerUser.isLoggedIn && resellerUser.isApproved && (
+                <div className="bg-gradient-to-r from-amber-500/20 via-yellow-500/30 to-amber-500/20 border-2 border-yellow-400/60 rounded-2xl p-3 shadow-[0_0_25px_rgba(234,179,8,0.4)] flex items-center justify-between mx-0.5 mb-2 animate-in fade-in">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-full bg-yellow-400/20 border border-yellow-400 flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(234,179,8,0.5)]">
+                      <Award className="text-yellow-400" size={20} />
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-black text-yellow-300 uppercase tracking-wide">üëë RESELLER VIP ACTIVE</span>
+                        <span className="bg-emerald-500 text-black text-[9px] font-black px-1.5 py-0.2 rounded-full uppercase">VERIFIED</span>
+                      </div>
+                      <span className="text-[11px] text-gray-200">{resellerUser.email} ‚Ä¢ Reseller Balance: <strong className="text-cyan-300 font-mono">‚Çπ{resellerUser.balance}</strong></span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowResellerModal(true)}
+                    className="bg-yellow-400 hover:bg-yellow-300 text-black font-black text-[10px] px-3 py-1.5 rounded-xl uppercase tracking-wider shadow-[0_0_10px_rgba(234,179,8,0.6)] transition-all active:scale-95 shrink-0"
+                  >
+                    PORTAL
+                  </button>
+                </div>
+              )}
 
               {panels.filter(p => {
                 const q = searchQuery.toLowerCase().trim();
@@ -1598,6 +2690,11 @@ export default function App() {
                 const displayThumbnail = activeYt 
                   ? activeYt.thumbnailUrl 
                   : (panel.image || "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop");
+
+                const isResellerActive = resellerUser.isLoggedIn && resellerUser.isApproved;
+                const activeSelectedPrice = selectedPlans[panel.id] || panel.pricing[0]?.price || 0;
+                const activePlan = panel.pricing.find(pr => pr.price === activeSelectedPrice) || panel.pricing[0];
+                const activeResellerPrice = activePlan ? ((activePlan as any).resellerPrice ?? Math.round(activePlan.price * 0.65)) : Math.round(activeSelectedPrice * 0.65);
 
                 return (
                   <div key={`store-panel-${panel.id}-${pIdx}`} className="relative rounded-2xl animate-satorang-border shadow-[0_6px_25px_rgba(0,0,0,0.4)] group overflow-hidden mx-0.5 mb-4 flex-shrink-0 transition-all duration-300 hover:scale-[1.01]">
@@ -1693,7 +2790,7 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Center Panel Name - Pure, Sharp & Clean Title (No extra layers/bubbles) */}
+                      {/* Center Panel Name */}
                       <div className="text-center my-0.5">
                         <h3 className="text-[16px] font-black text-white tracking-wider uppercase font-sans drop-shadow-[0_2px_4px_rgba(0,0,0,1)] antialiased select-all">
                           {panel.title}
@@ -1764,39 +2861,77 @@ export default function App() {
                         </button>
                       </div>
 
+                      {/* Differential Pricing Tag (If Reseller is active) */}
+                      {isResellerActive && (
+                        <div className="flex items-center justify-between text-[11px] bg-yellow-500/20 border border-yellow-400/50 px-2 py-1 rounded-lg text-yellow-300 font-black shadow-[0_0_10px_rgba(234,179,8,0.2)]">
+                          <span className="flex items-center gap-1">
+                            <Award size={13} className="text-yellow-400" /> üëë VIP Reseller Price:
+                          </span>
+                          <span className="font-mono text-xs text-yellow-200">
+                            ‚Çπ{activeResellerPrice} <span className="line-through text-gray-400 text-[10px] font-normal font-sans ml-1">‚Çπ{activeSelectedPrice}</span>
+                          </span>
+                        </div>
+                      )}
+
                       {/* Pricing Dropdown */}
                       <div className="relative mt-0.5">
                         <select 
                           value={selectedPlans[panel.id] || panel.pricing[0]?.price || ''}
-                          className="w-full appearance-none bg-black/40 backdrop-blur-sm hover:bg-black/60 text-white font-bold rounded-lg py-2 px-2.5 pr-7 focus:outline-none focus:ring-1 focus:ring-fuchsia-400 transition-all cursor-pointer text-[12px] border border-fuchsia-400/40 shadow-[0_0_12px_rgba(217,70,239,0.2)]"
+                          className={`w-full appearance-none bg-black/40 backdrop-blur-sm hover:bg-black/60 text-white font-bold rounded-lg py-2 px-2.5 pr-7 focus:outline-none focus:ring-1 transition-all cursor-pointer text-[12px] border ${
+                            isResellerActive 
+                              ? 'border-yellow-400/70 focus:ring-yellow-400 text-yellow-100 shadow-[0_0_12px_rgba(234,179,8,0.3)]' 
+                              : 'border-fuchsia-400/40 focus:ring-fuchsia-400 shadow-[0_0_12px_rgba(217,70,239,0.2)]'
+                          }`}
                           onChange={(e) => {
-                            const price = Number(e.target.value);
+                            const price = e.target.value;
                             setSelectedPlans(prev => ({...prev, [panel.id]: price}));
                           }}
                         >
-                          {panel.pricing.map((plan, idx) => (
-                            <option key={`price-${panel.id}-${plan.price}-${idx}`} value={plan.price} className="bg-[#0b0e18] text-white">‚Çπ{plan.price} - {plan.label}</option>
-                          ))}
+                          {panel.pricing.map((plan, idx) => {
+                            const isOutOfStock = isNaN(Number(plan.price)) || Number(plan.price) < 0 || (plan.label && plan.label.toLowerCase().includes('stock')) || (typeof plan.price === 'string' && plan.price.toLowerCase().includes('stock'));
+                            const planResellerP = (plan as any).resellerPrice !== undefined ? (plan as any).resellerPrice : Math.round(plan.price * 0.65);
+                            if (isOutOfStock) {
+                              return (
+                                <option key={`price-${panel.id}-${plan.price}-${idx}`} value={plan.price} disabled className="bg-[#0b0e18] text-red-400 font-bold">
+                                  üö´ {plan.label} (OUT OF STOCK)
+                                </option>
+                              );
+                            }
+                            return (
+                              <option key={`price-${panel.id}-${plan.price}-${idx}`} value={plan.price} className="bg-[#0b0e18] text-white">
+                                {isResellerActive
+                                  ? `üëë ‚Çπ${planResellerP} VIP (Normal: ‚Çπ${plan.price}) - ${plan.label}`
+                                  : `‚Çπ${plan.price} - ${plan.label}`
+                                }
+                              </option>
+                            );
+                          })}
                         </select>
                         <div className="absolute inset-y-0 right-0 flex items-center px-2.5 pointer-events-none">
-                          <ChevronDown size={14} className="text-white" />
+                          <ChevronDown size={14} className={isResellerActive ? "text-yellow-400" : "text-white"} />
                         </div>
                       </div>
 
                       {/* Buy Button */}
                       <button 
                         onClick={() => {
-                          const price = selectedPlans[panel.id] || panel.pricing[0]?.price;
-                          if (!price) {
+                          const price = selectedPlans[panel.id] !== undefined ? selectedPlans[panel.id] : panel.pricing[0]?.price;
+                          if (price === undefined || price === null || price === '') {
                             alert('Please select a plan from the dropdown above.');
                             return;
                           }
                           handleOpenCheckout(price, panel.title);
                         }}
-                        className="relative w-full overflow-hidden bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-600 hover:from-violet-500 hover:via-fuchsia-500 hover:to-pink-500 text-white font-black text-[12px] py-2.5 rounded-lg shadow-[0_0_20px_rgba(192,38,211,0.4)] transition-all hover:scale-[1.02] active:scale-[0.98] mt-0.5 border border-fuchsia-300/40 uppercase tracking-wider"
+                        className={`relative w-full overflow-hidden text-white font-black text-[12px] py-2.5 rounded-lg transition-all hover:scale-[1.02] active:scale-[0.98] mt-0.5 uppercase tracking-wider ${
+                          isResellerActive
+                            ? 'bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-black shadow-[0_0_20px_rgba(234,179,8,0.5)] border border-yellow-300'
+                            : 'bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-600 hover:from-violet-500 hover:via-fuchsia-500 hover:to-pink-500 shadow-[0_0_20px_rgba(192,38,211,0.4)] border border-fuchsia-300/40'
+                        }`}
                       >
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
-                        <span className="relative z-10 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">BUY KEY</span>
+                        <span className="relative z-10 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                          {isResellerActive ? `üëë BUY KEY (VIP: ‚Çπ${activeResellerPrice})` : 'BUY KEY'}
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -1885,6 +3020,57 @@ export default function App() {
                     </div>
                   ) : (
                     userKeyRequests.map((req, idx) => {
+                      if (req.status === 'REJECTED') {
+                        return (
+                          <div 
+                            key={`mykey-rejected-${req.id}-${idx}`} 
+                            className="relative bg-black/20 backdrop-blur-md border-2 border-red-500/70 rounded-[22px] p-5 shadow-[0_0_30px_rgba(239,68,68,0.4)] overflow-hidden flex flex-col gap-1 transition-all hover:border-red-400"
+                          >
+                            <div className="absolute inset-0 bg-gradient-to-br from-red-950/30 via-black to-red-950/20 pointer-events-none"></div>
+
+                            <div className="relative z-10 flex flex-col gap-1.5 text-left">
+                              <div className="flex justify-between items-start gap-2">
+                                <h3 className="text-white font-black text-lg tracking-tight uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                                  {req.panel}
+                                </h3>
+                                <span className="bg-red-500/20 text-red-400 border border-red-500/50 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shrink-0">
+                                  <X size={12} /> REJECTED
+                                </span>
+                              </div>
+                              
+                              <div className="text-gray-200 font-bold text-xs tracking-wide">
+                                {req.planLabel || '- 1 DAY nonroot'}
+                              </div>
+
+                              <div className="text-white font-black text-base">
+                                Order Amount: ‚Çπ{req.price}
+                              </div>
+
+                              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3.5 my-1.5 flex flex-col gap-1 text-left">
+                                <span className="text-red-400 font-black text-xs uppercase flex items-center gap-1">
+                                  <AlertTriangle size={14} /> ORDER CANCELLED & REFUNDED
+                                </span>
+                                <p className="text-gray-300 text-xs font-medium">
+                                  Aapka yeh order reject kar diya gaya hai aur <strong className="text-emerald-400">‚Çπ{req.price}</strong> aapke wallet me turant refund kar diye gaye hain.
+                                </p>
+                              </div>
+
+                              <div className="flex items-center justify-between bg-black/40 border border-emerald-500/40 rounded-xl p-2.5 px-3.5">
+                                <span className="text-gray-300 text-xs font-bold">Wallet Refund:</span>
+                                <span className="text-emerald-400 font-black font-mono text-sm">+‚Çπ{req.price} (SUCCESS)</span>
+                              </div>
+
+                              <button
+                                onClick={() => setCurrentView('home')}
+                                className="w-full mt-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-black py-3 rounded-xl uppercase tracking-wider text-xs shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                              >
+                                üõí Buy Another Key / Explore Store
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
                       const isDelivered = req.status === 'APPROVED' || req.status === 'DELIVERED';
 
                       if (!isDelivered) {
@@ -2013,15 +3199,7 @@ export default function App() {
                   Add <span className="text-fuchsia-500 drop-shadow-[0_0_15px_rgba(217,70,239,1)] animate-pulse-slow">Funds</span>
                 </h2>
               </div>
-              
-              {/* Voice Payment Guidance Banner (Audio Only) Removed from UI, voice still plays on mount */}
-              
-              {ensureArray(paymentHistory).some(p => p.status === 'REJECTED') && showRejectedAlert && (
-                <div className="bg-red-500/20 border border-red-500/50 rounded-xl p-3 flex items-start justify-between mb-3">
-                  <p className="text-red-400 text-sm font-semibold pr-2">Aapne UTR number galat diye ho isiliye aapka payment reject ho gaya hai. Kripya sahi UTR number darj karen.</p>
-                  <button onClick={() => setShowRejectedAlert(false)} className="text-red-400 hover:text-red-300"><X size={16} /></button>
-                </div>
-              )}
+
               {/* Steps Container */}
               <div className="bg-black/20 backdrop-blur-md border border-white/10 rounded-[24px] p-4 sm:p-5 shadow-[0_0_40px_rgba(0,0,0,0.8)]  relative overflow-hidden flex flex-col items-center w-[92%] mx-auto mt-2">
                 
@@ -3639,31 +4817,83 @@ export default function App() {
 
                         <span className="text-gray-500 text-[10px]">{req.date}</span>
                       </div>
-                      <span className={`text-[10px] font-black px-2 py-1 rounded-md border uppercase ${req.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30 animate-pulse' : 'bg-green-500/20 text-green-400 border-green-500/30'}`}>
-                        {req.status === 'PENDING' ? 'PENDING' : 'DELIVERED'}
+                      <span className={`text-[10px] font-black px-2 py-1 rounded-md border uppercase ${
+                        req.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30 animate-pulse' :
+                        req.status === 'REJECTED' ? 'bg-red-500/20 text-red-400 border-red-500/40' :
+                        'bg-green-500/20 text-green-400 border-green-500/30'
+                      }`}>
+                        {req.status === 'PENDING' ? 'PENDING' : req.status === 'REJECTED' ? 'REJECTED & REFUNDED' : 'DELIVERED'}
                       </span>
                     </div>
                     {req.status === 'PENDING' ? (
                       <div className="flex flex-col gap-2 mt-2">
                         <textarea
-                          placeholder="Type key message / code here (e.g. 5546272611)..."
+                          placeholder="Type key message / code here (e.g. 5546272611 or ABCD-1234-EFGH)..."
                           className="w-full bg-black/50 border border-white/20 rounded-lg py-2 px-3 text-sm font-bold text-emerald-400 font-mono focus:outline-none focus:border-yellow-400 transition-all resize-none h-20"
                           id={`key-input-${req.id}`}
                         />
-                        <button 
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <button 
+                            onClick={() => {
+                              const input = document.getElementById(`key-input-${req.id}`) as HTMLTextAreaElement;
+                              if (input && input.value) {
+                                setKeyRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'APPROVED', deliveredKey: input.value.trim() } : r));
+                                alert('Key delivered to user successfully!');
+                              } else {
+                                alert('Please enter a key message');
+                              }
+                            }}
+                            className="bg-yellow-500 hover:bg-yellow-400 text-black font-black py-2.5 rounded-lg shadow-[0_0_15px_rgba(234,179,8,0.4)] transition-colors w-full uppercase tracking-wider text-xs flex items-center justify-center gap-1.5 active:scale-95"
+                          >
+                            <CheckCircle size={14} /> APPROVE (IN-APP)
+                          </button>
+
+                          <button 
+                            onClick={async () => {
+                              const input = document.getElementById(`key-input-${req.id}`) as HTMLTextAreaElement;
+                              const targetEmail = req.userEmail || (req.user && req.user.includes('@') ? req.user : '');
+                              if (!input || !input.value.trim()) {
+                                alert('Please enter a key message');
+                                return;
+                              }
+                              let finalEmail = targetEmail;
+                              if (!finalEmail) {
+                                const promptEmail = prompt("Enter User's Email ID to send Key via EmailJS:", "");
+                                if (!promptEmail) return;
+                                finalEmail = promptEmail.trim();
+                              }
+                              const keyVal = input.value.trim();
+                              const sent = await handleSendKeyToUser(finalEmail, keyVal, `Hello ${req.user}, here is your ${req.panel} activation key. Thank you for your purchase!`);
+                              if (sent) {
+                                setKeyRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'APPROVED', deliveredKey: keyVal } : r));
+                              }
+                            }}
+                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black py-2.5 rounded-lg shadow-[0_0_15px_rgba(59,130,246,0.4)] transition-colors w-full uppercase tracking-wider text-xs flex items-center justify-center gap-1.5 active:scale-95"
+                          >
+                            <Mail size={14} /> üìß SEND VIA EMAILJS
+                          </button>
+                        </div>
+
+                        {/* REJECT & REFUND BUTTON */}
+                        <button
+                          type="button"
                           onClick={() => {
-                            const input = document.getElementById(`key-input-${req.id}`) as HTMLTextAreaElement;
-                            if (input && input.value) {
-                              setKeyRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'APPROVED', deliveredKey: input.value.trim() } : r));
-                              alert('Key delivered to user successfully!');
-                            } else {
-                              alert('Please enter a key message');
-                            }
+                            handleRejectAndRefundKey(req, "Out of stock / Technical issue");
                           }}
-                          className="bg-yellow-500 hover:bg-yellow-400 text-black font-black py-2 rounded-lg shadow-[0_0_15px_rgba(234,179,8,0.4)] transition-colors w-full uppercase tracking-wider text-xs"
+                          className="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black py-2.5 rounded-lg shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-colors uppercase tracking-wider text-xs flex items-center justify-center gap-1.5 active:scale-95 border border-red-400/40 mt-0.5"
                         >
-                          APPROVE & SEND KEY
+                          <X size={14} /> ‚ùå REJECT & REFUND ‚Çπ{req.price} (WALLET + EMAIL)
                         </button>
+                      </div>
+                    ) : req.status === 'REJECTED' ? (
+                      <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mt-2 flex flex-col gap-1 text-left">
+                        <div className="flex items-center justify-between">
+                          <span className="text-red-400 text-xs font-black uppercase flex items-center gap-1">
+                            <X size={14} /> ORDER REJECTED & REFUNDED
+                          </span>
+                          <span className="text-emerald-400 font-mono font-bold text-xs">‚Çπ{req.price} Added Back to Wallet</span>
+                        </div>
+                        <span className="text-gray-300 text-[11px]">‚Çπ{req.price} user ({req.user}) ke account wallet balance me refund kar diya gaya hai.</span>
                       </div>
                     ) : (
                       <div className="bg-black/20 backdrop-blur-md border border-green-500/30 rounded-lg p-3 mt-2">
@@ -3966,181 +5196,361 @@ export default function App() {
           )}
 
           {currentView === 'login' && (
-            <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
-               <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
-                  USER <span className="text-fuchsia-500 drop-shadow-[0_0_15px_rgba(217,70,239,1)] animate-pulse-slow">LOGIN</span>
-                </h2>
-              </div>
-              
-              {!userProfile.isLoggedIn ? (
-                <div className="bg-black/20 backdrop-blur-md border border-white/10 rounded-[24px] p-5 shadow-[0_0_40px_rgba(0,0,0,0.8)]  flex flex-col items-center w-full mt-4">
-                  <div className="w-16 h-16 bg-fuchsia-500/20 rounded-full flex items-center justify-center border border-fuchsia-500/50 mb-4 shadow-[0_0_20px_rgba(217,70,239,0.3)]">
-                    <User size={32} className="text-fuchsia-400" />
+            <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/40 backdrop-blur-2xl rounded-3xl p-5 sm:p-7 border border-white/15 shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-fuchsia-600 to-cyan-500 p-0.5 flex items-center justify-center shadow-[0_0_20px_rgba(217,70,239,0.5)] shrink-0">
+                    <div className="w-full h-full bg-black/80 rounded-[14px] flex items-center justify-center">
+                      <User className="text-cyan-400" size={24} />
+                    </div>
                   </div>
-                  
-                  <input
-                    type="email"
-                    value={userProfile.email}
-                    onChange={(e) => setUserProfile({...userProfile, email: e.target.value})}
-                    placeholder="Email Address"
-                    className="w-full bg-black/40 backdrop-blur-md border border-white/20 rounded-xl py-3 px-4 mb-3 text-sm font-bold text-white placeholder:text-gray-500 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all"
-                  />
-                  <input
-                    type="tel"
-                    value={userProfile.phone}
-                    onChange={(e) => setUserProfile({...userProfile, phone: e.target.value})}
-                    placeholder="Mobile Number (Optional)"
-                    className="w-full bg-black/40 backdrop-blur-md border border-white/20 rounded-xl py-3 px-4 mb-3 text-sm font-bold text-white placeholder:text-gray-500 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all"
-                  />
-                  <input
-                    type="password"
-                    value={userProfile.password}
-                    onChange={(e) => setUserProfile({...userProfile, password: e.target.value})}
-                    placeholder="Password"
-                    className="w-full bg-black/40 backdrop-blur-md border border-white/20 rounded-xl py-3 px-4 mb-4 text-sm font-bold text-white placeholder:text-gray-500 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all"
-                  />
-                  
-                  <button 
-                    onClick={() => {
-                      const emailVal = userProfile.email.trim();
-                      const phoneVal = userProfile.phone.trim();
-                      const passVal = userProfile.password.trim();
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
+                      USER <span className="text-fuchsia-500 drop-shadow-[0_0_15px_rgba(217,70,239,1)]">AUTHENTICATION</span>
+                    </h2>
+                    <p className="text-[11px] text-gray-300 font-medium">‡§∏‡•Å‡§∞‡§ï‡•ç‡§∑‡§ø‡§§ ‡§≤‡•â‡§ó‡§ø‡§® ‡§µ ‡§®‡§Ø‡§æ ‡§Ö‡§ï‡§æ‡§â‡§Ç‡§ü ‡§∞‡§ú‡§ø‡§∏‡•ç‡§ü‡•ç‡§∞‡•á‡§∂‡§®</p>
+                  </div>
+                </div>
+                {userProfile.isLoggedIn && (
+                  <span className="bg-green-500/20 text-green-400 border border-green-500/40 text-[10px] px-3 py-1 rounded-full font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_10px_rgba(34,197,94,0.3)]">
+                    <span className="w-2 h-2 rounded-full bg-green-400 animate-ping"></span> LOGGED IN
+                  </span>
+                )}
+              </div>
 
-                      if (!emailVal && !phoneVal) {
-                        alert("Kripya Email Address ya Mobile Number enter karein!");
-                        return;
-                      }
-                      if (!passVal) {
-                        alert("Kripya Password enter karein!");
-                        return;
-                      }
+              {!userProfile.isLoggedIn ? (
+                <div className="flex flex-col gap-5">
+                  {/* VIP Notice Banner */}
+                  <div className="bg-gradient-to-r from-fuchsia-950/40 via-purple-950/40 to-cyan-950/40 border border-fuchsia-500/30 rounded-2xl p-3.5 flex items-center gap-3 text-xs text-gray-200">
+                    <ShieldCheck className="text-fuchsia-400 shrink-0" size={22} />
+                    <div>
+                      <p className="font-bold text-white text-xs sm:text-sm">‡§Ö‡§∏‡§≤‡•Ä ‡§î‡§∞ ‡§∏‡•Å‡§∞‡§ï‡•ç‡§∑‡§ø‡§§ ‡§≤‡•â‡§ó‡§ø‡§® ‡§∏‡§ø‡§∏‡•ç‡§ü‡§Æ (Strict Real Verification)</p>
+                      <p className="text-[11px] text-gray-300">‡§ï‡•á‡§µ‡§≤ ‡§µ‡•à‡§ß Real Email ID, 10-‡§Ö‡§Ç‡§ï‡•ã‡§Ç ‡§ï‡§æ Mobile Number ‡§è‡§µ‡§Ç ‡§∏‡§π‡•Ä Password ‡§∏‡•á ‡§π‡•Ä ‡§≤‡•â‡§ó‡§ø‡§® ‡§π‡•ã‡§ó‡§æ‡•§</p>
+                    </div>
+                  </div>
 
-                      const accKey = getAccountKey(emailVal, phoneVal);
+                  {/* 1. PRIMARY GOOGLE LOGIN BUTTON */}
+                  <div className="flex flex-col gap-2">
+                    <button
+                      id="loginBtn"
+                      type="button"
+                      onClick={handleGoogleUserSignIn}
+                      disabled={isSigningInUserGoogle}
+                      className="w-full bg-white hover:bg-gray-100 text-gray-900 font-black text-sm py-3.5 px-5 rounded-2xl shadow-[0_0_30px_rgba(255,255,255,0.4)] transition-all flex items-center justify-center gap-3 active:scale-98 border-2 border-white hover:border-cyan-300 cursor-pointer group"
+                    >
+                      {isSigningInUserGoogle ? (
+                        <Loader2 size={22} className="animate-spin text-gray-800" />
+                      ) : (
+                        <svg className="w-6 h-6 shrink-0 group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                        </svg>
+                      )}
+                      <span className="tracking-wide">GOOGLE (GMAIL) ‡§∏‡•á LOGIN ‡§ï‡§∞‡•á‡§Ç</span>
+                    </button>
+                    <p className="text-[10px] text-gray-400 text-center">Google Popup ‡§Ø‡§æ Real Gmail ID ‡§¶‡•ç‡§µ‡§æ‡§∞‡§æ ‡§∏‡•Å‡§∞‡§ï‡•ç‡§∑‡§ø‡§§ ‡§è‡§ï-‡§ï‡•ç‡§≤‡§ø‡§ï ‡§≤‡•â‡§ó‡§ø‡§®</p>
+                  </div>
 
-                      // Check if account already exists in userWallets or registeredUsers
-                      const isExistingInWallets = accKey in userWallets;
-                      const existingUser = registeredUsers.find(u => getAccountKey(u.email, u.phone) === accKey);
+                  {/* DIVIDER */}
+                  <div className="flex items-center gap-3 my-1">
+                    <div className="flex-1 border-t border-white/15"></div>
+                    <span className="text-[11px] text-cyan-400 font-bold uppercase tracking-widest px-2">‡§Ø‡§æ REAL CREDENTIALS ‡§¶‡•ç‡§µ‡§æ‡§∞‡§æ</span>
+                    <div className="flex-1 border-t border-white/15"></div>
+                  </div>
 
-                      if (isExistingInWallets || existingUser) {
-                        // Existing account: Load saved wallet balance & profile data
-                        const savedBal = userWallets[accKey] ?? 0;
-                        const savedAccProfile = userAccountProfiles[accKey];
-                        setUserBalance(savedBal);
-                        setUserProfile({
-                          ...userProfile,
-                          isLoggedIn: true,
-                          email: emailVal || existingUser?.email || '',
-                          phone: phoneVal || existingUser?.phone || '',
-                          password: passVal,
-                          avatar: savedAccProfile?.avatar || existingUser?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
-                          keysBought: savedAccProfile?.keysBought ?? 0,
-                          totalAdded: savedAccProfile?.totalAdded ?? 0,
-                          joinDate: savedAccProfile?.joinDate || existingUser?.joinDate || new Date().toLocaleString()
-                        });
-                        alert(`Purana Account Login ho gaya hai! Aapka saved wallet balance: ‚Çπ${savedBal}`);
-                      } else {
-                        // New account: Initialize balance to 0 and fresh profile
-                        setUserWallets(prev => ({ ...prev, [accKey]: 0 }));
-                        setUserBalance(0);
-                        const joinDateStr = new Date().toLocaleString();
-                        const freshAvatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop';
+                  {/* TABS: LOGIN vs REGISTER */}
+                  <div className="grid grid-cols-2 gap-2 bg-black/60 p-1.5 rounded-2xl border border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => { setUserAuthTab('login'); setUserAuthError(''); }}
+                      className={`py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        userAuthTab === 'login'
+                          ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_20px_rgba(0,229,255,0.4)] border border-cyan-300/40'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Key size={14} /> 1. LOGIN (‡§≤‡•â‡§ó‡§ø‡§®)
+                    </button>
 
-                        setUserAccountProfiles(prev => ({
-                          ...prev,
-                          [accKey]: {
-                            avatar: freshAvatar,
-                            keysBought: 0,
-                            totalAdded: 0,
-                            joinDate: joinDateStr
-                          }
-                        }));
+                    <button
+                      type="button"
+                      onClick={() => { setUserAuthTab('register'); setUserAuthError(''); }}
+                      className={`py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        userAuthTab === 'register'
+                          ? 'bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white shadow-[0_0_20px_rgba(217,70,239,0.4)] border border-fuchsia-300/40'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <UserPlus size={14} /> 2. CREATE ACCOUNT (‡§∞‡§ú‡§ø‡§∏‡•ç‡§ü‡§∞)
+                    </button>
+                  </div>
 
-                        setUserProfile({
-                          ...userProfile,
-                          isLoggedIn: true,
-                          email: emailVal,
-                          phone: phoneVal,
-                          password: passVal,
-                          avatar: freshAvatar,
-                          keysBought: 0,
-                          totalAdded: 0,
-                          joinDate: joinDateStr
-                        });
+                  {/* ERROR BANNER */}
+                  {userAuthError && (
+                    <div className="bg-red-950/60 border-2 border-red-500/80 rounded-2xl p-3.5 text-red-200 text-xs flex items-start gap-2.5 shadow-[0_0_20px_rgba(239,68,68,0.3)] animate-in fade-in zoom-in-95">
+                      <AlertCircle className="text-red-400 shrink-0 mt-0.5" size={18} />
+                      <div className="flex-1 font-semibold leading-relaxed">
+                        {userAuthError}
+                      </div>
+                    </div>
+                  )}
 
-                        setRegisteredUsers(prev => [
-                          {
-                            email: emailVal,
-                            phone: phoneVal,
-                            password: passVal,
-                            avatar: freshAvatar,
-                            joinDate: joinDateStr
-                          },
-                          ...prev
-                        ]);
+                  {/* TAB 1: LOGIN FORM */}
+                  {userAuthTab === 'login' && (
+                    <form onSubmit={handleUserLoginSubmit} className="flex flex-col gap-3.5">
+                      <div>
+                        <label className="text-xs font-bold text-gray-200 block mb-1.5 flex items-center justify-between">
+                          <span>Registered Email ID ‡§Ø‡§æ 10-‡§Ö‡§Ç‡§ï‡•ã‡§Ç ‡§ï‡§æ Mobile Number:</span>
+                          <span className="text-[10px] text-cyan-400 font-normal">Real Email / Phone Required</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            placeholder="e.g. rahul@gmail.com ‡§Ø‡§æ 9876543210"
+                            value={userLoginForm.identifier}
+                            onChange={(e) => {
+                              setUserLoginForm({ ...userLoginForm, identifier: e.target.value });
+                              if (userAuthError) setUserAuthError('');
+                            }}
+                            className="w-full bg-black/60 border border-white/20 focus:border-cyan-400 rounded-xl px-3.5 py-3 text-xs sm:text-sm text-white placeholder:text-gray-500 focus:outline-none transition-all shadow-inner"
+                          />
+                        </div>
+                      </div>
 
-                        setUnreadLogins(prev => prev + 1);
-                        alert(`Naya Account ban gaya hai! Naye user ke wallet me ‚Çπ0 balance hai. Kripya Add Fund karein.`);
-                      }
+                      <div>
+                        <label className="text-xs font-bold text-gray-200 block mb-1.5 flex items-center justify-between">
+                          <span>Password (‡§™‡§æ‡§∏‡§µ‡§∞‡•ç‡§°):</span>
+                          <span className="text-[10px] text-gray-400 font-normal">Strict Password Check</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="password"
+                            placeholder="‡§Ö‡§™‡§®‡§æ ‡§∏‡•Å‡§∞‡§ï‡•ç‡§∑‡§ø‡§§ ‡§™‡§æ‡§∏‡§µ‡§∞‡•ç‡§° ‡§¶‡§∞‡•ç‡§ú ‡§ï‡§∞‡•á‡§Ç"
+                            value={userLoginForm.password}
+                            onChange={(e) => {
+                              setUserLoginForm({ ...userLoginForm, password: e.target.value });
+                              if (userAuthError) setUserAuthError('');
+                            }}
+                            className="w-full bg-black/60 border border-white/20 focus:border-cyan-400 rounded-xl px-3.5 py-3 text-xs sm:text-sm text-white placeholder:text-gray-500 focus:outline-none transition-all shadow-inner"
+                          />
+                        </div>
+                      </div>
 
-                      setCurrentView('home');
-                    }}
-                    className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-sm py-3.5 rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.4)] transition-all uppercase tracking-wider"
-                  >
-                    Login / Sign Up
-                  </button>
-                  
-                  <p className="text-gray-400 mt-4 text-xs font-semibold text-center">
-                    Don't have an account? <span className="text-cyan-400 cursor-pointer hover:underline">Create new account above</span>
-                  </p>
+                      <button
+                        type="submit"
+                        className="w-full bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-black text-sm py-3.5 rounded-xl shadow-[0_0_25px_rgba(0,229,255,0.4)] transition-all uppercase tracking-wider cursor-pointer active:scale-98 mt-1 flex items-center justify-center gap-2"
+                      >
+                        <Key size={18} /> VERIFY & LOGIN (‡§≤‡•â‡§ó‡§ø‡§® ‡§ï‡§∞‡•á‡§Ç)
+                      </button>
+
+                      <p className="text-gray-400 text-xs text-center mt-1">
+                        ‡§®‡§Ø‡§æ ‡§Ø‡•Ç‡§ú‡§º‡§∞ ‡§π‡•à‡§Ç?{' '}
+                        <button
+                          type="button"
+                          onClick={() => { setUserAuthTab('register'); setUserAuthError(''); }}
+                          className="text-cyan-400 font-bold hover:underline cursor-pointer"
+                        >
+                          ‡§Ø‡§π‡§æ‡§Å ‡§ï‡•ç‡§≤‡§ø‡§ï ‡§ï‡§∞‡§ï‡•á ‡§®‡§Ø‡§æ ‡§Ö‡§ï‡§æ‡§â‡§Ç‡§ü ‡§¨‡§®‡§æ‡§è‡§Ç (Create Account)
+                        </button>
+                      </p>
+                    </form>
+                  )}
+
+                  {/* TAB 2: REGISTER FORM */}
+                  {userAuthTab === 'register' && (
+                    <form onSubmit={handleUserRegisterSubmit} className="flex flex-col gap-3">
+                      <div>
+                        <label className="text-xs font-bold text-gray-200 block mb-1">
+                          Full Name (‡§Ü‡§™‡§ï‡§æ ‡§™‡•Ç‡§∞‡§æ ‡§®‡§æ‡§Æ):
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="‡§â‡§¶‡§æ. Rahul Sharma"
+                          value={userRegisterForm.name}
+                          onChange={(e) => {
+                            setUserRegisterForm({ ...userRegisterForm, name: e.target.value });
+                            if (userAuthError) setUserAuthError('');
+                          }}
+                          className="w-full bg-black/60 border border-white/20 focus:border-fuchsia-400 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none shadow-inner"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-gray-200 block mb-1 flex items-center justify-between">
+                          <span>Real Email ID (‡§Ö‡§∏‡§≤‡•Ä ‡§à‡§Æ‡•á‡§≤ ‡§™‡§§‡§æ):</span>
+                          <span className="text-[10px] text-fuchsia-400">Valid Format e.g. name@gmail.com</span>
+                        </label>
+                        <input
+                          type="email"
+                          placeholder="‡§â‡§¶‡§æ. rahul@gmail.com"
+                          value={userRegisterForm.email}
+                          onChange={(e) => {
+                            setUserRegisterForm({ ...userRegisterForm, email: e.target.value });
+                            if (userAuthError) setUserAuthError('');
+                          }}
+                          className="w-full bg-black/60 border border-white/20 focus:border-fuchsia-400 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none shadow-inner"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-gray-200 block mb-1 flex items-center justify-between">
+                          <span>Real 10-Digit Mobile Number (10-‡§Ö‡§Ç‡§ï‡•ã‡§Ç ‡§ï‡§æ ‡§Æ‡•ã‡§¨‡§æ‡§á‡§≤):</span>
+                          <span className="text-[10px] text-fuchsia-400">10 Digits (6-9 Start)</span>
+                        </label>
+                        <input
+                          type="tel"
+                          maxLength={10}
+                          placeholder="‡§â‡§¶‡§æ. 9876543210"
+                          value={userRegisterForm.phone}
+                          onChange={(e) => {
+                            setUserRegisterForm({ ...userRegisterForm, phone: e.target.value.replace(/[^0-9]/g, '') });
+                            if (userAuthError) setUserAuthError('');
+                          }}
+                          className="w-full bg-black/60 border border-white/20 focus:border-fuchsia-400 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none shadow-inner"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="text-xs font-bold text-gray-200 block mb-1">
+                            Create Password (‡§ï‡§Æ ‡§∏‡•á ‡§ï‡§Æ 6 ‡§Ö‡§ï‡•ç‡§∑‡§∞):
+                          </label>
+                          <input
+                            type="password"
+                            placeholder="‡§®‡§Ø‡§æ ‡§™‡§æ‡§∏‡§µ‡§∞‡•ç‡§° ‡§¨‡§®‡§æ‡§è‡§Ç"
+                            value={userRegisterForm.password}
+                            onChange={(e) => {
+                              setUserRegisterForm({ ...userRegisterForm, password: e.target.value });
+                              if (userAuthError) setUserAuthError('');
+                            }}
+                            className="w-full bg-black/60 border border-white/20 focus:border-fuchsia-400 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none shadow-inner"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-gray-200 block mb-1">
+                            Confirm Password (‡§™‡§æ‡§∏‡§µ‡§∞‡•ç‡§° ‡§¶‡•ã‡§¨‡§æ‡§∞‡§æ):
+                          </label>
+                          <input
+                            type="password"
+                            placeholder="‡§µ‡§π‡•Ä ‡§™‡§æ‡§∏‡§µ‡§∞‡•ç‡§° ‡§¶‡•ã‡§¨‡§æ‡§∞‡§æ ‡§¶‡§∞‡•ç‡§ú ‡§ï‡§∞‡•á‡§Ç"
+                            value={userRegisterForm.confirmPassword}
+                            onChange={(e) => {
+                              setUserRegisterForm({ ...userRegisterForm, confirmPassword: e.target.value });
+                              if (userAuthError) setUserAuthError('');
+                            }}
+                            className="w-full bg-black/60 border border-white/20 focus:border-fuchsia-400 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none shadow-inner"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full bg-gradient-to-r from-pink-600 via-fuchsia-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-black text-sm py-3.5 rounded-xl shadow-[0_0_25px_rgba(217,70,239,0.5)] transition-all uppercase tracking-wider cursor-pointer active:scale-98 mt-1 flex items-center justify-center gap-2"
+                      >
+                        <UserPlus size={18} /> CREATE VERIFIED ACCOUNT (‡§Ö‡§ï‡§æ‡§â‡§Ç‡§ü ‡§¨‡§®‡§æ‡§è‡§Ç)
+                      </button>
+
+                      <p className="text-gray-400 text-xs text-center mt-1">
+                        ‡§™‡§π‡§≤‡•á ‡§∏‡•á ‡§Ö‡§ï‡§æ‡§â‡§Ç‡§ü ‡§π‡•à?{' '}
+                        <button
+                          type="button"
+                          onClick={() => { setUserAuthTab('login'); setUserAuthError(''); }}
+                          className="text-fuchsia-400 font-bold hover:underline cursor-pointer"
+                        >
+                          ‡§Ø‡§π‡§æ‡§Å ‡§ï‡•ç‡§≤‡§ø‡§ï ‡§ï‡§∞‡§ï‡•á Login ‡§ï‡§∞‡•á‡§Ç
+                        </button>
+                      </p>
+                    </form>
+                  )}
                 </div>
               ) : (
-                <div className="bg-black/20 backdrop-blur-md border border-green-500/30 rounded-[24px] p-5 shadow-[0_0_40px_rgba(34,197,94,0.2)]  text-center">
-                  <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center border border-green-500/50 mx-auto mb-4">
-                    <User size={32} className="text-green-400" />
+                /* LOGGED IN USER PROFILE SUMMARY */
+                <div className="bg-black/30 backdrop-blur-md border border-green-500/40 rounded-3xl p-6 shadow-[0_0_50px_rgba(34,197,94,0.2)] flex flex-col items-center text-center">
+                  <div className="relative mb-4">
+                    <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center border-2 border-green-400 overflow-hidden shadow-[0_0_30px_rgba(34,197,94,0.4)]">
+                      {userProfile.avatar ? (
+                        <img src={userProfile.avatar} alt="User Avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        <User size={40} className="text-green-400" />
+                      )}
+                    </div>
+                    <span className="absolute -bottom-1 -right-1 bg-green-500 text-black text-[10px] font-black px-2 py-0.5 rounded-full border border-black shadow">
+                      VERIFIED
+                    </span>
                   </div>
-                  <h3 className="text-white font-bold text-lg mb-1">Logged In</h3>
-                  <p className="text-gray-400 text-sm mb-2">{userProfile.email || userProfile.phone}</p>
-                  <p className="text-cyan-400 font-black text-base mb-4">Wallet Balance: ‚Çπ{userBalance}</p>
-                  <button 
-                    onClick={() => {
-                      if (userProfile.isLoggedIn) {
-                        const key = getAccountKey(userProfile.email, userProfile.phone);
-                        if (key && key !== 'guest') {
-                          setUserWallets(prev => ({ ...prev, [key]: userBalance }));
-                          setUserAccountProfiles(prev => ({
-                            ...prev,
-                            [key]: {
-                              avatar: userProfile.avatar,
-                              keysBought: userProfile.keysBought,
-                              totalAdded: userProfile.totalAdded,
-                              joinDate: userProfile.joinDate
-                            }
-                          }));
+
+                  <h3 id="userInfo" className="text-white font-black text-lg sm:text-xl mb-1">
+                    ‡§∏‡•ç‡§µ‡§æ‡§ó‡§§ ‡§π‡•à, {userProfile.email || userProfile.phone || 'VIP Member'}!
+                  </h3>
+                  <p className="text-gray-300 text-xs mb-3">
+                    {userProfile.email ? `Email: ${userProfile.email}` : ''}
+                    {userProfile.phone ? ` | Phone: ${userProfile.phone}` : ''}
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-3 w-full max-w-sm mb-5">
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-3">
+                      <p className="text-[10px] text-gray-400 uppercase font-bold">Wallet Balance</p>
+                      <p className="text-cyan-400 font-black text-xl">‚Çπ{userBalance}</p>
+                    </div>
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-3">
+                      <p className="text-[10px] text-gray-400 uppercase font-bold">Keys Bought</p>
+                      <p className="text-fuchsia-400 font-black text-xl">{userProfile.keysBought ?? 0}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm">
+                    <button
+                      onClick={() => setCurrentView('home')}
+                      className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs py-3 rounded-xl shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all uppercase tracking-wider"
+                    >
+                      GO TO HOME (‡§ï‡•Ä ‡§ñ‡§∞‡•Ä‡§¶‡•á‡§Ç)
+                    </button>
+                    <button
+                      id="logoutBtn"
+                      onClick={async () => {
+                        try {
+                          const auth = getAuth(firebaseApp);
+                          await signOut(auth);
+                        } catch (e) {}
+                        if (userProfile.isLoggedIn) {
+                          const key = getAccountKey(userProfile.email, userProfile.phone);
+                          if (key && key !== 'guest') {
+                            setUserWallets(prev => ({ ...prev, [key]: userBalance }));
+                            setUserAccountProfiles(prev => ({
+                              ...prev,
+                              [key]: {
+                                avatar: userProfile.avatar,
+                                keysBought: userProfile.keysBought,
+                                totalAdded: userProfile.totalAdded,
+                                joinDate: userProfile.joinDate
+                              }
+                            }));
+                          }
                         }
-                      }
-                      setUserProfile({
-                        isLoggedIn: false,
-                        email: '',
-                        phone: '',
-                        password: '',
-                        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
-                        joinDate: '',
-                        keysBought: 0,
-                        totalAdded: 0
-                      });
-                      setUserBalance(0);
-                      alert("Logged out successfully! Account profile and wallet saved.");
-                    }}
-                    className="w-full bg-red-500/20 hover:bg-red-500/40 text-red-400 font-bold py-2.5 rounded-lg transition-colors border border-red-500/30"
-                  >
-                    Logout
-                  </button>
+                        setUserProfile({
+                          isLoggedIn: false,
+                          email: '',
+                          phone: '',
+                          password: '',
+                          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
+                          joinDate: '',
+                          keysBought: 0,
+                          totalAdded: 0
+                        });
+                        setUserBalance(0);
+                        alert("Logged out successfully! Account profile and wallet saved.");
+                      }}
+                      className="flex-1 bg-red-500/20 hover:bg-red-500/40 text-red-400 font-bold text-xs py-3 rounded-xl transition-colors border border-red-500/40 cursor-pointer"
+                    >
+                      Logout
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
           )}
-
           {currentView === 'profile' && (
             <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
                <div className="flex items-center gap-3">
@@ -4544,6 +5954,8 @@ export default function App() {
                 <div className="flex gap-1.5 overflow-x-auto pb-1 mt-1 no-scrollbar">
                   {[
                     { id: 'overview', label: 'üìä OVERVIEW', color: 'from-fuchsia-600 to-purple-600' },
+                    { id: 'emailKey', label: 'üìß EMAIL KEY (EMAILJS)', color: 'from-blue-600 to-indigo-600' },
+                    { id: 'resellers', label: `üõ°Ô∏è RESELLERS (${ensureArray(approvedResellers).length})`, color: 'from-amber-500 to-yellow-600' },
                     { id: 'addPanel', label: '‚ûï ADD PANEL', color: 'from-pink-500 to-fuchsia-600' },
                     { id: 'house', label: 'üè† HOUSE PANEL (24GHANTA)', color: 'from-amber-500 to-orange-600' },
                     { id: 'managePanels', label: 'üóëÔ∏è MANAGE PANELS', color: 'from-red-500 to-rose-600' },
@@ -4579,6 +5991,29 @@ export default function App() {
                     </p>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
+                      <button 
+                        onClick={() => setStaffTab('emailKey')}
+                        className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 p-4 rounded-xl text-white font-black text-sm uppercase flex items-center justify-between shadow-[0_0_20px_rgba(59,130,246,0.35)] transition-all hover:scale-[1.02] md:col-span-2 border border-blue-400/50"
+                      >
+                        <span className="flex items-center gap-2.5"><Mail size={20} className="text-blue-300" /> üìß Send Key via Email (EmailJS Direct Integration)</span>
+                        <ArrowRight size={18} />
+                      </button>
+                      <button 
+                        onClick={() => setStaffTab('refundPanel')}
+                        className="bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 hover:from-red-500 hover:to-rose-500 p-4 rounded-xl text-white font-black text-sm uppercase flex items-center justify-between shadow-[0_0_20px_rgba(239,68,68,0.35)] transition-all hover:scale-[1.02] md:col-span-2 border border-red-400/50"
+                      >
+                        <span className="flex items-center gap-2.5"><X size={20} className="text-red-300" /> ‚ùå Reject & Refund Panel (EmailJS)</span>
+                        <ArrowRight size={18} />
+                      </button>
+
+                      <button 
+                        onClick={() => setStaffTab('resellers')}
+                        className="bg-gradient-to-r from-amber-600 via-yellow-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 p-4 rounded-xl text-white font-black text-sm uppercase flex items-center justify-between shadow-[0_0_20px_rgba(245,158,11,0.35)] transition-all hover:scale-[1.02] md:col-span-2 border border-yellow-400/40"
+                      >
+                        <span className="flex items-center gap-2.5"><ShieldCheck size={20} className="text-yellow-300" /> üëë Reseller Admin Control & VIP Rates ({ensureArray(approvedResellers).length})</span>
+                        <ArrowRight size={18} />
+                      </button>
+
                       <button 
                         onClick={() => setStaffTab('addPanel')}
                         className="bg-gradient-to-r from-pink-600 to-fuchsia-600 hover:from-pink-500 hover:to-fuchsia-500 p-4 rounded-xl text-white font-black text-sm uppercase flex items-center justify-between shadow-[0_0_20px_rgba(217,70,239,0.3)] transition-all hover:scale-[1.02]"
@@ -4634,6 +6069,307 @@ export default function App() {
                         <span className="flex items-center gap-2.5"><Wallet size={20} /> üí∞ Money & Payments ("Kisne Kisne Paisa Lagaya")</span>
                         <ArrowRight size={18} />
                       </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STAFF TAB: RESELLERS & DIFFERENTIAL PRICING */}
+              {staffTab === 'resellers' && (
+                <div className="flex flex-col gap-4">
+                  {/* Reseller Admin Header & Metrics */}
+                  <div className="bg-black/20 backdrop-blur-md border border-amber-500/40 rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-left">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-lg font-black text-amber-400 flex items-center gap-2 uppercase tracking-wide">
+                          <ShieldCheck size={22} className="text-yellow-400" /> üëë RESELLER MANAGEMENT & VIP RATES
+                        </h3>
+                        <p className="text-gray-300 text-xs">
+                          Yahan se aap Reseller Gmail IDs approve kar sakte hain, unka Wallet Balance manage kar sakte hain aur Special Reseller VIP Rates configure kar sakte hain.
+                        </p>
+                      </div>
+                      <span className="bg-yellow-400 text-black font-black text-[11px] px-3 py-1 rounded-xl uppercase tracking-wider self-start shrink-0 shadow-md">
+                        {ensureArray(approvedResellers).length} Resellers
+                      </span>
+                    </div>
+
+                    {/* Reseller Summary Metrics */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      <div className="bg-black/40 border border-yellow-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center">
+                        <Users size={18} className="text-yellow-400 mb-1" />
+                        <span className="text-gray-400 text-[10px] font-bold uppercase">Total Resellers</span>
+                        <span className="text-yellow-300 font-black text-base">{ensureArray(approvedResellers).length}</span>
+                      </div>
+                      <div className="bg-black/40 border border-emerald-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center">
+                        <Wallet size={18} className="text-emerald-400 mb-1" />
+                        <span className="text-gray-400 text-[10px] font-bold uppercase">Reseller Float</span>
+                        <span className="text-emerald-400 font-black text-base">‚Çπ{ensureArray(approvedResellers).reduce((acc, curr) => acc + (Number(curr.balance) || 0), 0)}</span>
+                      </div>
+                      <div className="bg-black/40 border border-cyan-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center col-span-2 sm:col-span-1">
+                        <Percent size={18} className="text-cyan-400 mb-1" />
+                        <span className="text-gray-400 text-[10px] font-bold uppercase">Default VIP Discount</span>
+                        <span className="text-cyan-300 font-black text-base">35% OFF (‚Çπ50 vs ‚Çπ90)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Add New Approved Reseller Form */}
+                  <div className="bg-black/20 backdrop-blur-md border border-amber-500/30 rounded-2xl p-5 shadow-xl flex flex-col gap-3 text-left">
+                    <h4 className="text-sm font-black text-white uppercase flex items-center gap-2">
+                      <PlusCircle size={18} className="text-amber-400" /> ‚ûï Add / Approve New Reseller Gmail
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-amber-300 text-xs font-bold block mb-1">Reseller Gmail ID (Google Account) *</label>
+                        <input
+                          type="email"
+                          placeholder="e.g., pramk9992@gmail.com"
+                          value={newResellerForm.email}
+                          onChange={(e) => setNewResellerForm({ ...newResellerForm, email: e.target.value })}
+                          className="w-full bg-black/40 border border-white/20 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-amber-300 text-xs font-bold block mb-1">Reseller Name / Business</label>
+                        <input
+                          type="text"
+                          placeholder="e.g., Pramod VIP Reseller"
+                          value={newResellerForm.name}
+                          onChange={(e) => setNewResellerForm({ ...newResellerForm, name: e.target.value })}
+                          className="w-full bg-black/40 border border-white/20 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-amber-300 text-xs font-bold block mb-1">Contact Mobile Number</label>
+                        <input
+                          type="text"
+                          placeholder="e.g., 9876543210"
+                          value={newResellerForm.phone}
+                          onChange={(e) => setNewResellerForm({ ...newResellerForm, phone: e.target.value })}
+                          className="w-full bg-black/40 border border-white/20 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-amber-300 text-xs font-bold block mb-1">Initial Wallet Balance (‚Çπ)</label>
+                        <input
+                          type="number"
+                          placeholder="500"
+                          value={newResellerForm.balance}
+                          onChange={(e) => setNewResellerForm({ ...newResellerForm, balance: Number(e.target.value) })}
+                          className="w-full bg-black/40 border border-white/20 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const emailVal = newResellerForm.email.toLowerCase().trim();
+                        if (!emailVal || !emailVal.includes('@')) {
+                          alert("Kripya valid Gmail ID enter karein!");
+                          return;
+                        }
+                        const existingIdx = approvedResellers.findIndex(r => r.email.toLowerCase() === emailVal);
+                        if (existingIdx !== -1) {
+                          alert("Yeh Gmail ID pehle se Approved Resellers list mein mojud hai!");
+                          return;
+                        }
+
+                        const newObj = {
+                          email: emailVal,
+                          name: newResellerForm.name || 'VIP Reseller',
+                          phone: newResellerForm.phone || '',
+                          balance: Number(newResellerForm.balance) || 0,
+                          isApproved: true,
+                          discountPercent: 35,
+                          createdAt: new Date().toLocaleString()
+                        };
+
+                        setApprovedResellers(prev => [newObj, ...prev]);
+                        alert(`‚úÖ Reseller "${emailVal}" successfully Approved with ‚Çπ${newObj.balance} Wallet Balance!`);
+                        setNewResellerForm({ email: '', name: '', phone: '', balance: 500, isApproved: true });
+                      }}
+                      className="mt-2 w-full bg-gradient-to-r from-amber-500 via-yellow-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-black py-3 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95"
+                    >
+                      <ShieldCheck size={18} /> ‚ûï APPROVE & ADD RESELLER TO DATABASE
+                    </button>
+                  </div>
+
+                  {/* Resellers Search & List */}
+                  <div className="bg-black/20 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-xl flex flex-col gap-3 text-left">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <h4 className="text-sm font-black text-white uppercase flex items-center gap-2">
+                        <Users size={18} className="text-cyan-400" /> Approved Resellers List ({ensureArray(approvedResellers).length})
+                      </h4>
+                      <input
+                        type="text"
+                        placeholder="Search reseller by email / name..."
+                        value={searchResellerQuery}
+                        onChange={(e) => setSearchResellerQuery(e.target.value)}
+                        className="bg-black/40 border border-white/20 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-400 w-full sm:w-64"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-2.5 mt-1">
+                      {ensureArray(approvedResellers).filter(r => {
+                        const q = searchResellerQuery.toLowerCase().trim();
+                        return !q || r.email.toLowerCase().includes(q) || (r.name && r.name.toLowerCase().includes(q));
+                      }).map((reseller, rIdx) => (
+                        <div key={`reseller-row-${reseller.email}-${rIdx}`} className="bg-black/40 border border-yellow-500/30 rounded-xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md hover:border-yellow-400/60 transition-all">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-yellow-500/20 border border-yellow-400/50 flex items-center justify-center shrink-0">
+                              <Award className="text-yellow-400" size={22} />
+                            </div>
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <span className="text-white font-black text-sm">{reseller.name || 'VIP Reseller'}</span>
+                                {reseller.isApproved ? (
+                                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase flex items-center gap-1">
+                                    <CheckCircle size={10} /> APPROVED VIP
+                                  </span>
+                                ) : (
+                                  <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">
+                                    PENDING
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-xs text-yellow-300 font-mono select-all">{reseller.email}</span>
+                              <span className="text-[10px] text-gray-400">
+                                {reseller.phone ? `Phone: ${reseller.phone} ‚Ä¢ ` : ''}Added: {reseller.createdAt || 'Active'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Wallet Controls & Actions */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            {/* Wallet Balance Tag */}
+                            <div className="bg-black/60 border border-emerald-500/40 px-3 py-1.5 rounded-xl flex items-center gap-2">
+                              <span className="text-[10px] text-gray-400 font-bold uppercase">Balance:</span>
+                              <span className="text-emerald-400 font-black text-sm font-mono">‚Çπ{reseller.balance}</span>
+                            </div>
+
+                            {/* Quick Add Funds */}
+                            <div className="flex items-center gap-1">
+                              {[100, 500, 1000].map(addAmt => (
+                                <button
+                                  key={`add-${reseller.email}-${addAmt}`}
+                                  onClick={() => {
+                                    const newBal = (Number(reseller.balance) || 0) + addAmt;
+                                    setApprovedResellers(prev => prev.map(r => r.email.toLowerCase() === reseller.email.toLowerCase() ? { ...r, balance: newBal } : r));
+                                    if (resellerUser.email.toLowerCase() === reseller.email.toLowerCase()) {
+                                      setResellerUser(prev => ({ ...prev, balance: newBal }));
+                                    }
+                                    alert(`‚úÖ +‚Çπ${addAmt} added to ${reseller.email}'s wallet! New Balance: ‚Çπ${newBal}`);
+                                  }}
+                                  className="bg-emerald-600/30 hover:bg-emerald-600/60 border border-emerald-500/40 text-emerald-300 font-black text-[10px] px-2 py-1.5 rounded-lg transition-all"
+                                >
+                                  +‚Çπ{addAmt}
+                                </button>
+                              ))}
+
+                              {/* Custom Balance Button */}
+                              <button
+                                onClick={() => {
+                                  const customVal = prompt(`Enter custom balance for ${reseller.email}:`, String(reseller.balance));
+                                  if (customVal !== null && !isNaN(Number(customVal))) {
+                                    const parsed = Math.max(0, Number(customVal));
+                                    setApprovedResellers(prev => prev.map(r => r.email.toLowerCase() === reseller.email.toLowerCase() ? { ...r, balance: parsed } : r));
+                                    if (resellerUser.email.toLowerCase() === reseller.email.toLowerCase()) {
+                                      setResellerUser(prev => ({ ...prev, balance: parsed }));
+                                    }
+                                    alert(`‚úÖ Updated wallet balance for ${reseller.email} to ‚Çπ${parsed}`);
+                                  }
+                                }}
+                                className="bg-cyan-600/30 hover:bg-cyan-600/60 border border-cyan-500/40 text-cyan-300 font-black text-[10px] px-2.5 py-1.5 rounded-lg transition-all"
+                              >
+                                Edit ‚Çπ
+                              </button>
+                            </div>
+
+                            {/* Status Toggle */}
+                            <button
+                              onClick={() => {
+                                const toggled = !reseller.isApproved;
+                                setApprovedResellers(prev => prev.map(r => r.email.toLowerCase() === reseller.email.toLowerCase() ? { ...r, isApproved: toggled } : r));
+                                if (resellerUser.email.toLowerCase() === reseller.email.toLowerCase()) {
+                                  setResellerUser(prev => ({ ...prev, isApproved: toggled }));
+                                }
+                                alert(`Reseller status for ${reseller.email} updated to: ${toggled ? 'APPROVED' : 'DISABLED'}`);
+                              }}
+                              className={`text-[10px] font-black px-2.5 py-1.5 rounded-lg border transition-all ${
+                                reseller.isApproved
+                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                              }`}
+                            >
+                              {reseller.isApproved ? 'Disable VIP' : 'Approve VIP'}
+                            </button>
+
+                            {/* Delete Reseller */}
+                            <button
+                              onClick={() => {
+                                if (confirm(`Kya aap sach me ${reseller.email} ko Resellers list se delete karna chahte hain?`)) {
+                                  setApprovedResellers(prev => prev.filter(r => r.email.toLowerCase() !== reseller.email.toLowerCase()));
+                                  if (resellerUser.email.toLowerCase() === reseller.email.toLowerCase()) {
+                                    setResellerUser({ isLoggedIn: false, email: '', name: '', balance: 0, isApproved: false });
+                                  }
+                                  alert(`Reseller ${reseller.email} deleted.`);
+                                }
+                              }}
+                              className="p-1.5 bg-red-600/20 hover:bg-red-600/40 border border-red-500/40 text-red-300 rounded-lg transition-all"
+                              title="Delete Reseller"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+
+                      {ensureArray(approvedResellers).length === 0 && (
+                        <div className="p-4 text-center text-gray-400 text-xs bg-black/40 rounded-xl border border-white/10">
+                          Abhi koi Reseller add nahi hua hai. Upar diye gaye form se naya Reseller Gmail ID add karein.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Differential Pricing Rate Overview Table */}
+                  <div className="bg-black/20 backdrop-blur-md border border-cyan-500/30 rounded-2xl p-5 shadow-xl flex flex-col gap-3 text-left">
+                    <h4 className="text-sm font-black text-cyan-400 uppercase flex items-center gap-2">
+                      <Percent size={18} /> Differential Pricing Matrix (Normal vs Reseller VIP Price)
+                    </h4>
+                    <p className="text-gray-300 text-xs">
+                      Reseller ko har panel par Special VIP Rates (jaise ‚Çπ90 ke badle ‚Çπ50 ya 35% discount) automatically milta hai jab vah Google login ya Secret Code se login hota hai.
+                    </p>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/10 text-gray-400">
+                            <th className="py-2 px-3 font-bold">Panel Name</th>
+                            <th className="py-2 px-3 font-bold">Category</th>
+                            <th className="py-2 px-3 font-bold">Normal Price</th>
+                            <th className="py-2 px-3 font-bold text-yellow-300">üëë VIP Reseller Price</th>
+                            <th className="py-2 px-3 font-bold text-emerald-400">Reseller Profit / Margin</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {panels.slice(0, 8).map((p, idx) => {
+                            const p1 = p.pricing[0]?.price || 90;
+                            const resP = (p.pricing[0] as any)?.resellerPrice !== undefined ? (p.pricing[0] as any).resellerPrice : Math.round(p1 * 0.65);
+                            const margin = p1 - resP;
+                            return (
+                              <tr key={`diff-price-${p.id}-${idx}`} className="hover:bg-white/5">
+                                <td className="py-2 px-3 font-bold text-white">{p.title}</td>
+                                <td className="py-2 px-3 text-cyan-300">{p.category}</td>
+                                <td className="py-2 px-3 line-through text-gray-400">‚Çπ{p1} ({p.pricing[0]?.label || '1 Day'})</td>
+                                <td className="py-2 px-3 font-black text-yellow-300 font-mono">‚Çπ{resP}</td>
+                                <td className="py-2 px-3 font-bold text-emerald-400">+‚Çπ{margin} ({(margin / p1 * 100).toFixed(0)}% Profit)</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
@@ -5543,23 +7279,62 @@ export default function App() {
 
                           <div className="flex flex-col gap-2 pt-2 border-t border-white/10">
                             <textarea
-                              placeholder="Type key message / code here (e.g. 5546272611)..."
+                              placeholder="Type key message / code here (e.g. 5546272611 or ABCD-1234-EFGH-5678)..."
                               className="w-full bg-black/50 border border-white/20 rounded-xl py-2 px-3 text-sm font-bold text-emerald-400 font-mono focus:outline-none focus:border-amber-400 transition-all resize-none h-20"
                               id={`staff-key-input-${req.id}`}
                             />
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <button
+                                onClick={() => {
+                                  const input = document.getElementById(`staff-key-input-${req.id}`) as HTMLTextAreaElement;
+                                  if (input && input.value) {
+                                    setKeyRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'APPROVED', deliveredKey: input.value.trim() } : r));
+                                    alert(`‚úÖ Key approved and saved to database for ${req.user}!`);
+                                  } else {
+                                    alert('Please enter key code / message first!');
+                                  }
+                                }}
+                                className="w-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-xs py-2.5 rounded-xl uppercase shadow-[0_0_15px_rgba(234,179,8,0.4)] flex items-center justify-center gap-1.5 active:scale-95"
+                              >
+                                <CheckCircle size={14} /> APPROVE (IN-APP)
+                              </button>
+
+                              <button
+                                onClick={async () => {
+                                  const input = document.getElementById(`staff-key-input-${req.id}`) as HTMLTextAreaElement;
+                                  const targetEmail = req.userEmail || (req.user && req.user.includes('@') ? req.user : '');
+                                  if (!input || !input.value.trim()) {
+                                    alert('‡§ï‡•É‡§™‡§Ø‡§æ Key ‡§ï‡•ã‡§° ‡§¶‡§∞‡•ç‡§ú ‡§ï‡§∞‡•á‡§Ç!');
+                                    return;
+                                  }
+                                  let finalEmail = targetEmail;
+                                  if (!finalEmail) {
+                                    const promptEmail = prompt("Enter User's Email ID to send Key via EmailJS:", "");
+                                    if (!promptEmail) return;
+                                    finalEmail = promptEmail.trim();
+                                  }
+                                  const keyVal = input.value.trim();
+                                  const sent = await handleSendKeyToUser(finalEmail, keyVal, `Hello ${req.user}, here is your ${req.panel} activation key. Thank you for shopping with us!`);
+                                  if (sent) {
+                                    setKeyRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'APPROVED', deliveredKey: keyVal } : r));
+                                  }
+                                }}
+                                className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs py-2.5 rounded-xl uppercase shadow-[0_0_15px_rgba(59,130,246,0.4)] flex items-center justify-center gap-1.5 active:scale-95"
+                              >
+                                <Mail size={14} /> üìß APPROVE & SEND EMAIL (EMAILJS)
+                              </button>
+                            </div>
+
+                            {/* Staff Portal: REJECT & REFUND BUTTON */}
                             <button
+                              type="button"
                               onClick={() => {
-                                const input = document.getElementById(`staff-key-input-${req.id}`) as HTMLTextAreaElement;
-                                if (input && input.value) {
-                                  setKeyRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'APPROVED', deliveredKey: input.value.trim() } : r));
-                                  alert(`‚úÖ Key approved and sent to ${req.user}!`);
-                                } else {
-                                  alert('Please enter key code / message first!');
-                                }
+                                handleRejectAndRefundKey(req, "Out of stock / Technical issue");
                               }}
-                              className="w-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-xs py-2.5 rounded-xl uppercase shadow-[0_0_15px_rgba(234,179,8,0.4)] flex items-center justify-center gap-1.5 active:scale-95"
+                              className="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black py-2.5 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-1.5 active:scale-95 border border-red-400/40 mt-1"
                             >
-                              <CheckCircle size={14} /> APPROVE & SEND KEY TO USER
+                              <X size={14} /> ‚ùå REJECT & REFUND ‚Çπ{req.price} TO USER WALLET
                             </button>
                           </div>
                         </div>
@@ -5572,6 +7347,420 @@ export default function App() {
                         <span className="text-gray-500 text-xs">All user key orders have been approved or delivered.</span>
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              
+              {/* STAFF TAB: REJECT & REFUND PANEL */}
+              {staffTab === 'refundPanel' && (
+                <div className="flex flex-col gap-4 text-left animate-in fade-in duration-200">
+                  <div className="bg-black/40 backdrop-blur-xl border-2 border-red-500/50 rounded-3xl p-5 sm:p-7 shadow-[0_0_50px_rgba(239,68,68,0.25)] flex flex-col gap-5 relative overflow-hidden">
+                    
+                    <div className="flex items-center gap-3 border-b border-red-500/30 pb-4">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-red-600 to-pink-500 p-0.5 flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.6)] shrink-0">
+                        <div className="w-full h-full bg-black/70 rounded-[14px] flex items-center justify-center">
+                          <X className="text-red-400" size={24} />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight text-white">
+                            Reject & Refund Panel
+                          </h3>
+                          <span className="bg-red-500/20 text-red-300 border border-red-500/40 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">
+                            EMAILJS LIVE
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-300">
+                          Refund to User Wallet and send automated notification email.
+                        </p>
+                      </div>
+                    </div>
+
+                    <form 
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        const emailElem = document.getElementById("refundUserEmail") as HTMLInputElement;
+                        const amountElem = document.getElementById("refundAmount") as HTMLInputElement;
+                        const reasonElem = document.getElementById("refundReason") as HTMLTextAreaElement;
+                        const statusElem = document.getElementById("refundStatusMessage") as HTMLParagraphElement;
+
+                        const email = emailElem?.value?.trim();
+                        const amount = Number(amountElem?.value?.trim());
+                        const reason = reasonElem?.value?.trim() || "‡§Ü‡§™‡§ï‡§æ ‡§ë‡§∞‡•ç‡§°‡§∞ ‡§∞‡§ø‡§ú‡•á‡§ï‡•ç‡§ü ‡§ï‡§∞ ‡§¶‡§ø‡§Ø‡§æ ‡§ó‡§Ø‡§æ ‡§π‡•à ‡§î‡§∞ ‡§™‡•à‡§∏‡•á ‡§Ü‡§™‡§ï‡•á ‡§µ‡•â‡§≤‡•á‡§ü ‡§Æ‡•á‡§Ç ‡§∞‡§ø‡§´‡§º‡§Ç‡§° ‡§ï‡§∞ ‡§¶‡§ø‡§è ‡§ó‡§è ‡§π‡•à‡§Ç‡•§";
+
+                        if (!email || !amount) {
+                          if (statusElem) {
+                            statusElem.innerText = "‡§ï‡•É‡§™‡§Ø‡§æ User Email ‡§î‡§∞ Refund Amount ‡§¶‡•ã‡§®‡•ã‡§Ç ‡§≠‡§∞‡•á‡§Ç!";
+                            statusElem.className = "mt-4 font-bold text-red-400 text-sm";
+                          }
+                          return;
+                        }
+
+                        if (statusElem) {
+                          statusElem.innerText = "‡§∞‡§ø‡§´‡§º‡§Ç‡§° ‡§ï‡•Ä ‡§ú‡§æ‡§®‡§ï‡§æ‡§∞‡•Ä ‡§≠‡•á‡§ú‡•Ä ‡§ú‡§æ ‡§∞‡§π‡•Ä ‡§π‡•à...";
+                          statusElem.className = "mt-4 font-bold text-blue-400 text-sm";
+                        }
+
+                        // 1. Add fund to user wallet
+                        const tPhone = /^\d+$/.test(email) ? email : '';
+                        const targetAccKey = getAccountKey(email, tPhone);
+                        
+                        setUserWallets(prev => {
+                          const currentVal = Number(prev[targetAccKey]) || 0;
+                          return { ...prev, [targetAccKey]: currentVal + amount };
+                        });
+
+                        // 2. Send Email
+                        const success = await handleSendRefundEmailToUser(email, amount, reason);
+
+                        if (success) {
+                          if (statusElem) {
+                            statusElem.innerText = `‡§∏‡§´‡§≤‡§§‡§æ‡§™‡•Ç‡§∞‡•ç‡§µ‡§ï ‡§∞‡§ø‡§´‡§º‡§Ç‡§° ‡§à‡§Æ‡•á‡§≤ ‡§≠‡•á‡§ú ‡§¶‡§ø‡§Ø‡§æ ‡§ó‡§Ø‡§æ ‡§π‡•à! ‚Çπ${amount} Added to Wallet.`;
+                            statusElem.className = "mt-4 font-bold text-green-400 text-sm";
+                          }
+                          if (emailElem) emailElem.value = "";
+                          if (amountElem) amountElem.value = "";
+                          if (reasonElem) reasonElem.value = "";
+                        } else {
+                          if (statusElem) {
+                            statusElem.innerText = "Error: ‡§à‡§Æ‡•á‡§≤ ‡§≠‡•á‡§ú‡§®‡•á ‡§Æ‡•á‡§Ç ‡§∏‡§Æ‡§∏‡•ç‡§Ø‡§æ ‡§Ü‡§à‡•§ ‡§≤‡•á‡§ï‡§ø‡§® ‡§µ‡•â‡§≤‡•á‡§ü ‡§Æ‡•á‡§Ç ‡§∞‡§ø‡§´‡§º‡§Ç‡§° ‡§ê‡§° ‡§ï‡§∞ ‡§¶‡§ø‡§Ø‡§æ ‡§ó‡§Ø‡§æ ‡§π‡•à‡•§";
+                            statusElem.className = "mt-4 font-bold text-red-400 text-sm";
+                          }
+                        }
+                      }}
+                      className="flex flex-col gap-4"
+                    >
+                      <div>
+                        <label className="text-xs font-bold text-red-300 flex items-center gap-1.5 mb-1">
+                          <User size={14} /> User Email Address:
+                        </label>
+                        <input
+                          type="email"
+                          id="refundUserEmail"
+                          placeholder="user@gmail.com"
+                          className="w-full bg-black/50 border border-white/20 focus:border-red-400 rounded-xl p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none font-mono transition-all"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-red-300 flex items-center gap-1.5 mb-1">
+                          <Wallet size={14} /> Refund Amount (‚Çπ):
+                        </label>
+                        <input
+                          type="number"
+                          id="refundAmount"
+                          placeholder="e.g. 100"
+                          className="w-full bg-black/50 border border-white/20 focus:border-red-400 rounded-xl p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none font-mono transition-all"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-red-300 flex items-center gap-1.5 mb-1">
+                          <AlertTriangle size={14} /> Rejection Reason:
+                        </label>
+                        <textarea
+                          id="refundReason"
+                          placeholder="‡§ï‡§æ‡§∞‡§£ ‡§≤‡§ø‡§ñ‡•á‡§Ç (‡§â‡§¶‡§æ. Invalid Payment Screenshot)"
+                          rows={3}
+                          className="w-full bg-black/50 border border-white/20 focus:border-red-400 rounded-xl p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none transition-all"
+                        ></textarea>
+                      </div>
+
+                      <button 
+                        type="submit"
+                        className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black py-3.5 rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all uppercase tracking-wider text-sm flex items-center justify-center gap-2 active:scale-95 border border-red-400/40"
+                      >
+                        <X size={18} /> REJECT & REFUND ‚Çπ TO USER WALLET
+                      </button>
+
+                      <p id="refundStatusMessage" className="mt-2 text-sm"></p>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* STAFF TAB: EMAILJS SEND KEY PANEL ("Key ‡§≠‡•á‡§ú‡§®‡•á ‡§ï‡§æ Admin Panel") */}
+              {staffTab === 'emailKey' && (
+                <div className="flex flex-col gap-4 text-left animate-in fade-in duration-200">
+                  <div className="bg-black/40 backdrop-blur-xl border-2 border-blue-500/50 rounded-3xl p-5 sm:p-7 shadow-[0_0_50px_rgba(59,130,246,0.25)] flex flex-col gap-5 relative overflow-hidden">
+                    {/* Top Glow & Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-blue-500/30 pb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 p-0.5 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.6)] shrink-0">
+                          <div className="w-full h-full bg-black/70 rounded-[14px] flex items-center justify-center">
+                            <Mail className="text-blue-400" size={24} />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight text-white">
+                              Key ‡§≠‡•á‡§ú‡§®‡•á ‡§ï‡§æ Admin Panel
+                            </h3>
+                            <span className="bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">
+                              EMAILJS LIVE
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-300">
+                            Send direct activation keys to customer Gmail/Email with instant automated delivery.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Config Credentials Chip */}
+                      <div className="flex flex-col gap-1.5 shrink-0">
+                        <div className="bg-blue-950/40 border border-blue-400/30 rounded-xl p-2.5 text-[10px] font-mono text-gray-300 flex flex-col gap-0.5">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-blue-300 font-bold flex items-center gap-1">
+                              <ShieldCheck size={12} /> EmailJS IDs Configured:
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowEmailJsConfigSettings(!showEmailJsConfigSettings)}
+                              className="text-[10px] text-yellow-400 hover:underline font-sans font-bold"
+                            >
+                              {showEmailJsConfigSettings ? 'Hide Settings' : '‚öôÔ∏è Edit IDs'}
+                            </button>
+                          </div>
+                          <span>Service: <strong className="text-white">{emailJsConfig.serviceId}</strong></span>
+                          <span>Template: <strong className="text-white">{emailJsConfig.templateId}</strong></span>
+                          <span>Public Key: <strong className="text-white">{emailJsConfig.publicKey.substring(0, 8)}...</strong></span>
+                        </div>
+
+                        {showEmailJsConfigSettings && (
+                          <div className="bg-black/70 border border-yellow-400/40 rounded-xl p-3 flex flex-col gap-2 animate-in fade-in">
+                            <span className="text-xs text-yellow-300 font-bold">EmailJS Live API Credentials</span>
+                            <div>
+                              <label className="text-[10px] text-gray-300 block">Service ID:</label>
+                              <input 
+                                type="text"
+                                value={emailJsConfig.serviceId}
+                                onChange={(e) => {
+                                  const updated = { ...emailJsConfig, serviceId: e.target.value };
+                                  setEmailJsConfig(updated);
+                                  localStorage.setItem('satorang_emailjs_config', JSON.stringify(updated));
+                                }}
+                                className="w-full bg-black/60 border border-white/20 rounded p-1.5 text-xs text-white font-mono"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-300 block">Template ID:</label>
+                              <input 
+                                type="text"
+                                value={emailJsConfig.templateId}
+                                onChange={(e) => {
+                                  const updated = { ...emailJsConfig, templateId: e.target.value };
+                                  setEmailJsConfig(updated);
+                                  localStorage.setItem('satorang_emailjs_config', JSON.stringify(updated));
+                                }}
+                                className="w-full bg-black/60 border border-white/20 rounded p-1.5 text-xs text-white font-mono"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-300 block">Public Key:</label>
+                              <input 
+                                type="text"
+                                value={emailJsConfig.publicKey}
+                                onChange={(e) => {
+                                  const updated = { ...emailJsConfig, publicKey: e.target.value };
+                                  setEmailJsConfig(updated);
+                                  localStorage.setItem('satorang_emailjs_config', JSON.stringify(updated));
+                                }}
+                                className="w-full bg-black/60 border border-white/20 rounded p-1.5 text-xs text-white font-mono"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* EmailJS Main Form */}
+                    <form 
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleSendKeyToUser();
+                      }}
+                      className="flex flex-col gap-4"
+                    >
+                      {/* 1. User Email */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs font-bold text-blue-300 flex items-center gap-1.5">
+                            <User size={14} /> ‡§Ø‡•Ç‡§ú‡§º‡§∞ ‡§ï‡§æ Email ID:
+                          </label>
+                          {registeredUsers.length > 0 && (
+                            <span className="text-[10px] text-gray-400">
+                              Quick Select registered customer:
+                            </span>
+                          )}
+                        </div>
+                        <input
+                          type="email"
+                          id="userEmail"
+                          placeholder="‡§ú‡•à‡§∏‡•á: user@gmail.com"
+                          value={sendKeyEmailForm.userEmail}
+                          onChange={(e) => setSendKeyEmailForm(prev => ({ ...prev, userEmail: e.target.value }))}
+                          className="w-full bg-black/50 border border-white/20 focus:border-blue-400 rounded-xl p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none font-mono transition-all"
+                          required
+                        />
+
+                        {/* Registered user email quick chips */}
+                        {registeredUsers.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {registeredUsers
+                              .filter(u => u.email && u.email.includes('@'))
+                              .slice(0, 5)
+                              .map((u, uIdx) => (
+                                <button
+                                  key={`quick-u-email-${uIdx}`}
+                                  type="button"
+                                  onClick={() => setSendKeyEmailForm(prev => ({ ...prev, userEmail: u.email }))}
+                                  className="text-[10px] bg-blue-950/60 hover:bg-blue-900 border border-blue-500/40 text-blue-200 px-2 py-0.5 rounded-lg transition-colors"
+                                >
+                                  {u.email}
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 2. Key Value */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs font-bold text-blue-300 flex items-center gap-1.5">
+                            <Key size={14} /> ‡§ñ‡§∞‡•Ä‡§¶‡•Ä ‡§ó‡§à Key:
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const rand = 'PREM-' + Math.random().toString(36).substring(2, 6).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase() + '-' + Math.floor(1000 + Math.random() * 9000);
+                              setSendKeyEmailForm(prev => ({ ...prev, keyValue: rand }));
+                            }}
+                            className="text-[10px] text-amber-300 hover:text-amber-200 font-bold underline flex items-center gap-1"
+                          >
+                            <Sparkles size={11} /> üé≤ Generate Random Key
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          id="keyValue"
+                          placeholder="‡§ú‡•à‡§∏‡•á: ABCD-1234-EFGH-5678 ‡§Ø‡§æ PREM-VIP-9921"
+                          value={sendKeyEmailForm.keyValue}
+                          onChange={(e) => setSendKeyEmailForm(prev => ({ ...prev, keyValue: e.target.value }))}
+                          className="w-full bg-black/50 border border-white/20 focus:border-blue-400 rounded-xl p-3 text-sm text-emerald-400 font-mono font-bold placeholder:text-gray-500 focus:outline-none transition-all"
+                          required
+                        />
+                      </div>
+
+                      {/* 3. Admin Message */}
+                      <div>
+                        <label className="text-xs font-bold text-blue-300 block mb-1">
+                          Admin Message (‡§µ‡•à‡§ï‡§≤‡•ç‡§™‡§ø‡§ï):
+                        </label>
+                        <textarea
+                          id="adminMessage"
+                          rows={3}
+                          placeholder="‡§Ø‡•Ç‡§ú‡§º‡§∞ ‡§ï‡•á ‡§≤‡§ø‡§è ‡§ï‡•ã‡§à ‡§∏‡§Ç‡§¶‡•á‡§∂ (‡§ú‡•à‡§∏‡•á: Thank you for purchasing Private VIP Panel! Follow Telegram for instant setup guide)..."
+                          value={sendKeyEmailForm.adminMessage}
+                          onChange={(e) => setSendKeyEmailForm(prev => ({ ...prev, adminMessage: e.target.value }))}
+                          className="w-full bg-black/50 border border-white/20 focus:border-blue-400 rounded-xl p-3 text-xs text-white placeholder:text-gray-500 focus:outline-none transition-all resize-none"
+                        />
+                        
+                        {/* Preset Message Templates */}
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          {[
+                            "Thank you for purchasing! Here is your private activation key.",
+                            "Private 24Ghanta VIP Panel Key. Main ID Safe 100%.",
+                            "Your VIP Reseller Key Order is confirmed. Enjoy gaming!"
+                          ].map((msg, mIdx) => (
+                            <button
+                              key={`quick-msg-${mIdx}`}
+                              type="button"
+                              onClick={() => setSendKeyEmailForm(prev => ({ ...prev, adminMessage: msg }))}
+                              className="text-[10px] bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 px-2 py-0.5 rounded-lg transition-colors truncate max-w-[280px]"
+                            >
+                              "{msg.substring(0, 32)}..."
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Send Button */}
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <button
+                          type="submit"
+                          disabled={emailSendingStatus.loading}
+                          className={`flex-1 py-3.5 px-4 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(59,130,246,0.5)] ${
+                            emailSendingStatus.loading
+                              ? 'bg-blue-800 text-gray-300 cursor-not-allowed opacity-75'
+                              : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white hover:scale-[1.01] active:scale-[0.99]'
+                          }`}
+                        >
+                          {emailSendingStatus.loading ? (
+                            <>
+                              <Loader2 className="animate-spin" size={18} />
+                              <span>‡§à‡§Æ‡•á‡§≤ ‡§≠‡•á‡§ú‡§æ ‡§ú‡§æ ‡§∞‡§π‡§æ ‡§π‡•à... ‡§ï‡•É‡§™‡§Ø‡§æ ‡§™‡•ç‡§∞‡§§‡•Ä‡§ï‡•ç‡§∑‡§æ ‡§ï‡§∞‡•á‡§Ç‡•§</span>
+                            </>
+                          ) : (
+                            <>
+                              <Send size={18} />
+                              <span>SEND EMAIL (EMAILJS)</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={emailSendingStatus.loading}
+                          onClick={() => {
+                            const testKey = 'TEST-KEY-' + Math.floor(100000 + Math.random() * 900000);
+                            handleSendKeyToUser('pramk9992@gmail.com', testKey, 'Test key delivery from EmailJS admin panel.');
+                          }}
+                          className="bg-white/10 hover:bg-white/20 border border-white/20 text-blue-200 text-xs font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-1.5 shrink-0"
+                        >
+                          <Sparkles size={14} className="text-yellow-400" />
+                          <span>Test Self (`pramk9992@gmail.com`)</span>
+                        </button>
+                      </div>
+
+                      {/* Status Message Text */}
+                      {emailSendingStatus.message && (
+                        <div 
+                          id="statusMessage"
+                          className={`p-3 rounded-xl text-center text-xs font-bold border transition-all animate-in fade-in ${
+                            emailSendingStatus.status === 'success' 
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+                              : emailSendingStatus.status === 'error'
+                              ? 'bg-red-500/20 text-red-300 border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
+                              : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                          }`}
+                        >
+                          {emailSendingStatus.message}
+                        </div>
+                      )}
+
+                      {/* EmailJS Troubleshooting Guide Box */}
+                      <div className="bg-blue-950/30 border border-blue-500/20 rounded-2xl p-3.5 text-[11px] text-gray-300 flex flex-col gap-1.5">
+                        <div className="flex items-center gap-1.5 font-bold text-blue-300">
+                          <AlertCircle size={14} className="text-blue-400 shrink-0" />
+                          <span>EmailJS Setup & 422 Error Fix Guide:</span>
+                        </div>
+                        <ul className="list-disc pl-4 space-y-1 text-gray-300 leading-relaxed text-[11px]">
+                          <li>
+                            EmailJS Dashboard &gt; <strong>Email Templates</strong> &gt; Select <strong className="text-white">{emailJsConfig.templateId}</strong> &gt; Click <strong>Settings</strong> tab.
+                          </li>
+                          <li>
+                            Ensure <strong>"To Email"</strong> field contains <code className="bg-black/50 text-emerald-400 px-1.5 py-0.5 rounded font-mono">{"{{user_email}}"}</code> or <code className="bg-black/50 text-emerald-400 px-1.5 py-0.5 rounded font-mono">{"{{to_email}}"}</code>.
+                          </li>
+                          <li>
+                            Content body can use <code className="bg-black/50 text-yellow-300 px-1.5 py-0.5 rounded font-mono">{"{{key_value}}"}</code> and <code className="bg-black/50 text-yellow-300 px-1.5 py-0.5 rounded font-mono">{"{{admin_message}}"}</code>.
+                          </li>
+                        </ul>
+                      </div>
+                    </form>
                   </div>
                 </div>
               )}
@@ -6503,7 +8692,7 @@ export default function App() {
           <div className="absolute bottom-[20%] right-[20%] w-80 h-80 bg-cyan-500/30 rounded-full blur-[120px] animate-pulse pointer-events-none"></div>
 
           {loadingPhase === 'ring' ? (
-            <div className="relative flex flex-col items-center justify-center gap-6 animate-in fade-in duration-300">
+            <div className="relative max-w-[370px] w-full bg-black/95 backdrop-blur-2xl border-3 rounded-[32px] animate-satorang-border shadow-[0_0_80px_rgba(255,0,128,0.8)] p-6 flex flex-col items-center justify-center gap-6 animate-in fade-in duration-300">
               {/* DSLR Glowing Animated Circular Ring */}
               <div className="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center">
                 {/* Outer Rainbow Ring 1 */}
@@ -6580,7 +8769,7 @@ export default function App() {
       {!isAppLoading && showLordPremModal && (
         <div className="fixed top-0 left-0 right-0 bottom-0 w-full h-full z-[120] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-3 sm:p-4 animate-in fade-in zoom-in-95 duration-300 select-none touch-none overscroll-none">
           {/* Card Wrapper with 7-Color Live Animated Rainbow Border - Exact Dead Center */}
-          <div className="relative max-w-[350px] sm:max-w-[390px] w-full bg-black/60 backdrop-blur-md border-3 rounded-[26px] animate-rainbow-border shadow-[0_0_60px_rgba(255,0,128,0.7)] overflow-hidden flex flex-col">
+          <div className="relative max-w-[350px] sm:max-w-[390px] w-full bg-black/90 backdrop-blur-xl border-3 rounded-[26px] animate-satorang-border shadow-[0_0_80px_rgba(255,0,128,0.9)] overflow-hidden flex flex-col">
             
             {/* Top Right Floating Close Button (Black/Yellow Ring) */}
             <button 
@@ -6596,11 +8785,11 @@ export default function App() {
 
             {/* Poster Main Banner Body */}
             <div className="relative w-full aspect-[16/12] bg-black overflow-hidden flex flex-col items-center justify-between p-4">
-              {/* Generated Throne Image Background */}
+              {/* Generated Throne Image Background - 8K HD Crystal Clear Clarity */}
               <img 
                 src={lordPremThrone} 
                 alt="LORD PREM Throne" 
-                className="absolute inset-0 w-full h-full object-cover opacity-90 filter contrast-125 saturate-125 scale-105"
+                className="absolute inset-0 w-full h-full object-cover opacity-95 filter brightness-110 contrast-150 saturate-150 scale-100"
                 referrerPolicy="no-referrer"
               />
               
@@ -6609,9 +8798,13 @@ export default function App() {
 
               {/* Header Handles Line */}
               <div className="relative z-10 text-center pt-1">
-                <span className="text-[11px] font-black text-amber-300 uppercase tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,1)] flex items-center justify-center gap-1">
-                  ‚ú¶ CONNECT WEBSITE MAKING ‚ú¶
-                </span>
+                <div className="rainbow-box-container inline-block mx-auto mb-2 shadow-[0_0_20px_rgba(255,0,85,0.4)]">
+                  <div className="rainbow-box-content bg-black/80 px-4 py-2 rounded-2xl flex items-center justify-center">
+                    <span className="animate-satorang-text text-xs sm:text-sm font-black uppercase tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,1)] flex items-center justify-center gap-1.5">
+                      ‚ú¶ CONNECT WEBSITE MAKING ‚ú¶
+                    </span>
+                  </div>
+                </div>
                 <div className="flex items-center justify-center gap-2 mt-1.5 text-xs font-black tracking-wide drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">
                   <a 
                     href="https://t.me/Premjodvip" 
@@ -6632,12 +8825,12 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Central Title: LORD PREM */}
+              {/* Central Title: LORD PREM with 1-Second Live Satorang (7 Colors) Color Cycling */}
               <div className="relative z-10 text-center my-auto">
-                <h1 className="text-4xl sm:text-5xl font-black tracking-tight italic uppercase text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 via-amber-400 to-amber-600 drop-shadow-[0_4px_20px_rgba(0,0,0,1)] text-stroke-1 text-stroke-black leading-none">
+                <h1 className="text-4xl sm:text-5xl font-black tracking-tight italic uppercase animate-satorang-text drop-shadow-[0_4px_20px_rgba(0,0,0,1)] leading-none">
                   LORD
                 </h1>
-                <h1 className="text-4xl sm:text-5xl font-black tracking-wider italic uppercase text-transparent bg-clip-text bg-gradient-to-b from-yellow-100 via-yellow-400 to-amber-500 drop-shadow-[0_4px_20px_rgba(245,158,11,0.9)] text-stroke-1 text-stroke-black leading-tight mt-1">
+                <h1 className="text-4xl sm:text-5xl font-black tracking-wider italic uppercase animate-satorang-text drop-shadow-[0_4px_20px_rgba(0,0,0,1)] leading-tight mt-1" style={{ animationDelay: "0.5s" }}>
                   PREM
                 </h1>
               </div>
@@ -6670,11 +8863,11 @@ export default function App() {
         </div>
       )}
 
-      {/* 3. IMPORTANT NOTICE Modal (Tall, Spacious & Centered with 7-Color Animated Rainbow Border) */}
+      
       {!isAppLoading && !showLordPremModal && showImportantNoticeModal && (
         <div className="fixed top-0 left-0 right-0 bottom-0 w-full h-full z-[120] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-3 sm:p-4 animate-in fade-in zoom-in-95 duration-300 select-none overflow-y-auto">
           {/* Card Wrapper with Long/Spacious Height (Lambai) & 7-Color Live Animated Rainbow Border */}
-          <div className="relative max-w-[360px] sm:max-w-[420px] w-full bg-black/85 backdrop-blur-xl border-3 rounded-[26px] animate-rainbow-border shadow-[0_0_60px_rgba(255,204,0,0.5)] overflow-hidden flex flex-col p-4 sm:p-5 gap-3 text-left my-auto">
+          <div className="relative max-w-[360px] sm:max-w-[420px] w-full bg-black/95 backdrop-blur-2xl border-3 rounded-[26px] animate-satorang-border shadow-[0_0_80px_rgba(255,204,0,0.9)] overflow-hidden flex flex-col p-4 sm:p-5 gap-3 text-left my-auto">
             
             {/* Top Right Close Button */}
             <button 
@@ -6688,7 +8881,7 @@ export default function App() {
             {/* Header */}
             <div className="flex flex-col items-center justify-center text-center gap-1 border-b border-white/15 pb-2 pr-6">
               <div className="text-3xl text-yellow-400 animate-bounce leading-none">‚ö†Ô∏è</div>
-              <h2 className="text-lg sm:text-xl font-black tracking-tight text-amber-400 uppercase italic drop-shadow-[0_2px_10px_rgba(245,158,11,0.8)]">
+              <h2 className="text-lg sm:text-xl font-black tracking-tight uppercase italic drop-shadow-[0_2px_10px_rgba(0,0,0,1)] animate-satorang-text">
                 IMPORTANT NOTICE
               </h2>
             </div>
@@ -6722,329 +8915,13 @@ export default function App() {
               </div>
 
               {/* Warning reminder */}
-              <div className="flex items-center justify-center gap-1.5 text-xs text-amber-200/90 font-bold text-center">
-                <span>üõ°Ô∏è Choose wisely, don't waste your money</span>
-              </div>
-            </div>
-
-            {/* Close Notice Button */}
-            <button 
-              onClick={() => setShowImportantNoticeModal(false)}
-              className="w-full bg-gradient-to-r from-pink-600 via-fuchsia-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-black py-3 rounded-xl shadow-[0_0_20px_rgba(217,70,239,0.7)] transition-all uppercase tracking-wider text-xs sm:text-sm flex items-center justify-center gap-2 mt-1 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <X size={16} /> I Understand, Close
-            </button>
-
-          </div>
-        </div>
-      )}
-
-      {/* CHECKOUT MODAL / PAGE (BUY KEY FLOW) */}
-      {checkoutData && (
-        <div className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-2xl flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-black/20 backdrop-blur-md  border-2 border-fuchsia-500/50 rounded-3xl p-5 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col gap-4 relative overflow-hidden text-white">
-            <button 
-              onClick={() => setCheckoutData(null)}
-              className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
-            >
-              <X size={18} />
-            </button>
-
-            <div className="flex items-center gap-2 border-b border-white/10 pb-3">
-              <ShoppingBag className="text-fuchsia-400" size={24} />
-              <div>
-                <h3 className="text-lg font-black uppercase tracking-tight text-white">BUY KEY CHECKOUT</h3>
-                <p className="text-xs text-gray-400">Review plan & apply discount coupon</p>
-              </div>
-            </div>
-
-            {/* Panel & Pricing Info Card */}
-            <div className="bg-white/10  border border-white/20 rounded-2xl p-4 flex flex-col gap-2">
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-400 uppercase font-bold">Panel Name</span>
-                <span className="text-sm font-black text-fuchsia-400">{checkoutData.panelTitle}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-400 uppercase font-bold">Plan Details</span>
-                <span className="text-xs font-semibold text-cyan-300">{checkoutData.planLabel}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-400 uppercase font-bold">Plan Price</span>
-                <span className="text-sm font-mono font-bold text-white">‚Çπ{checkoutData.originalPrice}</span>
-              </div>
-              {appliedCoupon && appliedCoupon.discount > 0 && (
-                <div className="flex justify-between items-center text-green-400 animate-in fade-in">
-                  <span className="text-xs uppercase font-bold flex items-center gap-1">
-                    <Tag size={12} /> Coupon Discount ({appliedCoupon.code})
-                  </span>
-                  <span className="text-sm font-mono font-bold">- ‚Çπ{appliedCoupon.discount}</span>
-                </div>
-              )}
-              <div className="border-t border-white/10 my-1"></div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-black uppercase text-yellow-400">Final Amount</span>
-                <span className="text-lg font-mono font-black text-yellow-400">
-                  ‚Çπ{Math.max(0, checkoutData.originalPrice - (appliedCoupon ? appliedCoupon.discount : 0))}
-                </span>
-              </div>
-            </div>
-
-            {/* Coupon Code Input */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-1">
-                <Gift size={14} /> Have a Coupon Code?
-              </label>
-              <div className="flex gap-2">
-                <input 
-                  type="text"
-                  placeholder="Enter code (e.g. SPIN10-ABCD)"
-                  value={couponInputCode}
-                  onChange={(e) => setCouponInputCode(e.target.value.toUpperCase())}
-                  className="flex-1 bg-black/20 backdrop-blur-md border border-white/20 focus:border-fuchsia-500 rounded-xl px-3 py-2.5 text-xs font-mono font-bold text-yellow-300 placeholder:text-gray-500 uppercase focus:outline-none"
-                />
-                <button 
-                  onClick={handleApplyCoupon}
-                  className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-black text-xs px-4 rounded-xl shadow-[0_0_15px_rgba(217,70,239,0.5)] transition-all uppercase"
-                >
-                  APPLY
-                </button>
-              </div>
-              {couponSuccessMsg && (
-                <p className="text-[11px] text-green-400 font-bold flex items-center gap-1 mt-0.5">
-                  ‚úì {couponSuccessMsg}
-                </p>
-              )}
-              {couponErrorMsg && (
-                <p className="text-[11px] text-red-400 font-bold flex items-center gap-1 mt-0.5">
-                  ‚úï {couponErrorMsg}
-                </p>
-              )}
-
-              {/* Quick Select Available Active Coupons */}
-              {(() => {
-                const activeCoupons = userCoupons.filter(c => !c.isUsed && (Date.now() - c.createdAt < 24 * 60 * 60 * 1000));
-                if (activeCoupons.length === 0) return null;
-                return (
-                  <div className="mt-1 bg-purple-950/40 border border-purple-500/30 rounded-xl p-2.5 flex flex-col gap-1.5">
-                    <span className="text-[10px] font-bold text-fuchsia-300 uppercase flex items-center gap-1">
-                      <Tag size={12} /> Your Active Spin Coupon (Click to auto-apply):
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {activeCoupons.map((c, i) => (
-                        <button
-                          key={`active-coupon-${c.code}-${i}`}
-                          type="button"
-                          onClick={() => {
-                            setCouponInputCode(c.code);
-                            setAppliedCoupon({ code: c.code, discount: c.discount });
-                            setCouponSuccessMsg(`üéâ Coupon Applied! ‚Çπ${c.discount} discount!`);
-                            setCouponErrorMsg('');
-                          }}
-                          className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-mono text-[11px] font-bold px-2.5 py-1 rounded-lg border border-fuchsia-400/40 flex items-center gap-1 shadow-sm transition-transform active:scale-95"
-                        >
-                          <span>{c.code}</span>
-                          <span className="text-yellow-300 font-sans font-extrabold">(‚Çπ{c.discount} OFF)</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* User Account Info */}
-            <div className="bg-purple-950/30 border border-purple-500/20 rounded-xl p-3 text-xs text-gray-300 flex justify-between items-center">
-              <span>Account: <strong className="text-white">{userProfile.email || userProfile.phone || 'Guest'}</strong></span>
-              <span>Wallet: <strong className="text-cyan-400">‚Çπ{userBalance}</strong></span>
-            </div>
-
-            {/* Confirm Buy Button */}
-            <button 
-              onClick={handleRequestKey}
-              className="w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-black text-sm py-3.5 rounded-2xl shadow-[0_0_25px_rgba(16,185,129,0.5)] transition-all uppercase tracking-wider flex items-center justify-center gap-2 mt-1"
-            >
-              <CheckCircle size={18} /> CONFIRM & ORDER KEY (‚Çπ{Math.max(0, checkoutData.originalPrice - (appliedCoupon ? appliedCoupon.discount : 0))})
-            </button>
-
-            <p className="text-[11px] text-gray-400 text-center italic">
-              * Order karne ke baad key pending rahegi aur admin thodi der me aapko key send kar denge. Profile me "My Keys" section me status check kar sakte hain.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* BUY SUCCESSFUL PENDING MODAL (MATCHING SCREENSHOT) */}
-      {showBuySuccessPendingModal && (
-        <div className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-2xl flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-sm bg-black/20 backdrop-blur-md  border-2 border-cyan-400/50 rounded-[28px] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col items-center text-center gap-5 relative overflow-hidden">
-            
-            {/* Green Big Checkmark Icon */}
-            <div className="w-20 h-20 bg-emerald-500/20 border-4 border-emerald-500 rounded-full flex items-center justify-center text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.8)]">
-              <CheckCircle size={44} className="stroke-[2.5]" />
-            </div>
-
-            {/* Title */}
-            <h2 className="text-2xl font-black text-emerald-400 tracking-tight uppercase drop-shadow-[0_0_10px_rgba(16,185,129,0.8)]">
-              BUY SUCCESSFUL!
-            </h2>
-
-            {/* Inner Black Pending Box */}
-            <div className="w-full bg-black/20 backdrop-blur-md border border-amber-500/40 rounded-2xl p-5 flex flex-col items-center text-center gap-3 ">
-              <div className="w-12 h-12 bg-amber-500/20 rounded-full flex items-center justify-center text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.5)]">
-                <Clock size={28} />
-              </div>
-
-              <h3 className="text-lg font-black text-amber-400">
-                Order is Pending!
-              </h3>
-
-              <p className="text-xs text-gray-300 font-medium leading-relaxed">
-                Stock available nahi tha isliye aapka order admin ke paas bhej diya gaya hai.
-              </p>
-
-              <p className="text-xs text-white font-bold leading-relaxed">
-                Admin aapko thodi der me manually key deliver karenge.
-              </p>
-
-              <p className="text-[11px] text-gray-400 font-medium">
-                Aap 'My Keys' page me check karte rahein.
-              </p>
-            </div>
-
-            {/* Actions */}
-            <div className="w-full flex flex-col gap-3">
-              <button 
-                onClick={() => {
-                  setShowBuySuccessPendingModal(false);
-                  setCurrentView('profile');
-                }}
-                className="w-full bg-cyan-400 hover:bg-cyan-300 text-black font-black text-sm py-3.5 rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.6)] transition-all uppercase tracking-wider"
-              >
-                VIEW MY KEYS
-              </button>
-
-              <button 
-                onClick={() => setShowBuySuccessPendingModal(false)}
-                className="w-full bg-black/20 backdrop-blur-md border border-cyan-400/50 hover:bg-white/10 text-cyan-300 font-black text-xs py-3 rounded-xl transition-all uppercase tracking-wider"
-              >
-                CLOSE
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* WON COUPON MODAL POPUP */}
-      {wonCouponModal && (
-        <div className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-2xl flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-sm bg-black/20 backdrop-blur-md  border-2 border-yellow-400/80 rounded-3xl p-6 shadow-[0_0_50px_rgba(234,179,8,0.6)] flex flex-col items-center text-center gap-4 relative overflow-hidden">
-            <div className="w-16 h-16 bg-yellow-400/20 border-2 border-yellow-400 rounded-full flex items-center justify-center text-yellow-400 animate-bounce">
-              <Gift size={32} />
-            </div>
-
-            <div>
-              <h3 className="text-xl font-black text-yellow-400 uppercase tracking-tight">CONGRATULATIONS! üéâ</h3>
-              <p className="text-xs text-gray-300 mt-1">Aapne ‚Çπ{wonCouponModal.discount} ka Coupon Code jeet liya hai!</p>
-            </div>
-
-            <div className="w-full bg-black/20 backdrop-blur-md border-2 border-dashed border-yellow-400/80 rounded-2xl p-4 flex flex-col items-center gap-2 my-1">
-              <span className="text-xs text-gray-400 uppercase tracking-wider font-bold">Your Coupon Code</span>
-              <span className="text-2xl font-mono font-black text-yellow-300 tracking-wider select-all">{wonCouponModal.code}</span>
-              <span className="text-[11px] text-green-400 font-bold">‚Çπ{wonCouponModal.discount} Flat Discount</span>
-            </div>
-
-            <button 
-              onClick={() => {
-                navigator.clipboard.writeText(wonCouponModal.code);
-                alert(`Coupon Code '${wonCouponModal.code}' Copied! Use it on Buy Key checkout.`);
-              }}
-              className="w-full bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs py-3 rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.5)] transition-all uppercase tracking-wider flex items-center justify-center gap-2"
-            >
-              <Copy size={16} /> COPY CODE & CLOSE
-            </button>
-
-            <button 
-              onClick={() => setWonCouponModal(null)}
-              className="text-gray-400 hover:text-white text-xs font-bold underline"
-            >
-              Close Window
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Global CSS for text stroke & Sato-Rang Live Animated Borders */}
-      <style dangerouslySetInnerHTML={{__html: `
-        .text-stroke-1 {
-          -webkit-text-stroke-width: 1px;
-        }
-        .text-stroke-black {
-          -webkit-text-stroke-color: black;
-        }
-        .text-stroke-red-600 {
-          -webkit-text-stroke-color: #dc2626;
-        }
-        @keyframes dash {
-          to {
-            stroke-dashoffset: -20;
-          }
-        }
-        .animate-dash {
-          animation: dash 1s linear infinite;
-        }
-
-        /* Live 7-Color Sato-Rang Animated Rainbow Border */
-        @keyframes rainbow-border-glow {
-          0% {
-            border-color: #ff0055;
-            box-shadow: 0 0 30px rgba(255, 0, 85, 0.7), inset 0 0 15px rgba(255, 0, 85, 0.2);
-          }
-          14% {
-            border-color: #ff6600;
-            box-shadow: 0 0 30px rgba(255, 102, 0, 0.7), inset 0 0 15px rgba(255, 102, 0, 0.2);
-          }
-          28% {
-            border-color: #ffcc00;
-            box-shadow: 0 0 30px rgba(255, 204, 0, 0.7), inset 0 0 15px rgba(255, 204, 0, 0.2);
-          }
-          42% {
-            border-color: #00e676;
-            box-shadow: 0 0 30px rgba(0, 230, 118, 0.7), inset 0 0 15px rgba(0, 230, 118, 0.2);
-          }
-          57% {
-            border-color: #00e5ff;
-            box-shadow: 0 0 30px rgba(0, 229, 255, 0.7), inset 0 0 15px rgba(0, 229, 255, 0.2);
-          }
-          71% {
-            border-color: #7c4dff;
-            box-shadow: 0 0 30px rgba(124, 77, 255, 0.7), inset 0 0 15px rgba(124, 77, 255, 0.2);
-          }
-          85% {
-            border-color: #f50057;
-            box-shadow: 0 0 30px rgba(245, 0, 87, 0.7), inset 0 0 15px rgba(245, 0, 87, 0.2);
-          }
-          100% {
-            border-color: #ff0055;
-            box-shadow: 0 0 30px rgba(255, 0, 85, 0.7), inset 0 0 15px rgba(255, 0, 85, 0.2);
-          }
-        }
-        .animate-rainbow-border {
-          animation: rainbow-border-glow 3.5s linear infinite;
-        }
-
-        @keyframes rainbow-gradient-move {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-        .bg-rainbow-animated {
-          background: linear-gradient(135deg, #ff0055, #ff6600, #ffcc00, #00e676, #00e5ff, #7c4dff, #f50057, #ff0055);
-          background-size: 300% 300%;
-          animation: rainbow-gradient-move 4s ease infinite;
-        }
-      `}} />
-      <LiveNotifications />
-    </div>
-  );
-}
+              <div className="flex items-center justify-center gap-1.5 text-xs text-amber-200/90 fxú‰[]r„∆~˜)fô‘.π%P‡üVíWrq)≠óeâRD…ójÀ;Ü‰X¯Û EÀ|…[^í‰¡ï[$◊…‚#§g Å¡Ä§÷q%©¿.ëÛ”›Ûı◊=Ωæ#ﬂ±QD"√"^DXÂ¯3§\Ø√ {«?ˇÙóø˛ÛoFΩ©ÔáÕiHú≈≤}ÔEÑÊ8åZ¯3Ü\ﬂ#ã◊ª‚•´◊ª6ΩœﬂåoÂÓ=ÓæD=á2#jÙfEæá^Ó.ÛÔé‰}eﬂÎ9‘∫;z¨÷–—1z,¨'$—pÍœ˚n‡≥{ëÂ‹∑±Sc'$µœÔ^º'éÂª‰kZWmñKÂÜÂ‡0`óUÊ∆xÊ8h41&€mDæ¡–ò˘ÆPÔŒÿ3MtO1¥≥¶!|Úﬂ–$ò±¿!‚◊‘ø'ÏpıF'Ω∑j«Ô	]ŒßÙ1ˆπÇl›°`a¥ÛgûMl„¡A·€˛‹∏5ø5ømö¡√∑l2¬’f„’Œ+sßŸ:ÿ1Îù⁄1ÏÖ4¢æg`X¿,≥0hXw‘õsj&}—ÿ!Üv√ÿú–w≥0¢„EÚsÇ£â∞—{rZ&}–©‰$W∞aJ7Éì”´·uwpÇû£ﬁ≈‡∫?∏9’ôŸÎ]iŸªä·Â~÷ñâıqªk’—õõo–Wßﬂ†ﬁª”ﬁW7◊Ë¸‚§{Ü™=∂#Ï=á`Üﬁù†ﬂÕ∞C£E-còè÷îXw˛,:¡Fœü£™jÑñÔÖ¢·Å˝„÷¢@Gà≈7nB¬Í4<Û'b˜=ﬁâÚ®oÆtÍ3:°v.ﬂ4G(;ózÓ°˙¶MCl#Çóp8îÿ=¿÷˙"ˇªû6<D¶⁄…8;ˆ9é¶u?TÕe^F:ZMÌAö≈Ï@	}Å™99å∞É=ËÔôL˚ËÕ‡Á˘´ñˇ©ªkYß.¶|ºÌ%Û«‘!Yu¿4≤Oàh˝„èπÊ¡0êﬂ|1ôë0z¡áéø~æÇ:F¢ÛP5kß`óY‹”ËÏÜâ2é‡d9Âü#å‹Ö/1∂LÂ«∆m£e~‡P#6˛Ó4ÖOõA'#g∆å&Ï˛ç€4 ¥›√¿h#ÏQGƒ†c[|˛‡√»‘ÉùãÏ√Z =†bEÜ«WœëiÏ ƒ,<ã|≈≠®eƒ¡BÀ`2¿Rk0ÈüB|£›7V@Z≤:X‹»g I∏ªmÓÒwìÖ0LΩLL∂À!·+=Ó¶ÎôR€&û!ˇcXæÉ∏†Ñº:·ZıéÑDÆ4‰jEÄTø≈·Á⁄–◊pÏ K<_©Ô+x?uΩT=_MÌ,Á´(Ùùxnv≠ÿﬁZ`X-3/w)æX⁄âﬂjß^Iy–J\S±e∆c%*Zåó„ âØcüπÒã“4¶‚PÃD©Æ]),3‹¡#‚U§êúT€jò–ÔQH GèçΩ%
+#Êﬂë˜‘é¶Gè≠%⁄-“ùƒi4˝é`.>çfU(ÏUaaâ‡G…!¿›F#x0c_GÂîŒÁo ˇ$íÁ jN¥åb∑Y¶l˛∞cnFìÇﬁ√)„∆ÃmæFGª˘⁄µöÖ¿RÄ√¿Ñ&o$÷J”T¥“¨w4z——D:⁄°¶Õ¨–ƒrFú¡ñó€|íÂZ)7äƒN^ë&
+ÙÅZYÜ&Äk%Ñ&H`?ëÇπ√ˇkî,xän‚ª”¶vAAa=∑çIÒHÍBlX±®ê∏îG	ï„+rO…úsa†%Ç,V‘¡·ın∞•∏uÃ_nçs h‘√ÃF=~lµO¿hocZÊ∏ÒÍÉbØÈ÷»πDÈ<åv
+wcçPœ”D∫-öÿ¸àDs"∑!~\≤iMæiõz3Á∑†-°°v¢!√≠ÁÊ∑Ó?+«ó›¡Ètœµ‹y›êY œ;&úD∫»’LbÁ›4ÖÛéÿÃ≥¿Wés4π£ÁöFYñMjÕÜ˝_UƒYwÄNNØª˝≥·SUa-∞ó—ÉÿõäHaãûq˜ˇ&—À´~Ô…¶ùçñÖ0ˇÒáø?Ê¢ñßäÒ1FÒ@P7õ_Gÿ≤q	√éùeâ+ë!vÔ‚ÊÚå≤?ÑoÉkTÕØ¢n˘6Y÷ ÖõÙcpÒÈ„∆R9ñJRCV?]lAd4û`ä)¡¥Ûà∑)	R9~€tœP˜úKÒ©∂(¬3^3ÛPCé5µ⁄;çW;˚2bëV<˛D.˜Œ±I˜¿–¬=™èOt: ˘YŒÌ”x¢≠RÃ‘†ó≠Û∆ÇÃóö≠∑U-·ÜÈÍ-Á:•üç&'õËÜ8gÂÙÖFÊb“[‚Ø†%˙—©Ã¢b»Øhƒ≤®Ë‹cg”ñƒ≠œ;‚ì-Ó7~AX9≈ﬁöWIXÊ_¨ízÑŸÑDu—±f„Ú<ìE¶ EÑUNÎ_÷—≤?hòF∑_å’¯•√h¨¨f_o5M3õÈx8¥H`P@á˘„˚÷,<OÍ Ûî…y+Däåb2,Q3wM‡±&pè•,ÉwêµÌê.gÿR zaÊÈØ&∑¨¶ììTs&ôú	Ê2˘‰$√\íM~0⁄R¶AÈﬂv—ùöVíŒ:…ÍΩèó÷≥3¬…Ω˜ñ[‚î1üùáÓæ7DLå(éπëar»P˙ZÚ ©®Ã∏’pfY$∑SÎ‡’qW=∆#áLÔﬁc
+Ä‰'[á¡D!˙~6'˜4P]‰g‹∫>¶`f’‚ ÒÃ™”&$∂`@¿LI›ÛÁ’2êU∑Åv7BØQ≥˝rœ‰ˇ7L”¨’ÍÒ&—T‰v∑‰N∞ÓÜ&ö”ª˚2Á+©$*·°ï„o¯WQD®*∂-Ï0ƒ}ÜàåkákôR©ú3¨ı8øéƒ]T´V∞É¨æ˝ ^'ıxÚr?ï>GËé,é?
+√1¨¿¯Ì£H˙»ø¬ Àèz@ì◊∆ºÏé®õÂö’GƒG:DÒê;iäB‹JÛKÕ)ü“oOŸB’è?ˇÙß?&JèG}Ü8œ ÙºL|ˆq€1x®æx±ˆï¬!cˆ {É¯H†cr?ÁdW∑M’wÆéyNOlÅ¯Vö∫-R*p<_Æ†ë∫û”S®ƒ!ÑÆz∞òÀÁöùıÑŸ´lÉKF#©È≠€éô
+†ê¡Ÿ qµ†Ïã∑o◊∆D¢„R$ØZ	Y*ÒO€KÂ4æk…mΩêQoÏoófì,´≥â±Á∏◊ˆ1⁄∫XuM∆@iú` Áù*«ÒZ◊Öˇ‡1ÛGÄâΩîÜMÂ©ôläªr,Â[6x—ãÛç%É∑Ù<t˝\÷≈jﬁò2˜ó#I&zEæÁ«ó_ë≈⁄≥£µu…J;q©CD∞#ñM≤œ2‹4+úîõä˜RLí8§V:Çö1ƒ-Î6÷7$	@∞\EJn{;ç˝ŒN£……Ì~±Ç"t∑ç∫ŸTËÔ≠Y?ÿˇ∞≈Iî8’ÎQf9§ôƒü˚À¸·±„d≥â0¡#¨¨S{:gÉo˚WÁ W'ßW‚®°™§JÄØÙ‡KÀh5î+Sè$UÎõŒ\‰∞*P
+?.~ :Ñxâ.(›aq€A#åmNGP@<˛.bxJ&àCÿvÅ√ESﬂ¶àø‰B‹éÉ;_¥°=Ôû@‹[GÒ·>oT9_ ÿ
+a…‹#ÕByò(ﬁÒ@—SØ^êO†à¶ÄÁ çî,k’|¡J[¨ozΩ”·ÌÕ⁄ç÷¢À”¡IÂì*X¬©?3[ƒ¨ÁRJMGÂ©¯øßV°˝ﬂ^´ÙJS_©–—¨mS©Bà#c¢´U8X’*t:¸†∞…[î*»ÖvnóÈkr?í˙Ñæ•´≈+,7˘¡2¸qDœ\î_*Ï∆_≤N W∞—≤riÈ±ò◊p$bAÁ·°r1<‘k€\ÆeÖ*àÍ≤ÓlYwÆ¨‰ì#„¸ërÅ9¨óÊDπañy'ÄÊ¡‰Yπ‘Â≤Œ>œä∑d›]IZ“È?l¥°5'∫ÿ¡_nGm5E‹÷dZ´jú¢¬∑™∑hjÉÒ¢’Ä—dô,b5ŸB%En€’Q»WÚS!Ùügm“¬àlâO/ cH°ßO-íhåhízñ!sâ©ΩVé•ø¶ab!œ¿∆ZüP¥ Â¢©ZF\ÄâtL-·  ÷AÛ'‹/-X–Ã*I1ßqâB[≤îF£;9_ú¶‰<<•@R0»»°IQ0íf$–ú „ç¶‰;d”ìÖ?@=¥Ã„ihÊ“ã©9ÛºB·‘feŒ-…R
+5A\ZeﬁKë¸+G…\ÏMqÇïŸƒÁ+¯ù†eü¥æB≠ã¬9u≥√¡„SÇÛcPœÑËH"/y>ZB7Yüå„ÖEÀ/‹à©öz˝©Ë∂Ü∫‰\\`Øgë•%ˆ26c†ÿËkJÊ’†¯M]VLì€6:”≈°ÈÉLöÜÙOä@7÷⁄õ;Mp√Çª	rÚü(µ◊Fñ¬bøÓüæGÁ¢¿¨§<•<»€æ4u£ïl©‚4˜î¶9”íØí¬“%°b÷µ¢ûeï¢ñÜ›g√í}±€¸káÙ&l¨Âgˇ  ˇˇ R>d
