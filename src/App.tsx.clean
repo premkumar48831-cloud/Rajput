@@ -185,16 +185,16 @@ export function getYouTubeInfo(url: string | undefined | null) {
   return null;
 }
 
-// FIREBASE GOOGLE LOGIN & DATABASE CONFIG (ffh4ckjodvipff)
+// FIREBASE GOOGLE LOGIN & DATABASE CONFIG (ffh4ckjodvip)
 const firebaseConfig = {
-  apiKey: "AIzaSyDnylEQQKI-PbVCnBgNY9zx5Vx85yi3SCo",
-  authDomain: "ffh4ckjodvipff.firebaseapp.com",
-  databaseURL: "https://ffh4ckjodvipff-default-rtdb.firebaseio.com",
-  projectId: "ffh4ckjodvipff",
-  storageBucket: "ffh4ckjodvipff.firebasestorage.app",
-  messagingSenderId: "382512487880",
-  appId: "1:382512487880:web:c212a8b5386b5b5141b4fd",
-  measurementId: "G-VSY9CHJ412",
+  apiKey: "AIzaSyBy8u8SYI79TVaOetb-fYljejSjEP6UlAw",
+  authDomain: "ffh4ckjodvip.firebaseapp.com",
+  projectId: "ffh4ckjodvip",
+  storageBucket: "ffh4ckjodvip.firebasestorage.app",
+  messagingSenderId: "532017699520",
+  appId: "1:532017699520:web:f329492297cd927270ab25",
+  measurementId: "G-V0QZ7W0V3S",
+  databaseURL: "https://ffh4ckjodvip-default-rtdb.asia-southeast1.firebasedatabase.app",
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
@@ -8047,16 +8047,6 @@ export default function App() {
                       color: "from-blue-600 to-indigo-600",
                     },
                     {
-                      id: "colorTheme",
-                      label: "ðŸŽ¨ COLOR THEME",
-                      color: "from-cyan-600 to-blue-600",
-                    },
-                    {
-                      id: "refundPanel",
-                      label: "ðŸ’¸ REFUND PANEL",
-                      color: "from-red-600 to-rose-700",
-                    },
-                    {
                       id: "resellers",
                       label: `ðŸ›¡ï¸ RESELLERS (${ensureArray(approvedResellers).length})`,
                       color: "from-amber-500 to-yellow-600",
@@ -10865,5 +10855,11 @@ export default function App() {
                             size={14}
                             className="text-blue-400 shrink-0"
                           />
-                          <span>EmailJS Setup & 422 Error Fix Guide:</spanxœÄ”MO1†ïüŠÉLH\¬$F¹h4&x3†Ì¶ãÒÐýHÛE6†ÿn!²•H=5};óæ™™vÐ€š\Ìõr!IÔúºò¤ÐÆçB3È¥ß##¿ôÛ`hnüXaé_¶Z 	¹Hc_‘Ä9ñ•úÒnçóW¯ÞËºIá’†	
-y7‚[Ô“(CÅá,6ý¼…3.ÔFei<XÆÃ3%¹DC:¾Î—i`D’˜98Ûva–„ïaÈ”Y¡,òÊccqáâÜà¿×%Õ…"Øq†*‘$	6é Æ2NÛXQìGÙ4è¶ ŸÛ>«¬Hùº£‘,¨ê·³§Õ*4©1UµwÛ•¿;Ùùé(8I1#E|<¥òxÀ”Ÿy"ÒqBZcLGÃüëpßLˆMá-SÐít`¨T¦zð€S‚ï¡*")ÜS	B;³±L)ûÊ«êÃ5c¶xÆ† 2c›ûwŽ0(dêøcÃÀr%û´š ½ÇÍÝúqgKûÓµ¸us³mö‹Æ'   ÿÿ LPTò
+                          <span>EmailJS Setup & 422 Error Fix Guide:</span>
+                        </div>
+                        <ul className="list-disc pl-4 space-y-1 text-gray-300 leading-relaxed text-[11px]">
+                          <li>
+                            EmailJS Dashboard &gt;{" "}
+                            <strong>Email Templates</strong> &gt; Select{" "}
+                            <strong className="text-white">
+       xœª    ÿÿ  y y
