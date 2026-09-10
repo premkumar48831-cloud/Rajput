@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import lordPremThrone from "./assets/images/lord_prem_throne_1786425782320.jpg";
 import { LiveNotifications } from "./components/LiveNotifications";
+import { RazorpayButton } from "./components/RazorpayButton";
+import { RazorpayCheckoutModal } from "./components/RazorpayCheckoutModal";
 import { initializeApp } from "firebase/app";
 import {
   getDatabase,
@@ -76,9 +78,13 @@ import {
   Users,
   Percent,
   Award,
+  Coins,
   Mail,
   AlertCircle,
   AlertTriangle,
+  Megaphone,
+  Upload,
+  Lock,
 } from "lucide-react";
 
 export function formatExternalUrl(url?: string | null): string {
@@ -95,6 +101,41 @@ export function ensureArray<T = any>(val: any): T[] {
   if (typeof val === "object") return Object.values(val) as T[];
   return [];
 }
+
+const compressImageBase64 = (base64Str: string, maxWidth = 800, maxHeight = 800): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      } else {
+        resolve(base64Str);
+      }
+    };
+    img.onerror = () => resolve(base64Str);
+  });
+};
 
 export function processAsyncMediaUpload(
   file: File,
@@ -200,6 +241,93 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const database = getDatabase(firebaseApp);
 
+const initDB = () => {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    try {
+      if (typeof indexedDB === "undefined") {
+        return reject("IndexedDB not supported");
+      }
+      const request = indexedDB.open("app_media_db", 1);
+      request.onupgradeneeded = (e: any) => {
+        try {
+          e.target.result.createObjectStore("media");
+        } catch (err) {}
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
+};
+
+const DEFAULT_STORE_PANELS = [
+  {
+    id: "panel-default-1",
+    title: "🔥 FFH4CK VIP AIMBOT & ESP (MOD MENU)",
+    category: "VIP ESP & AIMBOT",
+    description: "100% Antiban VIP Mod for Free Fire with Aimbot, ESP Line, Name, Distance & Bullet Tracking.",
+    status: "Active",
+    installLink: "https://t.me/Premjodvip",
+    videoTutorial: "https://t.me/Premjodvip",
+    options: [
+      { label: "1 Day", price: 50 },
+      { label: "7 Day", price: 180 },
+      { label: "30 Day", price: 350 },
+    ],
+  },
+  {
+    id: "panel-default-2",
+    title: "⚡ APEX VIP HEADSHOT PANEL v3.5",
+    category: "HEADSHOT PANEL",
+    description: "High headshot accuracy, safe main account ID, super smooth bypass for all devices.",
+    status: "Active",
+    installLink: "https://t.me/Premjodvip",
+    videoTutorial: "https://t.me/Premjodvip",
+    options: [
+      { label: "1 Day", price: 40 },
+      { label: "7 Day", price: 140 },
+      { label: "30 Day", price: 250 },
+    ],
+  },
+  {
+    id: "panel-default-3",
+    title: "👑 PREM STORE ULTRA BYPASS v4.0",
+    category: "BYPASS & MOD",
+    description: "Ultra Bypass for PC & Mobile Emulator, zero lag, anti-blacklist protection.",
+    status: "Active",
+    installLink: "https://t.me/Premjodvip",
+    videoTutorial: "https://t.me/Premjodvip",
+    options: [
+      { label: "1 Day", price: 60 },
+      { label: "7 Day", price: 220 },
+      { label: "30 Day", price: 450 },
+    ],
+  },
+];
+
+const saveMediaToDB = async (key: string, data: any, isVideo: boolean) => {
+  try {
+    const db = await initDB();
+    db.transaction("media", "readwrite").objectStore("media").put({ data, isVideo }, key);
+  } catch (e) {
+    console.error("Failed to save media to DB", e);
+  }
+};
+
+const getMediaFromDB = async (key: string): Promise<{ data: any; isVideo: boolean } | null> => {
+  try {
+    const db = await initDB();
+    return new Promise((resolve) => {
+      const request = db.transaction("media").objectStore("media").get(key);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    });
+  } catch (e) {
+    return null;
+  }
+};
+
 export default function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentView, setCurrentView] = useState<
@@ -221,11 +349,13 @@ export default function App() {
     | "adminLogins"
     | "adminAddPanel"
     | "adminDeletePanel"
+    | "adminEditPanel"
     | "adminBgImage"
     | "adminAccessFiles"
     | "keyPending"
     | "adminOwner"
     | "staff"
+    | "adminBanner"
   >("home");
   const [staffTab, setStaffTab] = useState<
     | "overview"
@@ -959,18 +1089,21 @@ export default function App() {
     if (isAppLoading && loadingPhase === "ring") {
       progressInterval = setInterval(() => {
         setLoadingPercent((prev) => {
-          if (prev >= 10) {
+          if (prev >= 100) {
             clearInterval(progressInterval);
             setTimeout(() => {
               setIsAppLoading(false);
               setLoadingPhase("done");
-              setShowLordPremModal(true);
-            }, 300);
-            return 10;
+              setShowLordPremModal(false);
+              setShowImportantNoticeModal(true);
+            }, 350);
+            return 100;
           }
-          return prev + 1;
+          const step = prev < 35 ? 4 : prev < 75 ? 3 : 2;
+          const next = prev + step;
+          return next > 100 ? 100 : next;
         });
-      }, 100); // Smooth 1% to 10% loading count
+      }, 50); // Smooth count from 1% to 100% in ~1.8 seconds
     }
     return () => clearInterval(progressInterval);
   }, [isAppLoading, loadingPhase]);
@@ -1262,6 +1395,45 @@ export default function App() {
   const [showAccessFilesModal, setShowAccessFilesModal] = useState(false);
   const [activePanelFileUrl, setActivePanelFileUrl] = useState("");
 
+  const [bannerSettings, setBannerSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem("app_bannerSettings");
+      return saved
+        ? JSON.parse(saved)
+        : {
+            bannerEnabled: true,
+            bannerTitle: "🔥 FFH4CK VIP PREM STORE - SAFE MODS & ZERO BAN 🔥",
+            bannerSubtitle: "Instant 24/7 Auto Delivery • 100% Antiban Guaranteed",
+            bannerImage: "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
+            bannerLink: "https://t.me/Premjodvip",
+            marqueeEnabled: true,
+            marqueeText: "⚡ WELCOME TO PREM STORE ⚡ • 24/7 AUTO KEY DELIVERY • 100% SAFE ESP & AIMBOT • REFER FRIENDS & EARN ₹50 DIRECT BONUS • OWNER TELEGRAM: @PREMJODVIP",
+            popupEnabled: false,
+            popupTitle: "📢 SPECIAL ANNOUNCEMENT",
+            popupMessage: "Welcome to Prem Store! All new VIP panels are updated with 100% Antiban protection. Enjoy 24/7 instant delivery!",
+          };
+    } catch (e) {
+      return {
+        bannerEnabled: true,
+        bannerTitle: "🔥 FFH4CK VIP PREM STORE - SAFE MODS & ZERO BAN 🔥",
+        bannerSubtitle: "Instant 24/7 Auto Delivery • 100% Antiban Guaranteed",
+        bannerImage: "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
+        bannerLink: "https://t.me/Premjodvip",
+        marqueeEnabled: true,
+        marqueeText: "⚡ WELCOME TO PREM STORE ⚡ • 24/7 AUTO KEY DELIVERY • 100% SAFE ESP & AIMBOT • REFER FRIENDS & EARN ₹50 DIRECT BONUS • OWNER TELEGRAM: @PREMJODVIP",
+        popupEnabled: false,
+        popupTitle: "📢 SPECIAL ANNOUNCEMENT",
+        popupMessage: "Welcome to Prem Store! All new VIP panels are updated with 100% Antiban protection. Enjoy 24/7 instant delivery!",
+      };
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("app_bannerSettings", JSON.stringify(bannerSettings));
+  }, [bannerSettings]);
+
+  const [dismissedNoticeModal, setDismissedNoticeModal] = useState(false);
+
   const [panels, setPanels] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem("app_panels");
@@ -1272,33 +1444,7 @@ export default function App() {
         }
       }
     } catch (e) {}
-    return [
-      {
-        id: 1,
-        title: "A,XYZ MAIN ID FF PROXY NONROOT",
-        thumbnailTitle: "A,XYZ CHEATS BALA FF MAIN",
-        thumbnailSub: "PREMIUM PANELS",
-        image:
-          "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
-        isVideo: false,
-        features: [
-          "Main Id safe",
-          "Full safe NONROOT",
-          "Esp crack anti-blacklist",
-          "Auto headshot 100% working",
-        ],
-        installLink: "https://t.me/yourchannel",
-        videoLink: "https://t.me/yourchannel",
-        exceptFileLink: "https://t.me/yourchannel",
-        pricing: [
-          { label: "1 Day", price: 90 },
-          { label: "3 Day", price: 58 },
-          { label: "7 Day", price: 67 },
-          { label: "15 Day", price: 590 },
-          { label: "30 Day", price: 5000 },
-        ],
-      },
-    ];
+    return DEFAULT_STORE_PANELS;
   });
 
   useEffect(() => {
@@ -1307,37 +1453,49 @@ export default function App() {
 
   const [bgSettings, setBgSettings] = useState(() => {
     const saved = localStorage.getItem("app_bgSettings");
+    let parsed: any = {};
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        return {
-          enabled: parsed.enabled !== undefined ? parsed.enabled : true,
-          customImage:
-            parsed.customImage ||
-            "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop",
-          enableFlowers:
-            parsed.enableFlowers !== undefined ? parsed.enableFlowers : true,
-          flowerSpeed: parsed.flowerSpeed || 1,
-          darknessOverlay: parsed.darknessOverlay || 0,
-          themeHue: parsed.themeHue || 0,
-        };
+        parsed = JSON.parse(saved);
       } catch (e) {
         console.error(e);
       }
     }
     return {
-      enabled: true,
+      enabled: parsed.enabled !== undefined ? parsed.enabled : true,
       customImage:
+        parsed.customImage ||
         "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop",
-      enableFlowers: true,
-      flowerSpeed: 1,
-      darknessOverlay: 0,
-      themeHue: 0,
+      isVideo: parsed.isVideo || false,
+      enableFlowers:
+        parsed.enableFlowers !== undefined ? parsed.enableFlowers : true,
+      flowerSpeed: parsed.flowerSpeed || 1,
+      darknessOverlay: parsed.darknessOverlay || 0,
+      themeHue: parsed.themeHue || 0,
     };
   });
 
   useEffect(() => {
-    localStorage.setItem("app_bgSettings", JSON.stringify(bgSettings));
+    getMediaFromDB("bg_media").then((res) => {
+      if (res && res.data) {
+        let imageUrl = res.data;
+        if (res.data instanceof Blob || res.data instanceof File) {
+          imageUrl = URL.createObjectURL(res.data);
+        }
+        setBgSettings((prev) => ({ ...prev, customImage: imageUrl, isVideo: res.isVideo }));
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    // Only save to localstorage if it's not a huge base64 string to avoid QuotaExceededError
+    const dataToSave = { ...bgSettings };
+    if (dataToSave.customImage && dataToSave.customImage.length > 5000) {
+      dataToSave.customImage = ""; // Omit large data URLs from localStorage, they are in IndexedDB
+    }
+    try {
+      localStorage.setItem("app_bgSettings", JSON.stringify(dataToSave));
+    } catch(e) {}
   }, [bgSettings]);
 
   const [flowerParticles] = useState(() => {
@@ -1356,7 +1514,7 @@ export default function App() {
       return {
         id: i,
         left: (i * 2.1 + Math.sin(i * 1.8) * 12 + (i % 3) * 4) % 96,
-        size: 32 + (i % 6) * 6, // 32px to 62px large crisp size
+        size: 14 + (i % 6) * 4, // 14px to 34px smaller size
         duration: 4.5 + (i % 5) * 1.2, // Smooth duration
         delay: (i * 0.28) % 7,
         color: palette.primary,
@@ -1370,16 +1528,28 @@ export default function App() {
     {},
   );
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [isUploadingFeedbackMedia, setIsUploadingFeedbackMedia] = useState(false);
+  const [isUploadingVideoMedia, setIsUploadingVideoMedia] = useState(false);
 
   const [newPanelForm, setNewPanelForm] = useState({
     title: "",
     category: "NON ROOT",
+    badge: "PREMIUM PANELS",
     image: "",
     isVideo: false,
     videoLink: "",
+    installLink: "",
+    feedbackLink: "",
     exceptFileLink: "",
     featuresText:
       "Main Id safe\nFull safe NONROOT\nEsp crack anti-blacklist\nAuto headshot 100% working",
+    pricingPlans: [
+      { label: "1 Day", price: 90 },
+      { label: "3 Day", price: 58 },
+      { label: "7 Day", price: 67 },
+      { label: "15 Day", price: 590 },
+      { label: "30 Day", price: 5000 },
+    ],
     price1: 90,
     price3: 58,
     price7: 67,
@@ -1402,6 +1572,20 @@ export default function App() {
     price15: number;
     price30: number;
   } | null>(null);
+
+  const [adminPanelSearchQuery, setAdminPanelSearchQuery] = useState("");
+  const [adminUserSearchQuery, setAdminUserSearchQuery] = useState("");
+  const [editPanelForm, setEditPanelForm] = useState<any>(null);
+
+  const [adminBalanceInput, setAdminBalanceInput] = useState<Record<string, string>>({});
+  const [adminNewUserForm, setAdminNewUserForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+    balance: "0",
+  });
+  const [showAdminAddUserModal, setShowAdminAddUserModal] = useState(false);
 
   const [spinRequests, setSpinRequests] = useState<
     {
@@ -1613,7 +1797,7 @@ export default function App() {
         return [
           {
             name: userProfile.email
-              ? userProfile.email.split("@")[0]
+              ? userProfile.email?.split("@")[0]
               : userProfile.phone || "User",
             email: userProfile.email || "",
             phone: userProfile.phone || "",
@@ -1643,11 +1827,6 @@ export default function App() {
     confirmPassword: "",
   });
   const [userAuthError, setUserAuthError] = useState("");
-  const [showGoogleLoginModal, setShowGoogleLoginModal] = useState(false);
-  const [googleModalEmail, setGoogleModalEmail] = useState("");
-  const [googleModalName, setGoogleModalName] = useState("");
-  const [googleModalPass, setGoogleModalPass] = useState("");
-  const [googleModalError, setGoogleModalError] = useState("");
 
   const validateEmailFormat = (email: string) => {
     const re = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
@@ -1754,11 +1933,12 @@ export default function App() {
           "!\nनया Google Account सफलतापूर्वक बन गया है (Wallet Balance: ₹0)।",
       );
     }
-    setShowGoogleLoginModal(false);
+
     setCurrentView("home");
   };
 
   const handleGoogleUserSignIn = async () => {
+    setUserAuthError("");
     try {
       setIsSigningInUserGoogle(true);
       const auth = getAuth(firebaseApp);
@@ -1773,13 +1953,10 @@ export default function App() {
           user.photoURL || "",
           user.phoneNumber || "",
         );
-      } else {
-        setShowGoogleLoginModal(true);
       }
     } catch (err: any) {
-      console.warn("Google Auth popup issue or blocked in iframe:", err);
-      setShowGoogleLoginModal(true);
-      setGoogleModalError("");
+      console.warn("Google Auth failed:", err);
+      setUserAuthError("⚠️ Google Login Failed! Please verify with a real Gmail account. (" + (err.message || "") + ")");
     } finally {
       setIsSigningInUserGoogle(false);
     }
@@ -2006,31 +2183,6 @@ export default function App() {
     setCurrentView("home");
   };
 
-  const handleGoogleModalSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setGoogleModalError("");
-    const emailVal = googleModalEmail.trim().toLowerCase();
-    const nameVal = googleModalName.trim();
-
-    if (!emailVal) {
-      setGoogleModalError("❌ कृपया अपना Google (Gmail) ID दर्ज करें!");
-      return;
-    }
-    if (!validateEmailFormat(emailVal)) {
-      setGoogleModalError(
-        "❌ अमान्य Email Format! कृपया वैध Google Email ID (जैसे name@gmail.com) दर्ज करें।",
-      );
-      return;
-    }
-
-    processSuccessfulGoogleLogin(
-      emailVal,
-      nameVal || emailVal.split("@")[0],
-      "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
-      "",
-    );
-  };
-
   useEffect(() => {
     const q = searchQuery.trim();
     if (q === "PREM74") {
@@ -2080,7 +2232,7 @@ export default function App() {
     const panelObj = panels.find((p) => p.title === panelTitle);
 
     // Find the plan object carefully
-    const planObj = panelObj?.pricing.find(
+    const planObj = panelObj?.pricing?.find(
       (pr) =>
         String(pr.price) === String(price) ||
         (explicitResellerPrice &&
@@ -2138,10 +2290,31 @@ export default function App() {
       originalPrice: activeChargePrice,
       panelObj: panelObj,
     });
-    setAppliedCoupon(null);
-    setCouponInputCode("");
-    setCouponErrorMsg("");
-    setCouponSuccessMsg("");
+    const accKey = getAccountKey(userProfile.email, userProfile.phone);
+    const validCoupons = (userAccountCoupons[accKey] || []).filter(
+      (c) => !c.isUsed && Date.now() - c.createdAt < 24 * 60 * 60 * 1000,
+    );
+    const now = Date.now();
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+    const canUseCoupon = now - lastCouponUsedTimestamp >= twentyFourHours;
+
+    if (canUseCoupon && validCoupons.length > 0) {
+      const bestCoupon = validCoupons[0];
+      setAppliedCoupon({
+        code: bestCoupon.code,
+        discount: bestCoupon.discount,
+      });
+      setCouponInputCode(bestCoupon.code);
+      setCouponSuccessMsg(
+        `🎁 Spin & Win Code '${bestCoupon.code}' Auto-Added! (-₹${bestCoupon.discount})`,
+      );
+      setCouponErrorMsg("");
+    } else {
+      setAppliedCoupon(null);
+      setCouponInputCode("");
+      setCouponErrorMsg("");
+      setCouponSuccessMsg("");
+    }
   };
 
   const handleApplyCoupon = () => {
@@ -2440,7 +2613,17 @@ export default function App() {
   const [fundStep, setFundStep] = useState<"generate" | "confirm" | "checking">(
     "generate",
   );
-  const [paymentMode, setPaymentMode] = useState<"auto" | "manual">("auto");
+  // Auto UPI is locked/blocked per user request
+  const [isAutoUpiLocked, setIsAutoUpiLocked] = useState(true);
+  const [paymentMode, setPaymentMode] = useState<"auto" | "manual">("manual");
+
+  useEffect(() => {
+    if (isAutoUpiLocked && paymentMode === "auto") {
+      setPaymentMode("manual");
+    }
+  }, [isAutoUpiLocked, paymentMode]);
+  const [autoWhatsapp, setAutoWhatsapp] = useState("");
+  const [autoAmount, setAutoAmount] = useState("");
   const [utr, setUtr] = useState("");
   const [paymentScreenshot, setPaymentScreenshot] = useState<string>("");
   const [currentTxId, setCurrentTxId] = useState<number | null>(() => {
@@ -2468,6 +2651,15 @@ export default function App() {
       userPhone?: string;
       userPassword?: string;
       userAccountKey?: string;
+      userName?: string;
+      userAvatar?: string;
+      userJoinDate?: string;
+      userLastLogin?: string;
+      userBalance?: number;
+      keysBoughtCount?: number;
+      totalPaid?: number;
+      method?: string;
+      whatsapp?: string;
     }[]
   >(() => {
     try {
@@ -2481,6 +2673,50 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("app_paymentHistory", JSON.stringify(paymentHistory));
   }, [paymentHistory]);
+
+  const [autoPaymentHistory, setAutoPaymentHistory] = useState<
+    {
+      id: number;
+      amount: number;
+      utr: string;
+      status: string;
+      date: string;
+      method: string;
+      whatsapp: string;
+      userEmail: string;
+      userPhone: string;
+      userPassword?: string;
+      userName?: string;
+      userAvatar?: string;
+      userJoinDate?: string;
+      userLastLogin?: string;
+      userBalance?: number;
+      keysBoughtCount?: number;
+      totalPaid?: number;
+      userAccountKey?: string;
+    }[]
+  >(() => {
+    try {
+      const saved = localStorage.getItem("app_autoPaymentHistory");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(
+      "app_autoPaymentHistory",
+      JSON.stringify(autoPaymentHistory),
+    );
+  }, [autoPaymentHistory]);
+
+  const [autoPaySearch, setAutoPaySearch] = useState("");
+  const [autoPayFilter, setAutoPayFilter] = useState<
+    "ALL" | "PENDING" | "SUCCESS" | "REJECTED"
+  >("ALL");
+  const [isRazorpayModalOpen, setIsRazorpayModalOpen] = useState(false);
+  const razorpayContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [onlineUsersCount, setOnlineUsersCount] = useState(1);
 
@@ -2528,12 +2764,16 @@ export default function App() {
       const data = snapshot.val();
       if (data && data.initialized) {
         isSyncingFromFirebase.current = true;
-        if (data.panels) setPanels(ensureArray(data.panels));
+        if (data.panels && ensureArray(data.panels).length > 0) {
+          setPanels(ensureArray(data.panels));
+        }
         if (data.registeredUsers)
           setRegisteredUsers(ensureArray(data.registeredUsers));
         if (data.bannedUsers) setBannedUsers(ensureArray(data.bannedUsers));
         if (data.paymentHistory)
           setPaymentHistory(ensureArray(data.paymentHistory));
+        if (data.autoPaymentHistory)
+          setAutoPaymentHistory(ensureArray(data.autoPaymentHistory));
         if (data.keyRequests) setKeyRequests(ensureArray(data.keyRequests));
         if (data.paymentSettings) setPaymentSettings(data.paymentSettings);
         if (data.supportLinks) setSupportLinks(data.supportLinks);
@@ -2574,6 +2814,7 @@ export default function App() {
       registeredUsers,
       bannedUsers,
       paymentHistory,
+      autoPaymentHistory,
       keyRequests,
       paymentSettings,
       supportLinks,
@@ -2600,6 +2841,7 @@ export default function App() {
     registeredUsers,
     bannedUsers,
     paymentHistory,
+    autoPaymentHistory,
     keyRequests,
     paymentSettings,
     supportLinks,
@@ -2706,39 +2948,447 @@ export default function App() {
     };
   }, []);
 
+  if (checkoutData) {
+    return (
+      <div className="fixed inset-0 z-[999999] bg-[#07090e] text-white flex flex-col w-full h-full min-h-screen overflow-y-auto antialiased">
+        {/* STANDALONE PAGE 1: BUY KEY CHECKOUT PAGE */}
+        <div className="sticky top-0 z-30 bg-[#0c101a] border-b border-white/15 px-4 py-3.5 flex items-center justify-between shadow-2xl">
+          <button
+            onClick={() => setCheckoutData(null)}
+            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white font-black text-xs px-3.5 py-2 rounded-xl transition-all border border-white/20 active:scale-95 shadow-md cursor-pointer"
+          >
+            <ArrowLeft size={18} className="text-cyan-400" />
+            <span>RETURN TO STORE</span>
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.4)]">
+              <ShoppingBag size={18} className="text-cyan-400" />
+            </div>
+            <h2 className="text-cyan-400 font-black text-base sm:text-lg tracking-wider uppercase drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">
+              BUY KEY CHECKOUT
+            </h2>
+          </div>
+          <button
+            onClick={() => setCheckoutData(null)}
+            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white transition-all border border-white/10 active:scale-95 cursor-pointer"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Main Content */}
+        <div className="max-w-lg mx-auto w-full p-4 sm:p-6 flex flex-col gap-5 my-auto">
+          {/* High-Contrast Cyber Box */}
+          <div className="w-full bg-[#0c121e] border-2 border-cyan-500/60 rounded-3xl p-5 sm:p-6 shadow-[0_0_35px_rgba(6,182,212,0.25)] flex flex-col gap-4 relative">
+            <div className="flex items-center justify-between border-b border-white/15 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 p-0.5 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.5)]">
+                  <div className="w-full h-full bg-[#0d121f] rounded-[14px] flex items-center justify-center">
+                    <ShieldCheck size={20} className="text-cyan-400" />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                    SELECTED PANEL
+                  </p>
+                  <h3 className="text-lg sm:text-xl font-black text-white tracking-wide uppercase">
+                    {checkoutData.panelTitle}
+                  </h3>
+                </div>
+              </div>
+              <span className="bg-cyan-500/20 text-cyan-300 border border-cyan-400/60 text-[11px] px-3 py-1 rounded-full font-black uppercase tracking-wider">
+                {checkoutData.planLabel}
+              </span>
+            </div>
+
+            {/* Price Details */}
+            <div className="flex flex-col gap-2.5 bg-[#070a12] p-4 rounded-2xl border border-white/15 text-xs">
+              <div className="flex justify-between items-center text-gray-300">
+                <span className="font-medium text-gray-300">Original Price:</span>
+                <span className="text-white font-black text-base font-mono">
+                  ₹{checkoutData.originalPrice}
+                </span>
+              </div>
+              {appliedCoupon && (
+                <div className="flex justify-between items-center text-emerald-400 font-bold">
+                  <span>Coupon Discount ({appliedCoupon.code}):</span>
+                  <span>- ₹{appliedCoupon.discount}</span>
+                </div>
+              )}
+              <div className="border-t border-white/15 pt-2.5 flex justify-between items-center text-sm font-black text-white">
+                <span className="text-gray-200">Final Amount to Pay:</span>
+                <span className="text-emerald-400 font-black text-2xl font-mono drop-shadow-[0_0_12px_rgba(52,211,153,0.5)]">
+                  ₹
+                  {Math.max(
+                    0,
+                    checkoutData.originalPrice -
+                      (appliedCoupon ? appliedCoupon.discount : 0)
+                  )}
+                </span>
+              </div>
+            </div>
+
+            {/* Coupon Code Input Box */}
+            <div className="flex flex-col gap-2.5 bg-[#070a12] p-4 rounded-2xl border border-white/15">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black text-cyan-300 flex items-center gap-1.5 uppercase tracking-wider">
+                  <Zap size={14} className="text-amber-400" /> APPLY COUPON CODE
+                </label>
+                {appliedCoupon && (
+                  <button
+                    onClick={() => {
+                      setAppliedCoupon(null);
+                      setCouponInputCode("");
+                      setCouponSuccessMsg("");
+                      setCouponErrorMsg("Coupon removed.");
+                    }}
+                    className="text-[10px] text-red-400 hover:text-red-300 font-bold uppercase tracking-wider cursor-pointer"
+                  >
+                    ✕ Remove Code
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Enter Coupon Code (e.g. SPIN10-XXXX)..."
+                  value={couponInputCode}
+                  onChange={(e) => {
+                    setCouponInputCode(e.target.value.toUpperCase());
+                    setCouponErrorMsg("");
+                    setCouponSuccessMsg("");
+                  }}
+                  className="flex-1 bg-[#121929] border border-white/25 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white uppercase placeholder:normal-case placeholder:text-gray-500 focus:outline-none focus:border-cyan-400"
+                />
+                <button
+                  onClick={handleApplyCoupon}
+                  className="bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs px-4 py-2.5 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer uppercase tracking-wider"
+                >
+                  APPLY
+                </button>
+              </div>
+              {couponErrorMsg && (
+                <p className="text-red-400 text-xs font-bold mt-0.5">
+                  ❌ {couponErrorMsg}
+                </p>
+              )}
+              {couponSuccessMsg && (
+                <p className="text-emerald-400 text-xs font-black mt-0.5 flex items-center gap-1">
+                  ✅ {couponSuccessMsg}
+                </p>
+              )}
+
+              {/* Directly Show & Auto-Select Spin & Win Won Coupons */}
+              {(() => {
+                const accKey = getAccountKey(userProfile.email, userProfile.phone);
+                const userActiveCoupons = (userAccountCoupons[accKey] || []).filter(
+                  (c) => !c.isUsed && Date.now() - c.createdAt < 24 * 60 * 60 * 1000,
+                );
+                if (userActiveCoupons.length === 0) return null;
+
+                return (
+                  <div className="mt-1.5 pt-2.5 border-t border-white/10 flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-amber-300 font-bold flex items-center gap-1">
+                        <Gift size={13} className="text-amber-400" />
+                        Aapke Spin & Win Coupons:
+                      </span>
+                      <span className="text-gray-400 text-[10px]">
+                        (Click karke sidhe add karein)
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {userActiveCoupons.map((c, idx) => {
+                        const isThisApplied = appliedCoupon?.code === c.code;
+                        return (
+                          <button
+                            key={`spin-won-badge-${c.code}-${idx}`}
+                            type="button"
+                            onClick={() => {
+                              setCouponInputCode(c.code);
+                              setAppliedCoupon({
+                                code: c.code,
+                                discount: c.discount,
+                              });
+                              setCouponSuccessMsg(
+                                `🎁 Spin Code '${c.code}' Added! -₹${c.discount} Discount`,
+                              );
+                              setCouponErrorMsg("");
+                            }}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                              isThisApplied
+                                ? "bg-emerald-500 text-black border-2 border-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.6)] font-black"
+                                : "bg-[#141e33] hover:bg-[#1a2845] text-amber-300 border border-amber-400/40 hover:border-amber-300"
+                            }`}
+                          >
+                            <span>{c.code}</span>
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded font-black ${
+                                isThisApplied
+                                  ? "bg-black/20 text-black"
+                                  : "bg-emerald-500/20 text-emerald-400"
+                              }`}
+                            >
+                              -₹{c.discount}
+                            </span>
+                            {isThisApplied ? (
+                              <span className="text-[11px]">✓ ADDED</span>
+                            ) : (
+                              <span className="text-[10px] text-cyan-300 font-sans font-bold">
+                                TAP TO USE
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Account & Wallet Info */}
+            <div className="bg-[#070a12] border border-white/15 rounded-2xl py-3.5 px-5 flex flex-col sm:flex-row justify-between items-center gap-2 text-xs font-bold shadow-inner">
+              <span className="text-gray-300 flex items-center gap-1.5">
+                👤 Account:{" "}
+                <span className="text-white font-black">
+                  {userProfile.email || "user@gmail.com"}
+                </span>
+              </span>
+              <span className="text-gray-300 flex items-center gap-1.5">
+                💰 Available Wallet:{" "}
+                <span className="text-amber-400 font-black text-base font-mono drop-shadow-[0_0_8px_rgba(251,191,36,0.4)]">
+                  ₹
+                  {resellerUser.isLoggedIn && resellerUser.isApproved
+                    ? resellerUser.balance
+                    : userBalance}
+                </span>
+              </span>
+            </div>
+
+            {/* Confirm & Pay Button - High Contrast Always Visible */}
+            <button
+              onClick={handleRequestKey}
+              className="w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 border-2 border-emerald-300 text-white font-black py-4 rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.5)] flex items-center justify-center gap-2.5 uppercase tracking-wider text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
+            >
+              <CheckCircle size={22} className="text-white drop-shadow-md" />
+              <span className="drop-shadow-md">
+                CONFIRM & ORDER KEY (₹
+                {Math.max(
+                  0,
+                  checkoutData.originalPrice -
+                    (appliedCoupon ? appliedCoupon.discount : 0)
+                )}
+                )
+              </span>
+            </button>
+
+            {/* Cancel & return link */}
+            <button
+              onClick={() => setCheckoutData(null)}
+              className="w-full text-center text-xs font-black text-gray-300 hover:text-white uppercase tracking-widest py-2 transition-colors border-t border-white/10 mt-2 cursor-pointer"
+            >
+              ← CANCEL & RETURN TO STORE
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (showBuySuccessPendingModal) {
+    return (
+      <div className="fixed inset-0 z-[999999] bg-[#07090e] text-white flex flex-col w-full h-full min-h-screen overflow-y-auto antialiased">
+        {/* Standalone Header */}
+        <div className="sticky top-0 z-30 bg-[#0c101a] border-b border-white/15 px-4 py-3.5 flex items-center justify-between shadow-2xl">
+          <button
+            onClick={() => {
+              setShowBuySuccessPendingModal(false);
+              setCurrentView("home");
+            }}
+            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white font-black text-xs px-3.5 py-2 rounded-xl transition-all border border-white/20 active:scale-95 shadow-md cursor-pointer"
+          >
+            <ArrowLeft size={18} className="text-cyan-400" />
+            <span>RETURN TO STORE</span>
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.4)]">
+              <Check size={20} className="text-emerald-400" />
+            </div>
+            <h2 className="text-emerald-400 font-black text-base sm:text-lg tracking-wider uppercase drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]">
+              ORDER CONFIRMATION
+            </h2>
+          </div>
+          <button
+            onClick={() => {
+              setShowBuySuccessPendingModal(false);
+              setCurrentView("home");
+            }}
+            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white transition-all border border-white/10 active:scale-95 cursor-pointer"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Main Success Content */}
+        <div className="max-w-lg mx-auto w-full p-4 sm:p-6 flex flex-col items-center justify-center my-auto text-center gap-6">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-24 h-24 rounded-full border-4 border-emerald-400 bg-emerald-500/20 flex items-center justify-center shadow-[0_0_50px_rgba(16,185,129,0.6)] relative">
+              <Check size={48} className="text-emerald-400 relative z-10" strokeWidth={3.5} />
+              <div className="absolute inset-0 bg-emerald-500/20 rounded-full animate-ping"></div>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.6)] uppercase tracking-widest mt-2">
+              BUY SUCCESSFUL!
+            </h2>
+          </div>
+
+          <div className="w-full bg-[#0c121e] border-2 border-amber-500/50 rounded-3xl p-6 sm:p-7 shadow-[0_0_35px_rgba(245,158,11,0.2)] flex flex-col items-center text-center gap-4 relative">
+            <div className="w-10 h-10 rounded-2xl bg-orange-500/20 border border-orange-400/50 flex items-center justify-center shadow-[0_0_15px_rgba(249,115,22,0.4)]">
+              <Clock size={22} className="text-orange-400 animate-pulse" />
+            </div>
+
+            <h3 className="text-orange-400 font-black text-lg sm:text-xl tracking-wide uppercase">
+              ORDER IS PENDING DELIVERY!
+            </h3>
+            <p className="text-gray-200 text-xs sm:text-sm font-bold leading-relaxed">
+              Instant stock was empty. Your order has been placed successfully and sent to Admin.
+            </p>
+            <p className="text-emerald-300 font-black text-xs sm:text-sm leading-relaxed bg-emerald-500/15 border border-emerald-500/40 p-3 rounded-2xl w-full">
+              ✅ Admin will deliver your key manually shortly.
+            </p>
+            <p className="text-gray-400 text-xs font-medium">
+              Click the button below to check your order status on the 'My Keys' page.
+            </p>
+          </div>
+
+          <div className="w-full flex flex-col gap-3.5">
+            <button
+              onClick={() => {
+                setShowBuySuccessPendingModal(false);
+                setCurrentView("myKeys");
+              }}
+              className="w-full bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-blue-500 border-2 border-cyan-300 text-white font-black py-4 rounded-2xl uppercase tracking-wider text-sm sm:text-base shadow-[0_0_25px_rgba(6,182,212,0.5)] transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2.5 cursor-pointer"
+            >
+              <Key size={20} className="text-white drop-shadow-md" />
+              <span className="drop-shadow-md">VIEW MY KEYS</span>
+            </button>
+            <button
+              onClick={() => {
+                setShowBuySuccessPendingModal(false);
+                setCurrentView("home");
+              }}
+              className="w-full bg-white/10 hover:bg-white/20 border border-white/20 text-white font-black py-3.5 rounded-2xl uppercase tracking-widest text-xs transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Home size={16} />
+              <span>RETURN TO HOME STORE</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-[100dvh] w-full text-white font-sans relative overflow-hidden selection:bg-cyan-500/30 antialiased flex flex-col items-center justify-start">
       <style>{`
         img, video {
           filter: hue-rotate(-${bgSettings.themeHue || 0}deg);
         }
+        @keyframes rgbBorder {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        .dslr-rgb-box {
+          position: relative;
+          border-radius: 1.5rem;
+          background: rgba(10, 15, 29, 0.96);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(6, 182, 212, 0.35);
+          box-shadow: 0 0 40px rgba(0, 0, 0, 0.9);
+          z-index: 10;
+        }
+        .dslr-rgb-box::before {
+          content: "";
+          position: absolute;
+          inset: -2px;
+          border-radius: 1.6rem;
+          background: linear-gradient(90deg, rgba(6,182,212,0.35), rgba(59,130,246,0.35), rgba(139,92,246,0.35), rgba(6,182,212,0.35));
+          background-size: 300% 300%;
+          animation: rgbBorder 6s linear infinite;
+          z-index: -1;
+          opacity: 0.35;
+          filter: blur(2px);
+        }
+        .dslr-rgb-box::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          border-radius: 1.5rem;
+          background: rgba(10, 15, 29, 0.96);
+          z-index: -1;
+        }
       `}</style>
 
       {/* Background Wallpaper Layer - 100% Fixed, Ultra HD Clarity (Crystal Clear from Top to Bottom) */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden select-none">
-        {bgSettings.enabled && bgSettings.customImage ? (
-          <img
-            src={bgSettings.customImage}
-            alt="Website Background"
-            className="w-full h-full object-cover object-center pointer-events-none select-none transition-all duration-300"
-            style={{
-              filter: `contrast(1.02) brightness(${100 - (bgSettings.darknessOverlay || 0)}%)`,
-            }}
-          />
+        {bgSettings.customImage ? (
+          bgSettings.isVideo || (typeof bgSettings.customImage === "string" && (bgSettings.customImage.toLowerCase().endsWith(".mp4") || bgSettings.customImage.toLowerCase().endsWith(".webm"))) ? (
+            <video
+              src={bgSettings.customImage}
+              autoPlay
+              loop
+              muted
+              playsInline
+              onError={() => {
+                setBgSettings((prev) => ({
+                  ...prev,
+                  customImage: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop",
+                  isVideo: false,
+                }));
+              }}
+              className="w-full h-full object-cover object-center pointer-events-none select-none transition-all duration-300"
+              style={{
+                filter: `contrast(1.08) brightness(100%)`,
+              }}
+            />
+          ) : (
+            <img
+              src={bgSettings.customImage}
+              alt="Website Background"
+              onError={() => {
+                setBgSettings((prev) => ({
+                  ...prev,
+                  customImage: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop",
+                  isVideo: false,
+                }));
+              }}
+              className="w-full h-full object-cover object-center pointer-events-none select-none transition-all duration-300"
+              style={{
+                filter: `contrast(1.08) brightness(100%)`,
+              }}
+            />
+          )
         ) : (
           <img
             src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop"
             alt="Default Background"
             className="w-full h-full object-cover object-center pointer-events-none select-none"
             style={{
-              filter: `contrast(1.02) brightness(${100 - (bgSettings.darknessOverlay || 0)}%)`,
+              filter: `contrast(1.08) brightness(100%)`,
             }}
           />
         )}
       </div>
 
+      {/* Dim overlay when on Login page for ultra clear text visibility */}
+      {currentView === "login" && (
+        <div className="fixed inset-0 bg-black/65 backdrop-blur-[3px] z-[1] pointer-events-none transition-all duration-300" />
+      )}
+
       {/* Live Sato-Rang (7 Rainbow Colors) Falling Flowers - Stationary Ambient Layer */}
-      {bgSettings.enableFlowers && (
+      {bgSettings.enableFlowers && currentView !== "login" && (
         <div className="fixed inset-0 pointer-events-none overflow-hidden z-[5]">
           {flowerParticles.map((flower) => (
             <div
@@ -2846,14 +3496,14 @@ export default function App() {
       {/* Drawer Overlay */}
       {isMenuOpen && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] transition-opacity"
+          className="fixed inset-0 bg-black/40 z-[60] transition-opacity"
           onClick={() => setIsMenuOpen(false)}
         ></div>
       )}
 
       {/* Drawer Menu */}
       <div
-        className={`fixed top-0 left-0 h-full w-72 bg-[#090c16]/95 backdrop-blur-2xl border-r border-white/15 z-[70] transform transition-transform duration-300 ease-in-out shadow-[0_0_50px_rgba(0,0,0,0.9)] flex flex-col ${isMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed top-0 left-0 h-full w-72 bg-[#0a0e17]/95 backdrop-blur-2xl border-r border-white/15 z-[70] transform transition-transform duration-300 ease-in-out shadow-[0_0_50px_rgba(0,0,0,0.95)] flex flex-col ${isMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
         {/* Menu Header */}
         <div className="p-4 flex items-center justify-between border-b border-white/10 relative overflow-hidden bg-gradient-to-r from-red-500/10 via-amber-500/10 to-cyan-500/10">
@@ -2865,7 +3515,7 @@ export default function App() {
           </div>
           <button
             onClick={() => setIsMenuOpen(false)}
-            className="p-2 hover:bg-white/10 rounded-full transition-colors active:scale-95 border border-white/10 hover:border-cyan-400/50"
+            className="p-2 hover:bg-transparent rounded-full transition-colors active:scale-95 border border-white/10 hover:border-cyan-400/50"
           >
             <X
               size={22}
@@ -2966,7 +3616,7 @@ export default function App() {
                   setCurrentView(item.view as any);
                   setIsMenuOpen(false);
                 }}
-                className={`relative flex items-center justify-between px-3.5 py-3 rounded-xl transition-all duration-300 w-full text-left group overflow-hidden border backdrop-blur-md ${item.borderGlow} ${isActive ? "scale-[1.02] bg-white/10" : "bg-black/30 hover:bg-white/5 hover:scale-[1.02]"}`}
+                className={`relative flex items-center justify-between px-3.5 py-3 rounded-xl transition-all duration-300 w-full text-left group overflow-hidden border  ${item.borderGlow} ${isActive ? "scale-[1.02] bg-transparent" : "bg-transparent hover:bg-transparent hover:scale-[1.02]"}`}
                 style={{
                   boxShadow: isActive ? item.shadowGlow : undefined,
                 }}
@@ -2988,7 +3638,7 @@ export default function App() {
                 <div className="flex items-center gap-3.5 relative z-10 pl-2">
                   {/* HD Vibrant Glow Icon */}
                   <div
-                    className="p-1.5 rounded-lg bg-black/40 border transition-all duration-300 group-hover:scale-110"
+                    className="p-1.5 rounded-lg bg-transparent border transition-all duration-300 group-hover:scale-110"
                     style={{
                       borderColor: `${item.color}55`,
                       boxShadow: `0 0 8px ${item.color}40`,
@@ -3034,7 +3684,7 @@ export default function App() {
         </div>
 
         {/* Drawer Footer */}
-        <div className="p-3 border-t border-white/10 bg-black/40 backdrop-blur-md">
+        <div className="p-3 border-t border-white/10 bg-transparent ">
           <div className="flex items-center justify-between text-xs text-gray-300 px-1">
             <span className="flex items-center gap-1.5">
               <span
@@ -3049,22 +3699,19 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main App Window - Fixed Full Screen Window */}
-      <div className="relative z-10 flex flex-col h-full w-full max-w-[360px] sm:max-w-[390px] mx-auto overflow-hidden transition-all duration-500">
+      {/* Main App Window - Responsive HD Screen Window */}
+      <div className="relative z-10 flex flex-col h-full w-full max-w-md sm:max-w-lg md:max-w-xl mx-auto overflow-hidden transition-all duration-500">
         {/* Fixed Top Controls Bar - Crystal Clear Glass (Top Wallpaper Completely Visible in Ultra HD) */}
-        <div className="flex-shrink-0 z-50 bg-black/15 backdrop-blur-[2px] border-b border-white/10 shadow-[0_2px_15px_rgba(0,0,0,0.25)] flex flex-col transition-all">
+        <div className="flex-shrink-0 z-50 bg-transparent border-b border-white/10 shadow-[0_2px_15px_rgba(0,0,0,0.25)] flex flex-col transition-all">
           {/* Main Header/Nav - Menu + Title + Wallet */}
           <header className="flex items-center justify-between px-3.5 py-2.5">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsMenuOpen(true)}
-                className="p-1.5 hover:bg-white/10 rounded-lg transition-colors active:scale-95 bg-black/20 backdrop-blur-sm border border-white/10"
+                className="p-2 rounded-xl transition-all active:scale-95 bg-white/10 hover:bg-white/20 border border-white/20 hover:border-cyan-400 shadow-md cursor-pointer"
                 aria-label="Open Menu"
               >
-                <Menu
-                  size={22}
-                  className="text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]"
-                />
+                <Menu size={22} className="text-white drop-shadow-[0_0_8px_#fff]" />
               </button>
               <h1 className="text-lg font-black italic tracking-wider mt-0.5 text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.9)]">
                 FFH4CK<span className="text-amber-400 font-black">JOD</span>
@@ -3076,7 +3723,7 @@ export default function App() {
               {/* Wallet Balance Button */}
               <div
                 onClick={() => setCurrentView("addFund")}
-                className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md border border-cyan-400/70 rounded-full px-3 py-1 shadow-[0_0_15px_rgba(0,229,255,0.3)] cursor-pointer hover:border-cyan-300 hover:bg-cyan-950/40 transition-all active:scale-95"
+                className="flex items-center gap-1.5 bg-transparent border border-cyan-400/70 rounded-full px-3 py-1 shadow-[0_0_15px_rgba(0,229,255,0.3)] cursor-pointer hover:border-cyan-300 hover:bg-cyan-950/40 transition-all active:scale-95"
               >
                 <Wallet size={14} className="text-cyan-400" />
                 <span className="text-cyan-300 font-bold text-xs tracking-wide">
@@ -3085,6 +3732,25 @@ export default function App() {
               </div>
             </div>
           </header>
+
+          {/* Top Scrolling Marquee Notice Ticker */}
+          {bannerSettings.marqueeEnabled && (
+            <div
+              onClick={() => setShowImportantNoticeModal(true)}
+              className="bg-black/75 backdrop-blur-sm border-y border-fuchsia-500/30 px-3 py-1 flex items-center gap-2 cursor-pointer hover:bg-black/90 transition-all text-xs overflow-hidden select-none"
+              title="Click to view full Important Notice"
+            >
+              <div className="flex items-center gap-1 text-fuchsia-300 font-black text-[10px] shrink-0 bg-fuchsia-950/80 border border-fuchsia-500/50 px-1.5 py-0.5 rounded-full uppercase tracking-wider shadow-[0_0_8px_rgba(217,70,239,0.4)]">
+                <Megaphone size={11} className="text-fuchsia-400" />
+                <span>Notice</span>
+              </div>
+              <div className="overflow-hidden whitespace-nowrap w-full">
+                <div className="inline-block animate-marquee text-gray-200 text-[11px] font-medium tracking-wide">
+                  {bannerSettings.marqueeText}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Fixed Category Button & Search Bar for Home View */}
           {currentView === "home" && (
@@ -3098,26 +3764,23 @@ export default function App() {
                   </span>
                 </h2>
                 <div className="relative">
-                  {/* Category Button with 7-Color Live Satorang Animated Border */}
-                  <div className="relative p-0.5 rounded-xl animate-satorang-border shadow-[0_0_25px_rgba(255,0,128,0.7)]">
-                    <button
-                      onClick={() => setIsCategoryOpen(!isCategoryOpen)}
-                      className="relative w-full flex items-center gap-2 bg-black/95 backdrop-blur-2xl text-white px-3.5 py-2 rounded-[10px] font-black text-xs transition-all hover:bg-black active:scale-95"
-                    >
-                      <Filter size={14} className="animate-satorang-text" />
-                      <span className="animate-satorang-text tracking-wide uppercase font-black">
-                        {selectedCategory}
-                      </span>
-                    </button>
-                  </div>
+                  {/* Category Filter Button */}
+                  <button
+                    onClick={() => setIsCategoryOpen(!isCategoryOpen)}
+                    className="relative w-full flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white px-3.5 py-2 rounded-xl font-black text-xs transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Filter size={14} className="text-cyan-400" />
+                    <span className="text-cyan-300 tracking-wide uppercase font-black">
+                      {selectedCategory}
+                    </span>
+                  </button>
 
-                  {/* Category Dropdown with 7-Color Live Satorang Animated Border & Live Color Cycling */}
+                  {/* Category Dropdown */}
                   {isCategoryOpen && (
-                    <div className="absolute top-full right-0 mt-2.5 w-52 p-0.5 rounded-2xl animate-satorang-border shadow-[0_20px_50px_rgba(0,0,0,0.95)] z-50">
-                      <div className="bg-black/95 backdrop-blur-2xl rounded-[14px] overflow-hidden p-2 flex flex-col gap-1.5">
-                        <div className="px-2 py-1 text-[10px] font-black uppercase tracking-widest animate-satorang-text border-b border-white/10 mb-1 text-center">
-                          ✦ SELECT CATEGORY ✦
-                        </div>
+                    <div className="absolute top-full right-0 mt-2.5 w-52 p-2 rounded-2xl bg-[#0c101a] border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.95)] z-50 flex flex-col gap-1.5">
+                      <div className="px-2 py-1 text-[10px] font-black uppercase tracking-widest text-cyan-400 border-b border-white/10 mb-1 text-center font-bold">
+                        ✦ SELECT CATEGORY ✦
+                      </div>
                         {[
                           "All",
                           "24ghanta",
@@ -3134,7 +3797,7 @@ export default function App() {
                               setSelectedCategory(cat);
                               setIsCategoryOpen(false);
                             }}
-                            className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider text-white bg-black/80 hover:bg-white/15 transition-all flex items-center justify-between group border border-white/10 hover:border-white/30"
+                            className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider text-white bg-transparent hover:bg-transparent transition-all flex items-center justify-between group border border-white/10 hover:border-white/30"
                           >
                             <span className="animate-satorang-text group-hover:scale-105 transition-transform">
                               {cat}
@@ -3142,7 +3805,6 @@ export default function App() {
                             <span className="w-2 h-2 rounded-full bg-rainbow-animated shadow-[0_0_10px_rgba(255,255,255,0.8)]"></span>
                           </button>
                         ))}
-                      </div>
                     </div>
                   )}
                 </div>
@@ -3218,15 +3880,15 @@ export default function App() {
                     }
                   }}
                   placeholder="Search panels..."
-                  className="w-full bg-black/40 backdrop-blur-md border border-cyan-500/30 focus:border-cyan-400 rounded-xl py-1.5 pl-9 pr-3 text-white focus:outline-none focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all placeholder:text-gray-400 relative z-10 text-xs"
+                  className="w-full bg-transparent  border border-cyan-500/30 focus:border-cyan-400 rounded-xl py-1.5 pl-9 pr-3 text-white focus:outline-none focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all placeholder:text-gray-400 relative z-10 text-xs"
                 />
               </div>
             </div>
           )}
         </div>
 
-        {/* Scrollable Feed - ONLY the Panels Scroll Up & Down */}
-        <main className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden p-3 pb-28 flex flex-col gap-4 custom-scrollbar">
+        {/* Scrollable Feed - ONLY the Panels Scroll Up & Down with Generous Separation Gaps */}
+        <main className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5 pb-28 flex flex-col gap-6 sm:gap-8 custom-scrollbar">
           {currentView === "home" && (
             <>
               {/* Reseller VIP Live Floating Status Badge (When logged in as Reseller) */}
@@ -3262,10 +3924,12 @@ export default function App() {
                 </div>
               )}
 
-              {panels
+              {(ensureArray(panels).length > 0 ? ensureArray(panels) : DEFAULT_STORE_PANELS)
                 .filter((p) => {
+                  if (!p) return false;
                   const q = searchQuery.toLowerCase().trim();
-                  const pCat = p.category ? p.category.toLowerCase() : "";
+                  const pTitle = p.title ? String(p.title).toLowerCase() : "";
+                  const pCat = p.category ? String(p.category).toLowerCase() : "";
                   const pCatClean = pCat.replace(/\s+/g, "");
                   const selCatClean = selectedCategory
                     .toLowerCase()
@@ -3273,7 +3937,7 @@ export default function App() {
 
                   const matchesSearch =
                     !q ||
-                    p.title.toLowerCase().includes(q) ||
+                    pTitle.includes(q) ||
                     pCat.includes(q) ||
                     (q === "24ghanta" &&
                       (pCat.includes("24ghanta") || pCat.includes("house")));
@@ -3300,11 +3964,11 @@ export default function App() {
                   const isResellerActive =
                     resellerUser.isLoggedIn && resellerUser.isApproved;
                   const activeSelectedPrice =
-                    selectedPlans[panel.id] || panel.pricing[0]?.price || 0;
+                    selectedPlans[panel.id] || panel.pricing?.[0]?.price || 0;
                   const activePlan =
-                    panel.pricing.find(
+                    panel.pricing?.find(
                       (pr) => pr.price === activeSelectedPrice,
-                    ) || panel.pricing[0];
+                    ) || panel.pricing?.[0];
                   const activeResellerPrice = activePlan
                     ? ((activePlan as any).resellerPrice ??
                       Math.round(activePlan.price * 0.65))
@@ -3313,12 +3977,12 @@ export default function App() {
                   return (
                     <div
                       key={`store-panel-${panel.id}-${pIdx}`}
-                      className="relative rounded-2xl animate-satorang-border shadow-[0_6px_25px_rgba(0,0,0,0.4)] group overflow-hidden mx-0.5 mb-4 flex-shrink-0 transition-all duration-300 hover:scale-[1.01]"
+                      className="relative rounded-3xl animate-satorang-border shadow-[0_12px_40px_rgba(0,0,0,0.65)] group overflow-hidden mb-6 sm:mb-8 flex-shrink-0 transition-all duration-300 hover:scale-[1.015] bg-[#090d16]/80 backdrop-blur-md"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 ease-in-out pointer-events-none"></div>
 
                       {/* Water-like Clear Transparent Glass Body */}
-                      <div className="bg-black/20 hover:bg-black/15 backdrop-blur-[2px] rounded-[14px] p-3 flex flex-col gap-2.5 h-full w-full relative z-10 transition-colors">
+                      <div className="bg-transparent  rounded-[14px] p-3 flex flex-col gap-2.5 h-full w-full relative z-10 transition-colors">
                         {/* Video / Photo Thumbnail - Compact Height & Clear */}
                         <div
                           onClick={() => {
@@ -3326,7 +3990,9 @@ export default function App() {
                               ? panel.videoLink
                               : imgYt
                                 ? panel.image
-                                : null;
+                                : panel.videoTutorial && getYouTubeInfo(panel.videoTutorial)
+                                  ? panel.videoTutorial
+                                  : null;
                             if (activeYtUrl) {
                               setPreviewMedia({
                                 url: activeYtUrl,
@@ -3335,14 +4001,16 @@ export default function App() {
                                 youtubeLink: activeYtUrl,
                               });
                             } else {
+                              const target = panel.videoLink || panel.videoTutorial || panel.image;
                               setPreviewMedia({
-                                url: panel.image,
-                                isVideo: panel.isVideo,
-                                title: panel.title,
+                                url: target,
+                                isVideo: true,
+                                title: panel.title + " - Video Demo",
+                                youtubeLink: target,
                               });
                             }
                           }}
-                          className="relative w-full h-36 sm:h-40 rounded-xl overflow-hidden border border-cyan-500/30 bg-black/40 shadow-[0_0_15px_rgba(0,0,0,0.6)] cursor-pointer group/media"
+                          className="relative w-full h-36 sm:h-40 rounded-xl overflow-hidden border border-cyan-500/30 bg-transparent shadow-[0_0_15px_rgba(0,0,0,0.6)] cursor-pointer group/media"
                         >
                           {panel.isVideo && !imgYt ? (
                             <video
@@ -3376,7 +4044,7 @@ export default function App() {
 
                           {/* Central Glowing YouTube Play Icon Overlay */}
                           {activeYt && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-none group-hover/media:bg-black/10 transition-colors pointer-events-none z-10">
+                            <div className="absolute inset-0 flex items-center justify-center bg-transparent  group-hover/media:bg-transparent transition-colors pointer-events-none z-10">
                               <div className="w-10 h-10 rounded-full bg-red-600/90 border-2 border-white shadow-[0_0_20px_rgba(220,38,38,0.9)] flex items-center justify-center transition-transform group-hover/media:scale-110">
                                 <Play className="fill-white text-white ml-0.5 w-5 h-5" />
                               </div>
@@ -3402,7 +4070,7 @@ export default function App() {
                           </div>
 
                           {/* Tap to View HD Badge */}
-                          <div className="absolute bottom-1.5 left-2 bg-black/40 backdrop-blur-sm border border-cyan-400/40 text-cyan-300 text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-md z-10">
+                          <div className="absolute bottom-1.5 left-2 bg-transparent  border border-cyan-400/40 text-cyan-300 text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-md z-10">
                             <Zap size={9} className="fill-cyan-400" /> Tap for
                             HD
                           </div>
@@ -3416,20 +4084,16 @@ export default function App() {
                                   ? panel.videoLink
                                   : imgYt
                                     ? panel.image
-                                    : null;
-                                if (activeYtUrl) {
-                                  setPreviewMedia({
-                                    url: activeYtUrl,
-                                    isVideo: true,
-                                    title: panel.title + " Demo Video",
-                                    youtubeLink: activeYtUrl,
-                                  });
-                                } else {
-                                  window.open(
-                                    panel.videoLink || panel.installLink,
-                                    "_blank",
-                                  );
-                                }
+                                    : panel.videoTutorial && getYouTubeInfo(panel.videoTutorial)
+                                      ? panel.videoTutorial
+                                      : null;
+                                const targetUrl = activeYtUrl || panel.videoLink || panel.videoTutorial || "https://t.me/Premjodvip";
+                                setPreviewMedia({
+                                  url: targetUrl,
+                                  isVideo: true,
+                                  title: panel.title + " Demo Video",
+                                  youtubeLink: targetUrl,
+                                });
                               }}
                               className="bg-red-600 hover:bg-red-500 text-white font-bold text-[9px] px-2 py-1 rounded-md flex items-center gap-1 shadow-[0_0_12px_rgba(220,38,38,0.8)] transition-transform hover:scale-105 active:scale-95"
                             >
@@ -3452,11 +4116,11 @@ export default function App() {
                         >
                           {(expandedPanels[panel.id]
                             ? panel.features
-                            : panel.features.slice(0, 3)
+                            : (panel.features || []).slice(0, 3)
                           ).map((feature, idx) => (
                             <div
                               key={`feat-${panel.id}-${idx}`}
-                              className="flex items-center gap-1.5 bg-black/25 backdrop-blur-none border border-white/10 rounded-lg py-1 px-2 shrink-0"
+                              className="flex items-center gap-1.5 bg-transparent  border border-white/10 rounded-lg py-1 px-2 shrink-0"
                             >
                               <Zap
                                 size={12}
@@ -3495,7 +4159,7 @@ export default function App() {
                               </>
                             ) : (
                               <>
-                                <span>View All ({panel.features.length})</span>
+                                <span>View All ({(panel.features || []).length})</span>
                                 <ChevronDown
                                   size={16}
                                   className="text-fuchsia-500 animate-bounce"
@@ -3520,22 +4184,26 @@ export default function App() {
                                 alert("No install link provided");
                               }
                             }}
-                            className="flex items-center justify-center gap-1 border border-cyan-400/60 bg-cyan-950/40 backdrop-blur-sm hover:bg-cyan-900/60 text-white rounded-lg py-2 text-[10px] font-bold tracking-wider transition-all shadow-[0_0_12px_rgba(0,229,255,0.2)] hover:scale-[1.02] active:scale-[0.98]"
+                            className="flex items-center justify-center gap-1 border border-cyan-400/60 bg-cyan-950/40  hover:bg-cyan-900/60 text-white rounded-lg py-2 text-[10px] font-bold tracking-wider transition-all shadow-[0_0_12px_rgba(0,229,255,0.2)] hover:scale-[1.02] active:scale-[0.98]"
                           >
                             <Download size={12} className="text-cyan-400" />
                             INSTALL/PANEL
                           </button>
                           <button
                             onClick={() => {
-                              const targetUrl = panel.videoLink || panel.image;
+                              const targetUrl =
+                                panel.videoLink ||
+                                panel.videoTutorial ||
+                                panel.image ||
+                                "https://t.me/Premjodvip";
                               setPreviewMedia({
                                 url: targetUrl,
                                 isVideo: true,
-                                title: panel.title + " - Video Feedback",
+                                title: panel.title + " - Video Feedback & Proof",
                                 youtubeLink: targetUrl,
                               });
                             }}
-                            className="flex items-center justify-center gap-1 border border-red-500/60 bg-red-950/40 backdrop-blur-sm hover:bg-red-900/60 text-white rounded-lg py-2 text-[10px] font-bold tracking-wider transition-all shadow-[0_0_12px_rgba(239,68,68,0.2)] hover:scale-[1.02] active:scale-[0.98]"
+                            className="flex items-center justify-center gap-1 border border-red-500/60 bg-red-950/40  hover:bg-red-900/60 text-white rounded-lg py-2 text-[10px] font-bold tracking-wider transition-all shadow-[0_0_12px_rgba(239,68,68,0.2)] hover:scale-[1.02] active:scale-[0.98]"
                           >
                             <Play size={12} className="fill-white" />
                             VIDEO/FEEDBACK
@@ -3563,10 +4231,10 @@ export default function App() {
                           <select
                             value={
                               selectedPlans[panel.id] ||
-                              panel.pricing[0]?.price ||
+                              panel.pricing?.[0]?.price ||
                               ""
                             }
-                            className={`w-full appearance-none bg-black/40 backdrop-blur-sm hover:bg-black/60 text-white font-bold rounded-lg py-2 px-2.5 pr-7 focus:outline-none focus:ring-1 transition-all cursor-pointer text-[12px] border ${
+                            className={`w-full appearance-none bg-transparent  hover:bg-transparent text-white font-bold rounded-lg py-2 px-2.5 pr-7 focus:outline-none focus:ring-1 transition-all cursor-pointer text-[12px] border ${
                               isResellerActive
                                 ? "border-yellow-400/70 focus:ring-yellow-400 text-yellow-100 shadow-[0_0_12px_rgba(234,179,8,0.3)]"
                                 : "border-fuchsia-400/40 focus:ring-fuchsia-400 shadow-[0_0_12px_rgba(217,70,239,0.2)]"
@@ -3579,7 +4247,7 @@ export default function App() {
                               }));
                             }}
                           >
-                            {panel.pricing.map((plan, idx) => {
+                            {panel.pricing?.map((plan, idx) => {
                               const isOutOfStock =
                                 isNaN(Number(plan.price)) ||
                                 Number(plan.price) < 0 ||
@@ -3632,7 +4300,7 @@ export default function App() {
                               selectedPlans[panel.id] !== undefined
                                 ? selectedPlans[panel.id]
                                 : panel.pricing && panel.pricing.length > 0
-                                ? panel.pricing[0].price
+                                ? panel.pricing?.[0]?.price
                                 : "";
 
                             if (
@@ -3684,7 +4352,7 @@ export default function App() {
               </div>
 
               {countdown > 0 ? (
-                <div className="flex flex-col items-center gap-2 bg-black/20 backdrop-blur-md border border-yellow-500/30 p-4 rounded-2xl w-full max-w-xs ">
+                <div className="flex flex-col items-center gap-2 bg-transparent  border border-yellow-500/30 p-4 rounded-2xl w-full max-w-xs ">
                   <span className="text-5xl font-black text-yellow-400 drop-shadow-[0_0_15px_rgba(234,179,8,0.8)] animate-bounce">
                     {countdown}
                   </span>
@@ -3731,12 +4399,12 @@ export default function App() {
               });
 
               return (
-                <div className="flex flex-col gap-5 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+                <div className="flex flex-col gap-5 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => setCurrentView("home")}
-                        className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors "
+                        className="p-2 bg-transparent hover:bg-transparent rounded-full transition-colors "
                       >
                         <ArrowLeft size={20} className="text-white" />
                       </button>
@@ -3757,7 +4425,7 @@ export default function App() {
 
                   <div className="flex flex-col gap-4">
                     {userKeyRequests.length === 0 ? (
-                      <div className="bg-black/20 backdrop-blur-md border border-white/10 rounded-2xl p-8 text-center flex flex-col items-center shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
+                      <div className="bg-transparent  border border-white/10 rounded-2xl p-8 text-center flex flex-col items-center shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
                         <Key size={40} className="text-gray-500 mb-3" />
                         <p className="text-gray-200 font-bold text-sm mb-1">
                           No Keys Purchased Yet
@@ -3768,7 +4436,7 @@ export default function App() {
                         </p>
                         <button
                           onClick={() => setCurrentView("home")}
-                          className="bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white font-black px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(217,70,239,0.5)]"
+                          className="bg-rainbow-animated border-2 border-white text-white font-black px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(217,70,239,0.5)]"
                         >
                           Explore Store
                         </button>
@@ -3779,7 +4447,7 @@ export default function App() {
                           return (
                             <div
                               key={`mykey-rejected-${req.id}-${idx}`}
-                              className="relative bg-black/20 backdrop-blur-md border-2 border-red-500/70 rounded-[22px] p-5 shadow-[0_0_30px_rgba(239,68,68,0.4)] overflow-hidden flex flex-col gap-1 transition-all hover:border-red-400"
+                              className="relative bg-transparent  border-2 border-red-500/70 rounded-[22px] p-5 shadow-[0_0_30px_rgba(239,68,68,0.4)] overflow-hidden flex flex-col gap-1 transition-all hover:border-red-400"
                             >
                               <div className="absolute inset-0 bg-gradient-to-br from-red-950/30 via-black to-red-950/20 pointer-events-none"></div>
 
@@ -3816,7 +4484,7 @@ export default function App() {
                                   </p>
                                 </div>
 
-                                <div className="flex items-center justify-between bg-black/40 border border-emerald-500/40 rounded-xl p-2.5 px-3.5">
+                                <div className="flex items-center justify-between bg-transparent border border-emerald-500/40 rounded-xl p-2.5 px-3.5">
                                   <span className="text-gray-300 text-xs font-bold">
                                     Wallet Refund:
                                   </span>
@@ -3827,7 +4495,7 @@ export default function App() {
 
                                 <button
                                   onClick={() => setCurrentView("home")}
-                                  className="w-full mt-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-black py-3 rounded-xl uppercase tracking-wider text-xs shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                                  className="w-full mt-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 border border-cyan-400/50 text-white font-black py-3 rounded-xl uppercase tracking-wider text-xs shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
                                 >
                                   🛒 Buy Another Key / Explore Store
                                 </button>
@@ -3844,7 +4512,7 @@ export default function App() {
                           return (
                             <div
                               key={`mykey-pending-${req.id}-${idx}`}
-                              className="relative bg-black/20 backdrop-blur-md  border-2 border-purple-500/70 rounded-[22px] p-5 shadow-[0_0_30px_rgba(168,85,247,0.4)]  overflow-hidden flex flex-col gap-1 transition-all hover:border-purple-400"
+                              className="relative bg-transparent   border-2 border-purple-500/70 rounded-[22px] p-5 shadow-[0_0_30px_rgba(168,85,247,0.4)]  overflow-hidden flex flex-col gap-1 transition-all hover:border-purple-400"
                             >
                               <div className="absolute inset-0 bg-gradient-to-br from-red-950/20 via-purple-950/30 to-black pointer-events-none"></div>
 
@@ -3867,7 +4535,7 @@ export default function App() {
                                   </span>
                                 </div>
 
-                                <div className="bg-black/20 backdrop-blur-md border border-amber-500/40 rounded-xl p-4 my-2 flex items-center justify-center gap-2 text-center shadow-[inset_0_0_20px_rgba(245,158,11,0.2)]">
+                                <div className="bg-transparent  border border-amber-500/40 rounded-xl p-4 my-2 flex items-center justify-center gap-2 text-center shadow-[inset_0_0_20px_rgba(245,158,11,0.2)]">
                                   <Hourglass
                                     size={18}
                                     className="text-amber-400 animate-spin shrink-0"
@@ -3897,7 +4565,7 @@ export default function App() {
                         return (
                           <div
                             key={`mykey-delivered-${req.id}-${idx}`}
-                            className="relative bg-black/20 backdrop-blur-md  border-2 border-purple-500/70 rounded-[22px] p-5 shadow-[0_0_30px_rgba(168,85,247,0.4)]  overflow-hidden flex flex-col gap-1 transition-all hover:border-purple-400"
+                            className="relative bg-transparent   border-2 border-purple-500/70 rounded-[22px] p-5 shadow-[0_0_30px_rgba(168,85,247,0.4)]  overflow-hidden flex flex-col gap-1 transition-all hover:border-purple-400"
                           >
                             <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/20 via-purple-950/30 to-black pointer-events-none"></div>
 
@@ -3926,7 +4594,7 @@ export default function App() {
                                 </div>
                               </div>
 
-                              <div className="bg-black/40 backdrop-blur-md border border-cyan-500/50 rounded-xl p-3 my-2 flex items-center justify-between gap-2 shadow-[0_0_20px_rgba(0,229,255,0.2)]">
+                              <div className="bg-transparent  border border-cyan-500/50 rounded-xl p-3 my-2 flex items-center justify-between gap-2 shadow-[0_0_20px_rgba(0,229,255,0.2)]">
                                 <div className="flex items-center gap-2 overflow-hidden pr-2">
                                   <span className="text-green-400 font-black text-sm shrink-0">
                                     Key :
@@ -3985,7 +4653,7 @@ export default function App() {
             })()}
 
           {currentView === "addFund" && (
-            <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <div className="flex items-center gap-3">
                 <h2 className="text-2xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
                   Add{" "}
@@ -3995,14 +4663,43 @@ export default function App() {
                 </h2>
               </div>
 
-              {/* Steps Container */}
-              <div className="bg-black/20 backdrop-blur-md border border-white/10 rounded-[24px] p-4 sm:p-5 shadow-[0_0_40px_rgba(0,0,0,0.8)]  relative overflow-hidden flex flex-col items-center w-[92%] mx-auto mt-2">
-                {fundStep === "generate" && (
+              {/* Payment Mode Selector */}
+              <div className="flex gap-2 w-[92%] mx-auto bg-white/5 p-1.5 rounded-[20px] border border-white/10 shadow-inner">
+                <button
+                  onClick={() => setPaymentMode("manual")}
+                  className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all duration-300 ${
+                    paymentMode === "manual"
+                      ? "bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white shadow-[0_0_20px_rgba(217,70,239,0.5)]"
+                      : "text-gray-400 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  Manual UPI
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    alert("🔒 Auto UPI Payment abhi temporary band (LOCKED) hai!\n\nKripya Manual UPI ka upyog karein.");
+                  }}
+                  className="flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-1.5 bg-red-950/40 border border-red-500/40 text-red-300 opacity-70 hover:opacity-100 cursor-not-allowed active:scale-95"
+                  title="Auto UPI Payment is locked and blocked"
+                >
+                  <Lock size={13} className="text-red-400" />
+                  <span>Auto UPI</span>
+                  <span className="text-[9px] bg-red-600/30 text-red-300 px-1.5 py-0.5 rounded font-mono border border-red-500/40 font-bold tracking-wider">
+                    LOCKED
+                  </span>
+                </button>
+              </div>
+
+              {paymentMode === "manual" && (
+                /* Steps Container for Manual */
+                <div className="bg-transparent  border border-white/10 rounded-[24px] p-4 sm:p-5 shadow-[0_0_40px_rgba(0,0,0,0.8)]  relative overflow-hidden flex flex-col items-center w-[92%] mx-auto mt-2">
+                  {fundStep === "generate" && (
                   <div className="flex flex-col items-center gap-5 w-full animate-in fade-in duration-300">
                     {/* QR Code Container */}
                     <div className="relative flex flex-col items-center w-full my-1">
                       <div className="relative w-56 h-56 rounded-3xl p-[3px] bg-gradient-to-tr from-red-500 via-orange-400 via-yellow-400 via-green-400 via-cyan-400 via-blue-500 to-purple-600 shadow-[0_0_20px_rgba(255,0,0,0.25),0_0_25px_rgba(0,255,100,0.25),0_0_30px_rgba(0,200,255,0.3)] flex items-center justify-center transition-all duration-300">
-                        <div className="w-full h-full bg-white/[0.05] backdrop-blur-md  rounded-[22px] flex items-center justify-center relative overflow-hidden p-2">
+                        <div className="w-full h-full bg-white/[0.05]   rounded-[22px] flex items-center justify-center relative overflow-hidden p-2">
                           <div className="absolute top-2 left-2 w-3 h-3 border-t-2 border-l-2 border-cyan-400 z-10 pointer-events-none"></div>
                           <div className="absolute top-2 right-2 w-3 h-3 border-t-2 border-r-2 border-yellow-400 z-10 pointer-events-none"></div>
                           <div className="absolute bottom-2 left-2 w-3 h-3 border-b-2 border-l-2 border-pink-400 z-10 pointer-events-none"></div>
@@ -4031,7 +4728,7 @@ export default function App() {
                             <div className="flex flex-col items-center justify-center gap-2.5 p-2 animate-in fade-in zoom-in duration-300">
                               {/* 7-Color Ring */}
                               <div className="relative w-24 h-24 rounded-full p-[3px] bg-gradient-to-tr from-red-500 via-orange-500 via-yellow-400 via-green-500 via-cyan-400 via-blue-600 to-purple-600 animate-spin shadow-[0_0_25px_rgba(255,0,128,0.5),0_0_30px_rgba(0,255,255,0.5)]">
-                                <div className="w-full h-full bg-white/[0.05] backdrop-blur-md  rounded-full flex items-center justify-center relative overflow-hidden">
+                                <div className="w-full h-full bg-white/[0.05]   rounded-full flex items-center justify-center relative overflow-hidden">
                                   <div className="absolute inset-0 bg-gradient-to-tr from-red-500/20 via-green-500/20 to-blue-500/20 animate-pulse"></div>
                                   <span className="relative z-10 text-3xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-yellow-300 via-green-300 via-cyan-300 to-purple-400 drop-shadow-[0_0_12px_rgba(255,255,255,0.9)]">
                                     {countdown}s
@@ -4080,7 +4777,7 @@ export default function App() {
                     </div>
 
                     {/* Official UPI ID Copy Box */}
-                    <div className="w-full bg-black/20 backdrop-blur-md border border-cyan-400/50 rounded-2xl p-3 flex items-center justify-between shadow-[0_0_15px_rgba(0,229,255,0.2)]">
+                    <div className="w-full bg-transparent  border border-cyan-400/50 rounded-2xl p-3 flex items-center justify-between shadow-[0_0_15px_rgba(0,229,255,0.2)]">
                       <div className="flex flex-col text-left">
                         <span className="text-[10px] text-gray-400 font-bold uppercase">
                           Official UPI ID:
@@ -4112,7 +4809,7 @@ export default function App() {
                           value={amount}
                           onChange={(e) => setAmount(e.target.value)}
                           placeholder="Enter Amount (₹)"
-                          className="w-full bg-black/20 backdrop-blur-md border border-cyan-500/50 rounded-2xl py-3.5 px-4 text-center text-xl font-black text-cyan-300 placeholder:text-gray-600 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_20px_rgba(0,229,255,0.4)] transition-all"
+                          className="w-full bg-transparent  border border-cyan-500/50 rounded-2xl py-3.5 px-4 text-center text-xl font-black text-cyan-300 placeholder:text-gray-600 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_20px_rgba(0,229,255,0.4)] transition-all"
                           disabled={isGenerating}
                         />
                       </div>
@@ -4151,7 +4848,7 @@ export default function App() {
                     <div className="w-full flex items-center justify-between">
                       <button
                         onClick={() => setFundStep("generate")}
-                        className="p-2 hover:bg-white/10 rounded-full transition-colors -ml-2 text-cyan-400 font-bold flex items-center gap-1 text-xs"
+                        className="p-2 hover:bg-transparent rounded-full transition-colors -ml-2 text-transparent bg-clip-text bg-rainbow-animated font-black drop-shadow-[0_0_10px_#fff] flex items-center gap-1 text-xs"
                       >
                         <ArrowLeft size={20} /> Back to QR / Apps
                       </button>
@@ -4177,7 +4874,7 @@ export default function App() {
                     <div className="w-full space-y-3">
                       {/* 1. Paid Amount */}
                       <div className="space-y-1.5 text-left">
-                        <label className="text-cyan-400 font-bold text-xs tracking-wider uppercase block">
+                        <label className="text-transparent bg-clip-text bg-rainbow-animated font-black drop-shadow-[0_0_10px_#fff] text-xs tracking-wider uppercase block">
                           1. Enter Amount Paid (₹)
                         </label>
                         <input
@@ -4185,13 +4882,13 @@ export default function App() {
                           value={amount}
                           onChange={(e) => setAmount(e.target.value)}
                           placeholder="Confirm Paid Amount"
-                          className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-xl py-3 px-4 text-center text-base font-bold text-white placeholder:text-gray-600 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all"
+                          className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-center text-base font-bold text-white placeholder:text-gray-600 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all"
                         />
                       </div>
 
                       {/* 2. UTR Number */}
                       <div className="space-y-1.5 text-left">
-                        <label className="text-cyan-400 font-bold text-xs tracking-wider uppercase block">
+                        <label className="text-transparent bg-clip-text bg-rainbow-animated font-black drop-shadow-[0_0_10px_#fff] text-xs tracking-wider uppercase block">
                           2. Enter 12-Digit UTR / Transaction ID
                         </label>
                         <input
@@ -4199,7 +4896,7 @@ export default function App() {
                           value={utr}
                           onChange={(e) => setUtr(e.target.value)}
                           placeholder="Enter 12-Digit UTR Number"
-                          className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-xl py-3 px-4 text-center text-base font-bold text-white placeholder:text-gray-600 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all font-mono"
+                          className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-center text-base font-bold text-white placeholder:text-gray-600 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all font-mono"
                         />
                       </div>
                     </div>
@@ -4277,7 +4974,7 @@ export default function App() {
                             chuka hai.
                           </p>
 
-                          <div className="bg-black/20 backdrop-blur-md border border-green-500/40 rounded-xl p-3 text-xs w-full max-w-[260px] text-left space-y-1 mt-1 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
+                          <div className="bg-transparent  border border-green-500/40 rounded-xl p-3 text-xs w-full max-w-[260px] text-left space-y-1 mt-1 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
                             <div className="flex justify-between">
                               <span className="text-gray-400">
                                 Added Amount:
@@ -4367,7 +5064,7 @@ export default function App() {
                         </p>
 
                         {activeTx && (
-                          <div className="bg-black/20 backdrop-blur-md border border-yellow-500/30 rounded-xl p-3 text-xs w-full max-w-[260px] text-left space-y-1 mt-1">
+                          <div className="bg-transparent  border border-yellow-500/30 rounded-xl p-3 text-xs w-full max-w-[260px] text-left space-y-1 mt-1">
                             <div className="flex justify-between">
                               <span className="text-gray-400">Amount:</span>{" "}
                               <span className="text-white font-bold">
@@ -4406,7 +5103,7 @@ export default function App() {
                           onClick={() => {
                             setFundStep("confirm");
                           }}
-                          className="w-full max-w-[260px] mt-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs py-2.5 rounded-xl border border-cyan-400/40 uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                          className="w-full max-w-[260px] mt-2 bg-rainbow-animated border-2 border-white hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs py-2.5 rounded-xl border border-cyan-400/40 uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                         >
                           <ArrowLeft size={16} /> Edit / Re-Submit Payment
                           Details
@@ -4415,6 +5112,294 @@ export default function App() {
                     );
                   })()}
               </div>
+              )}
+
+              {paymentMode === "auto" && isAutoUpiLocked && (
+                <div className="bg-[#0e0707]/90 border border-red-500/40 rounded-[24px] p-6 sm:p-8 shadow-[0_0_30px_rgba(239,68,68,0.25)] text-center flex flex-col items-center w-[92%] mx-auto mt-2 animate-in zoom-in-95 duration-200">
+                  <div className="w-16 h-16 bg-red-500/15 border border-red-500/40 rounded-2xl flex items-center justify-center mb-3 text-red-400 shadow-[0_0_20px_rgba(239,68,68,0.3)]">
+                    <Lock size={32} />
+                  </div>
+                  <h3 className="text-xl font-black text-white uppercase tracking-wider mb-2">
+                    Auto UPI <span className="text-red-400">Payment Blocked / Locked</span>
+                  </h3>
+                  <p className="text-gray-300 text-xs sm:text-sm max-w-sm mb-5 leading-relaxed">
+                    Auto UPI payment abhi temporary band (locked) kar di gayi hai. Is par click karne par payment open nahi hogi. Kripya <strong>Manual UPI</strong> se payment karein.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMode("manual")}
+                    className="bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-black text-xs px-6 py-3 rounded-xl uppercase tracking-wider shadow-[0_0_20px_rgba(217,70,239,0.5)] transition-all active:scale-95 cursor-pointer"
+                  >
+                    Go to Manual UPI Payment
+                  </button>
+                </div>
+              )}
+
+              {paymentMode === "auto" && !isAutoUpiLocked && (
+                <div className="bg-[#090d16]/80 backdrop-blur-md border border-cyan-400/30 rounded-[24px] p-6 sm:p-8 shadow-[0_10px_40px_rgba(6,182,212,0.15)] relative overflow-hidden flex flex-col items-center w-[92%] mx-auto mt-2 animate-in zoom-in-95 duration-300">
+                  <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent pointer-events-none"></div>
+                  
+                  <div className="w-16 h-16 bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 rounded-2xl flex items-center justify-center border border-cyan-400/40 shadow-[0_0_20px_rgba(6,182,212,0.4)] mb-4">
+                    <Zap size={32} className="text-yellow-400" />
+                  </div>
+                  
+                  <h3 className="text-xl sm:text-2xl font-black text-white tracking-wide text-center uppercase italic mb-2 drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">
+                    Auto UPI <span className="text-cyan-400">Payment Gateway</span>
+                  </h3>
+                  
+                  <p className="text-gray-300 text-center text-xs sm:text-sm leading-relaxed max-w-xs mb-6">
+                    Instant automated payments powered by Razorpay. Enter your details and click Payment Request to open gateway.
+                  </p>
+
+                  <div className="w-full space-y-4">
+                    {/* Amount Input */}
+                    <div className="space-y-1.5 text-left">
+                      <label className="text-cyan-400 font-black text-xs tracking-wider uppercase block">
+                        Enter Amount (₹)
+                      </label>
+                      <input
+                        type="number"
+                        value={autoAmount}
+                        onChange={(e) => setAutoAmount(e.target.value)}
+                        placeholder="e.g. 150"
+                        className="w-full bg-[#05080f] border border-white/10 rounded-xl py-3.5 px-4 text-base font-bold text-white placeholder:text-gray-600 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all"
+                      />
+                    </div>
+
+                    {/* WhatsApp Number Input */}
+                    <div className="space-y-1.5 text-left">
+                      <label className="text-green-400 font-black text-xs tracking-wider uppercase block">
+                        WhatsApp Number
+                      </label>
+                      <input
+                        type="tel"
+                        value={autoWhatsapp}
+                        onChange={(e) => setAutoWhatsapp(e.target.value)}
+                        placeholder="Enter your 10-digit number"
+                        className="w-full bg-[#05080f] border border-white/10 rounded-xl py-3.5 px-4 text-base font-bold text-white placeholder:text-gray-600 focus:outline-none focus:border-green-400 focus:shadow-[0_0_15px_rgba(34,197,94,0.3)] transition-all"
+                      />
+                    </div>
+
+                    {/* Payment Request Button (Connected to Razorpay Gateway & Admin Profile Log) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const amt = Number(autoAmount);
+                        if (!amt || amt <= 0) {
+                          alert("Please enter a valid amount!");
+                          return;
+                        }
+                        const cleanWhatsapp = autoWhatsapp.trim();
+                        if (!cleanWhatsapp || cleanWhatsapp.length < 10) {
+                          alert("Please enter a valid 10-digit WhatsApp number!");
+                          return;
+                        }
+
+                        const curEmail = userProfile.email || "";
+                        const curPhone = userProfile.phone || cleanWhatsapp;
+                        const curPassword = userProfile.password || "";
+                        const accKey = getAccountKey(curEmail, curPhone);
+
+                        const regUser = ensureArray(registeredUsers).find(
+                          (u) =>
+                            (curEmail &&
+                              u.email &&
+                              u.email.toLowerCase() ===
+                                curEmail.toLowerCase()) ||
+                            (curPhone && u.phone && u.phone === curPhone) ||
+                            (u.whatsapp && u.whatsapp === cleanWhatsapp),
+                        );
+
+                        const userKeys = ensureArray(keyRequests).filter(
+                          (r) =>
+                            (curEmail &&
+                              r.userEmail &&
+                              r.userEmail.toLowerCase() ===
+                                curEmail.toLowerCase()) ||
+                            (curPhone &&
+                              r.userPhone &&
+                              r.userPhone === curPhone) ||
+                            (curEmail && r.user === curEmail) ||
+                            (curPhone && r.user === curPhone),
+                        );
+                        const keysCount = userKeys.filter(
+                          (r) =>
+                            r.status === "APPROVED" || r.status === "DELIVERED",
+                        ).length;
+
+                        const userPayments = ensureArray(paymentHistory).filter(
+                          (p) =>
+                            (curEmail &&
+                              p.userEmail &&
+                              p.userEmail.toLowerCase() ===
+                                curEmail.toLowerCase()) ||
+                            (curPhone &&
+                              p.userPhone &&
+                              p.userPhone === curPhone),
+                        );
+                        const totalPaid = userPayments
+                          .filter(
+                            (p) =>
+                              p.status === "SUCCESS" || p.status === "APPROVED",
+                          )
+                          .reduce(
+                            (acc, curr) => acc + (Number(curr.amount) || 0),
+                            0,
+                          );
+
+                        const curWalletBal =
+                          userWallets[accKey] ?? userBalance ?? 0;
+                        const newTxId = Date.now();
+
+                        const newAutoPayment = {
+                          id: newTxId,
+                          amount: amt,
+                          whatsapp: cleanWhatsapp,
+                          utr: `AUTO-RZP-${Date.now().toString().slice(-6)}`,
+                          status: "PENDING",
+                          date: new Date().toLocaleString(),
+                          method: "AUTO_UPI",
+                          userEmail:
+                            curEmail || regUser?.email || "Guest User",
+                          userPhone:
+                            cleanWhatsapp ||
+                            curPhone ||
+                            regUser?.phone ||
+                            "N/A",
+                          userPassword:
+                            curPassword || regUser?.password || "N/A",
+                          userName:
+                            userProfile.name ||
+                            regUser?.name ||
+                            curEmail?.split("@")[0] ||
+                            "User",
+                          userAvatar:
+                            userProfile.avatar || regUser?.avatar || "",
+                          userJoinDate:
+                            regUser?.joinDate ||
+                            userProfile.joinDate ||
+                            new Date().toLocaleDateString(),
+                          userLastLogin:
+                            regUser?.lastLogin || new Date().toLocaleString(),
+                          userBalance: curWalletBal,
+                          keysBoughtCount: keysCount,
+                          totalPaid: totalPaid,
+                          userAccountKey: accKey,
+                        };
+
+                        setAutoPaymentHistory((prev) => [
+                          newAutoPayment,
+                          ...ensureArray(prev),
+                        ]);
+                        setPaymentHistory((prev) => [
+                          newAutoPayment,
+                          ...ensureArray(prev),
+                        ]);
+                        setCurrentTxId(newTxId);
+
+                        // Open Official Razorpay Checkout Modal
+                        setIsRazorpayModalOpen(true);
+                      }}
+                      className="w-full mt-4 bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500 hover:from-cyan-400 hover:to-blue-400 text-white font-black text-sm sm:text-base py-4 rounded-xl shadow-[0_0_25px_rgba(6,182,212,0.6)] transition-all flex items-center justify-center gap-2 uppercase tracking-wider active:scale-95 cursor-pointer border border-cyan-300/40"
+                    >
+                      <Zap size={18} className="text-yellow-300 fill-yellow-300" />
+                      Payment Request (Open Razorpay Gateway)
+                    </button>
+
+                    {/* Quick Standard Razorpay Modal Trigger Button */}
+                    <button
+                      type="button"
+                      onClick={() => setIsRazorpayModalOpen(true)}
+                      className="w-full mt-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs sm:text-sm py-3 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all flex items-center justify-center gap-2 uppercase tracking-wider active:scale-95 cursor-pointer border border-emerald-400/40"
+                    >
+                      <CreditCard size={16} />
+                      ⚡ Instant Razorpay Standard Checkout (Card/UPI/NetBanking)
+                    </button>
+
+                    {/* DIRECT SCAN & PAY QR CODE SECTION (AS REQUESTED) */}
+                    <div className="w-full my-4 p-4 rounded-2xl bg-[#05080f]/90 border border-cyan-400/40 shadow-[0_0_25px_rgba(6,182,212,0.2)] flex flex-col items-center text-center">
+                      <div className="flex items-center gap-2 mb-2">
+                        <QrCode size={18} className="text-cyan-400" />
+                        <h3 className="text-sm sm:text-base font-black text-white uppercase tracking-wider">
+                          या सीधे स्कैन करके पेमेंट करें:
+                        </h3>
+                      </div>
+
+                      {/* QR Code Photo / Dynamic QR */}
+                      <div className="relative p-2 bg-white rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.4)] my-2">
+                        <img
+                          src={
+                            autoAmount && Number(autoAmount) > 0
+                              ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(
+                                  `upi://pay?pa=${paymentSettings.upiId || "yourname@paytm"}&pn=LordPremPayment&am=${autoAmount}&cu=INR`,
+                                )}`
+                              : paymentSettings.qrCode ||
+                                `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(
+                                  `upi://pay?pa=${paymentSettings.upiId || "yourname@paytm"}&pn=LordPremPayment&cu=INR`,
+                                )}`
+                          }
+                          alt="Payment QR Code"
+                          className="w-[180px] h-[180px] sm:w-[200px] sm:h-[200px] object-contain rounded-lg"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src =
+                              `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(
+                                `upi://pay?pa=${paymentSettings.upiId || "yourname@paytm"}&pn=LordPremPayment&cu=INR`,
+                              )}`;
+                          }}
+                        />
+                      </div>
+
+                      {autoAmount && Number(autoAmount) > 0 && (
+                        <span className="text-xs font-black text-cyan-300 mb-1">
+                          Amount: ₹{autoAmount} (Auto Configured)
+                        </span>
+                      )}
+
+                      {/* UPI ID display with Copy button */}
+                      <div className="flex items-center justify-center gap-2 mt-2 bg-black/60 px-3 py-1.5 rounded-xl border border-white/10 max-w-full">
+                        <p className="text-xs text-gray-300 font-mono truncate">
+                          UPI ID: <strong className="text-yellow-400 select-all font-bold">{paymentSettings.upiId || "yourname@paytm"}</strong>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(paymentSettings.upiId || "yourname@paytm");
+                            alert(`✅ UPI ID Copied: ${paymentSettings.upiId || "yourname@paytm"}`);
+                          }}
+                          className="p-1 text-cyan-300 hover:text-white transition-colors cursor-pointer shrink-0"
+                          title="Copy UPI ID"
+                        >
+                          <Copy size={13} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Razorpay Gateway Embedded Integration */}
+                    <div className="pt-2">
+                      <div className="flex items-center gap-2 my-2">
+                        <div className="flex-1 h-px bg-white/10"></div>
+                        <span className="text-[10px] text-gray-400 uppercase tracking-widest font-black">
+                          OR PAY DIRECTLY VIA RAZORPAY
+                        </span>
+                        <div className="flex-1 h-px bg-white/10"></div>
+                      </div>
+
+                      <div className="bg-[#05080f]/90 border border-cyan-400/20 rounded-2xl p-4 flex flex-col items-center gap-2">
+                        <span className="text-[11px] text-cyan-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <CreditCard size={14} /> Official Razorpay Payment Gateway
+                        </span>
+                        <RazorpayButton
+                          amount={autoAmount}
+                          onClick={() => setIsRazorpayModalOpen(true)}
+                        />
+                        <span className="text-[10px] text-gray-400 font-mono text-center">
+                          🔒 Secure in-app checkout • 0% redirect • Instant wallet credit
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* PAYMENT HISTORY */}
               <div className="mt-4 pb-10">
@@ -4450,7 +5435,7 @@ export default function App() {
 
                     if (userPaymentHistory.length === 0) {
                       return (
-                        <div className="text-center text-gray-500 text-xs py-6 bg-black/40 backdrop-blur-md rounded-xl border border-white/5">
+                        <div className="text-center text-gray-500 text-xs py-6 bg-transparent  rounded-xl border border-white/5">
                           No payment history for this account yet.
                         </div>
                       );
@@ -4462,7 +5447,7 @@ export default function App() {
                       return (
                         <div
                           key={`payhist-${history.id}-${idx}`}
-                          className={`border-l-[4px] ${isSuccess ? "border-green-500 bg-green-950/30 border-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.15)]" : isRejected ? "border-red-500 bg-red-950/20 border-red-500/30" : "border-yellow-500 bg-black/20 backdrop-blur-md border-fuchsia-500/20"} rounded-r-xl rounded-l-sm p-3 relative overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.5)] `}
+                          className={`border-l-[4px] ${isSuccess ? "border-green-500 bg-green-950/30 border-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.15)]" : isRejected ? "border-red-500 bg-red-950/20 border-red-500/30" : "border-yellow-500 bg-transparent  border-fuchsia-500/20"} rounded-r-xl rounded-l-sm p-3 relative overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.5)] `}
                         >
                           <div className="absolute -right-4 -bottom-4 opacity-[0.03]">
                             <Zap size={80} className="fill-fuchsia-500" />
@@ -4529,7 +5514,7 @@ export default function App() {
           )}
 
           {currentView === "spinWin" && (
-            <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <div className="flex items-center gap-3">
                 <h2 className="text-2xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
                   DAILY{" "}
@@ -4539,7 +5524,7 @@ export default function App() {
                 </h2>
               </div>
 
-              <div className="bg-black/20 backdrop-blur-md border border-purple-500/50 rounded-[24px] p-4 sm:p-5 shadow-[0_0_40px_rgba(168,85,247,0.4)]  relative overflow-hidden flex flex-col items-center w-[94%] mx-auto mt-2">
+              <div className="bg-transparent  border border-purple-500/50 rounded-[24px] p-4 sm:p-5 shadow-[0_0_40px_rgba(168,85,247,0.4)]  relative overflow-hidden flex flex-col items-center w-[94%] mx-auto mt-2">
                 <div className="text-center mb-6 relative z-10">
                   <h3 className="text-xl font-bold text-cyan-400 drop-shadow-[0_0_10px_rgba(0,229,255,0.8)] flex items-center justify-center gap-2">
                     <Gift size={20} /> SPIN & WIN COUPON
@@ -4716,6 +5701,14 @@ export default function App() {
                             setSpinRequests((prev) => [newSpin, ...prev]);
                             setUnreadSpins((prev) => prev + 1);
 
+                            setAppliedCoupon({
+                              code: newCode,
+                              discount: wonAmount,
+                            });
+                            setCouponInputCode(newCode);
+                            setCouponSuccessMsg(
+                              `🎁 Spin Code '${newCode}' auto-added! (-₹${wonAmount})`,
+                            );
                             setWonCouponModal({
                               code: newCode,
                               discount: wonAmount,
@@ -4745,7 +5738,7 @@ export default function App() {
                   if (activeCoupons.length === 0) return null;
 
                   return (
-                    <div className="w-full mt-6 bg-black/50 border border-fuchsia-500/30 rounded-xl p-4">
+                    <div className="w-full mt-6 bg-transparent border border-fuchsia-500/30 rounded-xl p-4">
                       <div className="flex justify-between items-center mb-2">
                         <h4 className="text-fuchsia-400 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
                           <Tag size={14} /> My Active Coupons (
@@ -4790,17 +5783,35 @@ export default function App() {
                                   {remHours}h {remMins}m
                                 </span>
                               </div>
-                              <button
-                                onClick={() => {
-                                  navigator.clipboard.writeText(coupon.code);
-                                  alert(
-                                    `Coupon code '${coupon.code}' copied! Apply it on BUY KEY checkout page.`,
-                                  );
-                                }}
-                                className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold text-[11px] px-2.5 py-1 rounded flex items-center gap-1 shadow-[0_0_10px_rgba(217,70,239,0.5)]"
-                              >
-                                <Copy size={12} /> COPY CODE
-                              </button>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    setAppliedCoupon({
+                                      code: coupon.code,
+                                      discount: coupon.discount,
+                                    });
+                                    setCouponInputCode(coupon.code);
+                                    setCouponSuccessMsg(
+                                      `🎁 Spin Code '${coupon.code}' auto-added! (-₹${coupon.discount})`,
+                                    );
+                                    setCurrentView("home");
+                                  }}
+                                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] px-2.5 py-1 rounded flex items-center gap-1 shadow-md cursor-pointer uppercase tracking-wider"
+                                >
+                                  <ShoppingBag size={12} /> USE IN BUY KEY
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(coupon.code);
+                                    alert(
+                                      `Coupon code '${coupon.code}' copied! Buy Key page par automatically add ho jayega.`,
+                                    );
+                                  }}
+                                  className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold text-[11px] px-2.5 py-1 rounded flex items-center gap-1 shadow-[0_0_10px_rgba(217,70,239,0.5)] cursor-pointer"
+                                >
+                                  <Copy size={12} /> COPY
+                                </button>
+                              </div>
                             </div>
                           );
                         })}
@@ -4825,7 +5836,7 @@ export default function App() {
               const shareText = `🎉 Join using my official referral link and get ₹${referBonusAmount} bonus discount on panels & keys!\n👉 Link: ${finalShareLink}`;
 
               return (
-                <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+                <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
                   <div className="flex items-center gap-3">
                     <h2 className="text-2xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
                       REFER &{" "}
@@ -4835,7 +5846,7 @@ export default function App() {
                     </h2>
                   </div>
 
-                  <div className="bg-black/20 backdrop-blur-md border border-yellow-500/50 rounded-[24px] p-5 sm:p-6 shadow-[0_0_40px_rgba(234,179,8,0.4)]  relative overflow-hidden flex flex-col items-center w-[92%] mx-auto mt-2">
+                  <div className="bg-transparent  border border-yellow-500/50 rounded-[24px] p-5 sm:p-6 shadow-[0_0_40px_rgba(234,179,8,0.4)]  relative overflow-hidden flex flex-col items-center w-[92%] mx-auto mt-2">
                     <div className="text-center mb-5 relative z-10">
                       <h3 className="text-xl font-bold text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)] flex items-center justify-center gap-2">
                         <Gift size={24} className="fill-yellow-500" /> Invite
@@ -4854,11 +5865,11 @@ export default function App() {
                     </div>
 
                     {/* Website Referral Link Box */}
-                    <div className="w-full bg-black/20 backdrop-blur-md border border-yellow-500/40 rounded-xl p-3.5 mb-4 relative z-10">
+                    <div className="w-full bg-transparent  border border-yellow-500/40 rounded-xl p-3.5 mb-4 relative z-10">
                       <span className="text-[10px] font-bold text-yellow-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
                         <Globe size={12} /> Your Official Website Referral Link:
                       </span>
-                      <div className="bg-black/20 backdrop-blur-md border border-white/10 rounded-lg p-2.5 text-yellow-300 overflow-hidden whitespace-nowrap text-ellipsis text-xs font-mono font-bold shadow-inner">
+                      <div className="bg-transparent  border border-white/10 rounded-lg p-2.5 text-yellow-300 overflow-hidden whitespace-nowrap text-ellipsis text-xs font-mono font-bold shadow-inner">
                         {finalShareLink}
                       </div>
                     </div>
@@ -4871,7 +5882,7 @@ export default function App() {
                           setUnreadRefers((prev) => prev + 1);
                           alert("Referral link copied to clipboard!");
                         }}
-                        className="bg-yellow-500 hover:bg-yellow-400 text-black font-black py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(234,179,8,0.4)] transition-all active:scale-95 text-xs uppercase"
+                        className="bg-rainbow-animated border-2 border-white text-black font-black py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(234,179,8,0.4)] transition-all active:scale-95 text-xs uppercase"
                       >
                         <Copy size={16} /> COPY LINK
                       </button>
@@ -4887,7 +5898,7 @@ export default function App() {
                     </div>
 
                     {/* Simulated Referral Test Form for User */}
-                    <div className="w-full bg-black/40 backdrop-blur-md border border-white/10 p-4 rounded-xl mb-6 relative z-10 text-left">
+                    <div className="w-full bg-transparent  border border-white/10 p-4 rounded-xl mb-6 relative z-10 text-left">
                       <span className="text-yellow-400 text-xs font-bold block mb-2">
                         Simulate New User Joining Via Your Link:
                       </span>
@@ -4895,7 +5906,7 @@ export default function App() {
                         type="text"
                         id="referred-user-input"
                         placeholder="Enter referred user's Email / Phone"
-                        className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-lg p-2.5 text-xs font-bold text-white mb-2 focus:outline-none focus:border-yellow-400"
+                        className="w-full bg-transparent  border border-white/20 rounded-lg p-2.5 text-xs font-bold text-white mb-2 focus:outline-none focus:border-yellow-400"
                       />
                       <button
                         onClick={() => {
@@ -4926,7 +5937,7 @@ export default function App() {
                             alert("Please enter referred user info");
                           }
                         }}
-                        className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xs py-2.5 rounded-lg uppercase tracking-wider"
+                        className="w-full bg-rainbow-animated border-2 border-white text-black font-black text-xs py-2.5 rounded-lg uppercase tracking-wider"
                       >
                         Submit Referral To Admin (₹{referBonusAmount} Bonus)
                       </button>
@@ -4970,7 +5981,7 @@ export default function App() {
             })()}
 
           {currentView === "admin" && (
-            <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-2xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
                   ADMIN{" "}
@@ -5013,6 +6024,16 @@ export default function App() {
                     color: "from-cyan-400 to-blue-600",
                     view: "adminPayment",
                     badge: ensureArray(paymentHistory).filter(
+                      (p) => p.status === "PENDING",
+                    ).length,
+                  },
+                  {
+                    title: "Auto Payment History",
+                    icon: Zap,
+                    desc: "Auto UPI orders & full user profiles",
+                    color: "from-amber-400 via-yellow-500 to-orange-500",
+                    view: "adminAutoPayment",
+                    badge: ensureArray(autoPaymentHistory).filter(
                       (p) => p.status === "PENDING",
                     ).length,
                   },
@@ -5108,7 +6129,7 @@ export default function App() {
                     }}
                     className={`relative rounded-xl p-[2px] bg-live-gradient animate-color-shift bg-gradient-to-r ${btn.color} shadow-[0_0_20px_rgba(0,0,0,0.5)] group overflow-hidden`}
                   >
-                    <div className="bg-black/20 backdrop-blur-md rounded-[10px] p-4 flex items-center gap-4  h-full w-full relative z-10 transition-colors group-hover:bg-black/20 backdrop-blur-md ">
+                    <div className="bg-transparent  rounded-[10px] p-4 flex items-center gap-4  h-full w-full relative z-10 transition-colors group-hover:bg-transparent  ">
                       <div
                         className={`p-3 rounded-lg bg-gradient-to-br ${btn.color} shadow-inner`}
                       >
@@ -5136,29 +6157,29 @@ export default function App() {
                 ))}
 
                 {/* Live Notifications Box */}
-                <div className="mt-2 bg-black/20 backdrop-blur-md border border-fuchsia-500/30 rounded-xl p-4 shadow-[0_0_30px_rgba(217,70,239,0.2)]">
+                <div className="mt-2 bg-transparent  border border-fuchsia-500/30 rounded-xl p-4 shadow-[0_0_30px_rgba(217,70,239,0.2)]">
                   <h3 className="text-white font-bold mb-3 flex items-center gap-2">
                     <Zap size={16} className="text-fuchsia-500 animate-pulse" />
                     Live Notifications
                   </h3>
                   <div className="flex flex-col gap-2">
-                    <div className="bg-white/5 border border-white/10 rounded-lg p-2.5 text-xs text-gray-300 shadow-inner flex justify-between items-center">
+                    <div className="bg-transparent border border-white/10 rounded-lg p-2.5 text-xs text-gray-300 shadow-inner flex justify-between items-center">
                       <span>
-                        <span className="text-cyan-400 font-bold">User99</span>{" "}
+                        <span className="text-transparent bg-clip-text bg-rainbow-animated font-black drop-shadow-[0_0_10px_#fff]">User99</span>{" "}
                         bought 1 Week Key.
                       </span>
                       <span className="text-[10px] text-gray-500">
                         Just now
                       </span>
                     </div>
-                    <div className="bg-white/5 border border-white/10 rounded-lg p-2.5 text-xs text-gray-300 shadow-inner flex justify-between items-center">
+                    <div className="bg-transparent border border-white/10 rounded-lg p-2.5 text-xs text-gray-300 shadow-inner flex justify-between items-center">
                       <span>
                         <span className="text-green-400 font-bold">Prem</span>{" "}
                         requested fund ₹500.
                       </span>
                       <span className="text-[10px] text-gray-500">2m ago</span>
                     </div>
-                    <div className="bg-white/5 border border-white/10 rounded-lg p-2.5 text-xs text-gray-300 shadow-inner flex justify-between items-center">
+                    <div className="bg-transparent border border-white/10 rounded-lg p-2.5 text-xs text-gray-300 shadow-inner flex justify-between items-center">
                       <span>
                         <span className="text-purple-400 font-bold">Ali</span>{" "}
                         won ₹50 in Spin.
@@ -5172,11 +6193,11 @@ export default function App() {
           )}
 
           {currentView === "adminUserHistory" && (
-            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <div className="flex items-center gap-3 mb-2">
                 <button
                   onClick={() => setCurrentView("admin")}
-                  className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors "
+                  className="p-2 bg-transparent hover:bg-transparent rounded-full transition-colors "
                 >
                   <ArrowLeft size={20} className="text-white" />
                 </button>
@@ -5230,7 +6251,7 @@ export default function App() {
                   const displayName =
                     user.name ||
                     (user.email
-                      ? user.email.split("@")[0]
+                      ? user.email?.split("@")[0]
                       : user.phone || "User");
                   const avatarUrl =
                     user.avatar ||
@@ -5239,7 +6260,7 @@ export default function App() {
                   return (
                     <div
                       key={`reguser-${user.email || user.phone || idx}-${idx}`}
-                      className="bg-black/20 backdrop-blur-md border-l-4 border-cyan-400 rounded-r-xl rounded-l-sm p-4 relative overflow-hidden shadow-[0_4px_25px_rgba(0,0,0,0.6)]  flex flex-col gap-3 text-left"
+                      className="bg-transparent  border-l-4 border-cyan-400 rounded-r-xl rounded-l-sm p-4 relative overflow-hidden shadow-[0_4px_25px_rgba(0,0,0,0.6)]  flex flex-col gap-3 text-left"
                     >
                       <div className="flex justify-between items-start gap-2">
                         <div className="flex items-center gap-3">
@@ -5286,7 +6307,7 @@ export default function App() {
                       </div>
 
                       {/* Stats Bar (Total Paisa & Total Keys) */}
-                      <div className="grid grid-cols-2 gap-2 bg-black/50 p-2.5 rounded-lg border border-white/10 text-xs font-mono">
+                      <div className="grid grid-cols-2 gap-2 bg-transparent p-2.5 rounded-lg border border-white/10 text-xs font-mono">
                         <div className="flex flex-col">
                           <span className="text-gray-400 text-[10px] uppercase font-bold">
                             TOTAL PAISA LAGAYA
@@ -5323,7 +6344,7 @@ export default function App() {
                               activeTab: "info",
                             });
                           }}
-                          className="flex-1 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/40 hover:to-blue-500/40 text-cyan-400 border border-cyan-500/40 rounded-lg py-2.5 text-xs font-black transition-all flex items-center justify-center gap-1.5 uppercase shadow-[0_0_10px_rgba(0,229,255,0.2)] active:scale-95"
+                          className="flex-1 bg-rainbow-animated border-2 border-white hover:from-cyan-500/40 hover:to-blue-500/40 text-cyan-400 border border-cyan-500/40 rounded-lg py-2.5 text-xs font-black transition-all flex items-center justify-center gap-1.5 uppercase shadow-[0_0_10px_rgba(0,229,255,0.2)] active:scale-95"
                         >
                           <Edit size={14} /> EDIT USER & WALLET
                         </button>
@@ -5361,8 +6382,8 @@ export default function App() {
 
               {/* FULL USER EDIT & DETAIL MODAL FOR ADMIN */}
               {editingAdminUser && (
-                <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-md  flex items-center justify-center p-3 overflow-y-auto animate-in fade-in">
-                  <div className="bg-black/20 backdrop-blur-md border border-cyan-500/40 rounded-2xl max-w-md w-full max-h-[92vh] overflow-y-auto p-4 flex flex-col gap-4 shadow-[0_0_50px_rgba(0,229,255,0.3)] relative text-left my-auto">
+                <div className="fixed inset-0 z-[100] bg-transparent   flex items-center justify-center p-3 overflow-y-auto animate-in fade-in">
+                  <div className="bg-transparent  border border-cyan-500/40 rounded-2xl max-w-md w-full max-h-[92vh] overflow-y-auto p-4 flex flex-col gap-4 shadow-[0_0_50px_rgba(0,229,255,0.3)] relative text-left my-auto">
                     {/* Modal Header */}
                     <div className="flex items-center justify-between border-b border-white/10 pb-3">
                       <div className="flex items-center gap-2">
@@ -5374,14 +6395,14 @@ export default function App() {
                       </div>
                       <button
                         onClick={() => setEditingAdminUser(null)}
-                        className="p-1.5 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                        className="p-1.5 bg-transparent hover:bg-transparent rounded-full text-white transition-colors"
                       >
                         <X size={18} />
                       </button>
                     </div>
 
                     {/* User Avatar & Photo URL */}
-                    <div className="flex flex-col items-center gap-2 bg-black/40 backdrop-blur-md p-3 rounded-xl border border-white/10">
+                    <div className="flex flex-col items-center gap-2 bg-transparent  p-3 rounded-xl border border-white/10">
                       <div className="relative group">
                         <img
                           src={editingAdminUser.avatar}
@@ -5398,7 +6419,7 @@ export default function App() {
                       </div>
 
                       <div className="w-full">
-                        <label className="text-cyan-400 font-bold text-[10px] uppercase tracking-wider block mb-1">
+                        <label className="text-transparent bg-clip-text bg-rainbow-animated font-black drop-shadow-[0_0_10px_#fff] text-[10px] uppercase tracking-wider block mb-1">
                           PROFILE PHOTO URL
                         </label>
                         <input
@@ -5411,7 +6432,7 @@ export default function App() {
                             })
                           }
                           placeholder="https://..."
-                          className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+                          className="w-full bg-transparent  border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
                         />
                       </div>
                     </div>
@@ -5419,7 +6440,7 @@ export default function App() {
                     {/* User Name & Info Form */}
                     <div className="flex flex-col gap-3">
                       <div>
-                        <label className="text-cyan-400 font-bold text-[10px] uppercase tracking-wider block mb-1">
+                        <label className="text-transparent bg-clip-text bg-rainbow-animated font-black drop-shadow-[0_0_10px_#fff] text-[10px] uppercase tracking-wider block mb-1">
                           USER NAME
                         </label>
                         <input
@@ -5432,13 +6453,13 @@ export default function App() {
                             })
                           }
                           placeholder="User Full Name"
-                          className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-lg p-2.5 text-xs font-bold text-white focus:outline-none focus:border-cyan-400"
+                          className="w-full bg-transparent  border border-white/20 rounded-lg p-2.5 text-xs font-bold text-white focus:outline-none focus:border-cyan-400"
                         />
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="text-cyan-400 font-bold text-[10px] uppercase tracking-wider block mb-1">
+                          <label className="text-transparent bg-clip-text bg-rainbow-animated font-black drop-shadow-[0_0_10px_#fff] text-[10px] uppercase tracking-wider block mb-1">
                             GMAIL / EMAIL ID
                           </label>
                           <input
@@ -5451,11 +6472,11 @@ export default function App() {
                               })
                             }
                             placeholder="user@gmail.com"
-                            className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+                            className="w-full bg-transparent  border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
                           />
                         </div>
                         <div>
-                          <label className="text-cyan-400 font-bold text-[10px] uppercase tracking-wider block mb-1">
+                          <label className="text-transparent bg-clip-text bg-rainbow-animated font-black drop-shadow-[0_0_10px_#fff] text-[10px] uppercase tracking-wider block mb-1">
                             PHONE NUMBER
                           </label>
                           <input
@@ -5468,13 +6489,13 @@ export default function App() {
                               })
                             }
                             placeholder="Mobile Number"
-                            className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+                            className="w-full bg-transparent  border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="text-cyan-400 font-bold text-[10px] uppercase tracking-wider block mb-1">
+                        <label className="text-transparent bg-clip-text bg-rainbow-animated font-black drop-shadow-[0_0_10px_#fff] text-[10px] uppercase tracking-wider block mb-1">
                           ACCOUNT PASSWORD
                         </label>
                         <div className="relative flex items-center">
@@ -5492,7 +6513,7 @@ export default function App() {
                               })
                             }
                             placeholder="User Password"
-                            className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-lg p-2.5 text-xs font-bold text-yellow-400 pr-10 focus:outline-none focus:border-cyan-400"
+                            className="w-full bg-transparent  border border-white/20 rounded-lg p-2.5 text-xs font-bold text-yellow-400 pr-10 focus:outline-none focus:border-cyan-400"
                           />
                           <button
                             type="button"
@@ -5536,7 +6557,7 @@ export default function App() {
                               balance: Number(e.target.value) || 0,
                             })
                           }
-                          className="w-full bg-black/20 backdrop-blur-md border border-cyan-400/60 rounded-lg p-2 text-lg font-black text-cyan-300 focus:outline-none focus:border-cyan-400"
+                          className="w-full bg-transparent  border border-cyan-400/60 rounded-lg p-2 text-lg font-black text-cyan-300 focus:outline-none focus:border-cyan-400"
                         />
                       </div>
 
@@ -5694,7 +6715,7 @@ export default function App() {
                     {/* Tab Content */}
                     {(!editingAdminUser.activeTab ||
                       editingAdminUser.activeTab === "info") && (
-                      <div className="bg-black/40 backdrop-blur-md p-3 rounded-xl border border-white/10 flex flex-col gap-2 text-xs font-mono">
+                      <div className="bg-transparent  p-3 rounded-xl border border-white/10 flex flex-col gap-2 text-xs font-mono">
                         <div className="flex justify-between">
                           <span className="text-gray-400">Join Date:</span>
                           <span className="text-white font-bold">
@@ -5782,7 +6803,7 @@ export default function App() {
                           return userKeys.map((k, idx) => (
                             <div
                               key={`userkey-${k.id}-${idx}`}
-                              className="bg-black/20 backdrop-blur-md p-2.5 rounded-lg border border-white/10 text-xs flex flex-col gap-1"
+                              className="bg-transparent  p-2.5 rounded-lg border border-white/10 text-xs flex flex-col gap-1"
                             >
                               <div className="flex justify-between font-bold text-white">
                                 <span>{k.panelTitle || "Panel Key"}</span>
@@ -5791,7 +6812,7 @@ export default function App() {
                                 </span>
                               </div>
                               {k.deliveredKey && (
-                                <div className="text-yellow-400 font-mono text-[11px] bg-black/20 backdrop-blur-md p-1 rounded border border-yellow-500/30 select-all">
+                                <div className="text-yellow-400 font-mono text-[11px] bg-transparent  p-1 rounded border border-yellow-500/30 select-all">
                                   🔑 {k.deliveredKey}
                                 </div>
                               )}
@@ -5839,7 +6860,7 @@ export default function App() {
                           return userPay.map((p, idx) => (
                             <div
                               key={`userpay-${p.id}-${idx}`}
-                              className="bg-black/20 backdrop-blur-md p-2.5 rounded-lg border border-white/10 text-xs flex flex-col gap-1"
+                              className="bg-transparent  p-2.5 rounded-lg border border-white/10 text-xs flex flex-col gap-1"
                             >
                               <div className="flex justify-between font-bold">
                                 <span className="text-emerald-400">
@@ -5934,7 +6955,7 @@ export default function App() {
                           );
                           setEditingAdminUser(null);
                         }}
-                        className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black py-3 rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.4)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95"
+                        className="w-full bg-rainbow-animated border-2 border-white hover:from-cyan-400 hover:to-blue-500 text-white font-black py-3 rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.4)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95"
                       >
                         <Save size={16} /> SAVE USER DETAILS & BALANCE
                       </button>
@@ -5973,7 +6994,7 @@ export default function App() {
 
                         <button
                           onClick={() => setEditingAdminUser(null)}
-                          className="flex-1 bg-white/10 hover:bg-white/20 text-gray-300 rounded-lg py-2 text-xs font-bold transition-colors uppercase active:scale-95"
+                          className="flex-1 bg-transparent hover:bg-transparent text-gray-300 rounded-lg py-2 text-xs font-bold transition-colors uppercase active:scale-95"
                         >
                           CANCEL
                         </button>
@@ -5986,20 +7007,35 @@ export default function App() {
           )}
 
           {currentView === "adminPayment" && (
-            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
-              <div className="flex items-center gap-3 mb-2">
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setCurrentView("admin")}
+                    className="p-2 bg-transparent hover:bg-transparent rounded-full transition-colors "
+                  >
+                    <ArrowLeft size={20} className="text-white" />
+                  </button>
+                  <h2 className="text-xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
+                    PAYMENT{" "}
+                    <span className="text-fuchsia-500 drop-shadow-[0_0_15px_rgba(217,70,239,1)]">
+                      FUND REQUESTS
+                    </span>
+                  </h2>
+                </div>
+
                 <button
-                  onClick={() => setCurrentView("admin")}
-                  className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors "
+                  onClick={() => setCurrentView("adminAutoPayment")}
+                  className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black text-xs font-black rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.5)] flex items-center gap-1.5 uppercase tracking-wider transition-all cursor-pointer active:scale-95"
                 >
-                  <ArrowLeft size={20} className="text-white" />
+                  <Zap size={14} className="fill-black" /> Auto UPI History (
+                  {
+                    ensureArray(autoPaymentHistory).filter(
+                      (p) => p.status === "PENDING",
+                    ).length
+                  }
+                  )
                 </button>
-                <h2 className="text-xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
-                  PAYMENT{" "}
-                  <span className="text-fuchsia-500 drop-shadow-[0_0_15px_rgba(217,70,239,1)]">
-                    FUND REQUESTS
-                  </span>
-                </h2>
               </div>
 
               {/* Pending Requests Section */}
@@ -6018,134 +7054,263 @@ export default function App() {
                 {ensureArray(paymentHistory).filter(
                   (p) => p.status === "PENDING",
                 ).length === 0 ? (
-                  <div className="text-center text-gray-400 text-xs py-6 bg-black/20 backdrop-blur-md /60 border border-white/10 rounded-xl">
+                  <div className="text-center text-gray-400 text-xs py-6 bg-transparent  /60 border border-white/10 rounded-xl">
                     No pending payment requests at the moment.
                   </div>
                 ) : (
                   ensureArray(paymentHistory)
                     .filter((p) => p.status === "PENDING")
-                    .map((req, idx) => (
-                      <div
-                        key={`pending-payreq-${req.id}-${idx}`}
-                        className="bg-black/20 backdrop-blur-md border border-fuchsia-500/40 rounded-xl p-4 relative overflow-hidden shadow-[0_4px_25px_rgba(0,0,0,0.6)]  flex flex-col gap-3"
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className="text-gray-400 text-xs font-semibold block">
-                              Requested Fund
-                            </span>
-                            <span className="text-fuchsia-400 font-black text-2xl drop-shadow-[0_0_10px_rgba(217,70,239,0.5)]">
-                              ₹{req.amount}
+                    .map((req, idx) => {
+                      const uKey =
+                        req.userAccountKey ||
+                        getAccountKey(req.userEmail, req.userPhone);
+                      const regUser = ensureArray(registeredUsers).find(
+                        (u) =>
+                          (req.userEmail &&
+                            u.email &&
+                            u.email.toLowerCase() ===
+                              req.userEmail.toLowerCase()) ||
+                          (req.userPhone &&
+                            u.phone &&
+                            u.phone === req.userPhone) ||
+                          (req.whatsapp && u.whatsapp === req.whatsapp),
+                      );
+                      const userAvatar =
+                        req.userAvatar ||
+                        regUser?.avatar ||
+                        "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop";
+                      const isAuto =
+                        req.method === "AUTO_UPI" ||
+                        (req.utr && req.utr.startsWith("AUTO-"));
+
+                      return (
+                        <div
+                          key={`pending-payreq-${req.id}-${idx}`}
+                          className={`bg-transparent border ${isAuto ? "border-cyan-400/60 shadow-[0_4px_25px_rgba(6,182,212,0.3)]" : "border-fuchsia-500/40 shadow-[0_4px_25px_rgba(0,0,0,0.6)]"} rounded-xl p-4 relative overflow-hidden flex flex-col gap-3`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-3">
+                              <img
+                                src={userAvatar}
+                                alt="User Avatar"
+                                className="w-12 h-12 rounded-full border-2 border-cyan-400/80 object-cover shadow-[0_0_12px_rgba(0,229,255,0.4)] shrink-0"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src =
+                                    "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop";
+                                }}
+                              />
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-white font-black text-base">
+                                    {req.userName ||
+                                      regUser?.name ||
+                                      req.userEmail?.split("@")[0] ||
+                                      "User"}
+                                  </span>
+                                  {isAuto && (
+                                    <span className="text-[10px] font-black px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 flex items-center gap-1 uppercase">
+                                      <Zap size={10} /> Auto UPI
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-fuchsia-400 font-black text-2xl drop-shadow-[0_0_10px_rgba(217,70,239,0.5)]">
+                                  ₹{req.amount}
+                                </span>
+                              </div>
+                            </div>
+
+                            <span className="text-[10px] font-black px-2.5 py-1 rounded-md bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 flex items-center gap-1 uppercase">
+                              <Hourglass size={10} className="animate-spin" />{" "}
+                              PENDING
                             </span>
                           </div>
-                          <span className="text-[10px] font-black px-2.5 py-1 rounded-md bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 flex items-center gap-1 uppercase">
-                            <Hourglass size={10} className="animate-spin" />{" "}
-                            PENDING
-                          </span>
+
+                          {/* USER ACCOUNT & PAYMENT DETAILS */}
+                          <div className="bg-transparent  p-3 rounded-lg border border-white/10 text-xs font-mono flex flex-col gap-1.5">
+                            <div className="text-transparent bg-clip-text bg-rainbow-animated font-black drop-shadow-[0_0_10px_#fff] border-b border-white/10 pb-1 uppercase tracking-wider flex items-center gap-1">
+                              <User size={12} /> Account & Purchase Details:
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">📧 Email:</span>
+                              <span className="text-white font-bold">
+                                {req.userEmail || regUser?.email || "N/A"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">📱 Mobile:</span>
+                              <span className="text-white font-bold">
+                                {req.userPhone || regUser?.phone || "N/A"}
+                              </span>
+                            </div>
+                            {(req.whatsapp || regUser?.whatsapp) && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-green-400">
+                                  💬 WhatsApp:
+                                </span>
+                                <a
+                                  href={`https://wa.me/91${(req.whatsapp || regUser?.whatsapp || "").replace(/\D/g, "")}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-green-300 font-bold hover:underline flex items-center gap-1"
+                                >
+                                  {req.whatsapp || regUser?.whatsapp}{" "}
+                                  <ExternalLink size={10} />
+                                </a>
+                              </div>
+                            )}
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">
+                                🔑 Password:
+                              </span>
+                              <span className="text-yellow-400 font-bold">
+                                {req.userPassword ||
+                                  regUser?.password ||
+                                  "N/A"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">
+                                💼 Current Balance:
+                              </span>
+                              <span className="text-cyan-400 font-bold">
+                                ₹
+                                {req.userBalance ??
+                                  userWallets[uKey] ??
+                                  userBalance ??
+                                  0}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">
+                                🔑 Total Keys Bought:
+                              </span>
+                              <span className="text-purple-300 font-bold">
+                                {req.keysBoughtCount ??
+                                  ensureArray(keyRequests).filter(
+                                    (r) =>
+                                      (r.userEmail &&
+                                        req.userEmail &&
+                                        r.userEmail.toLowerCase() ===
+                                          req.userEmail.toLowerCase()) ||
+                                      (r.userPhone &&
+                                        req.userPhone &&
+                                        r.userPhone === req.userPhone),
+                                  ).length}{" "}
+                                Keys
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">📅 Joined:</span>
+                              <span className="text-gray-300">
+                                {req.userJoinDate ||
+                                  regUser?.joinDate ||
+                                  "N/A"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">
+                                🕒 Last Login:
+                              </span>
+                              <span className="text-gray-300">
+                                {req.userLastLogin ||
+                                  regUser?.lastLogin ||
+                                  "N/A"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between pt-1 border-t border-white/10">
+                              <span className="text-gray-400">
+                                🧾 UTR / Txn ID:
+                              </span>
+                              <span className="text-cyan-300 font-bold select-all">
+                                {req.utr}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-[10px] text-gray-500">
+                              <span>Date & Time:</span>
+                              <span>{req.date}</span>
+                            </div>
+                          </div>
+
+                          {/* ACTION BUTTONS */}
+                          <div className="flex items-center gap-2 mt-1">
+                            <button
+                              onClick={() => {
+                                setPaymentHistory((prev) =>
+                                  prev.map((p) =>
+                                    p.id === req.id
+                                      ? { ...p, status: "REJECTED" }
+                                      : p,
+                                  ),
+                                );
+                                setAutoPaymentHistory((prev) =>
+                                  prev.map((p) =>
+                                    p.id === req.id
+                                      ? { ...p, status: "REJECTED" }
+                                      : p,
+                                  ),
+                                );
+                                alert("Payment rejected!");
+                              }}
+                              className="flex-1 bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/40 rounded-lg py-2 text-xs font-black transition-all uppercase tracking-wider cursor-pointer"
+                            >
+                              REJECT
+                            </button>
+                            <button
+                              onClick={() => {
+                                const targetKey =
+                                  req.userAccountKey ||
+                                  getAccountKey(req.userEmail, req.userPhone);
+
+                                // 1. Update status
+                                setPaymentHistory((prev) =>
+                                  prev.map((p) =>
+                                    p.id === req.id
+                                      ? { ...p, status: "SUCCESS" }
+                                      : p,
+                                  ),
+                                );
+                                setAutoPaymentHistory((prev) =>
+                                  prev.map((p) =>
+                                    p.id === req.id
+                                      ? { ...p, status: "SUCCESS" }
+                                      : p,
+                                  ),
+                                );
+
+                                // 2. Add funds to userWallets
+                                setUserWallets((prev) => {
+                                  const cur = prev[targetKey] ?? 0;
+                                  return {
+                                    ...prev,
+                                    [targetKey]: cur + req.amount,
+                                  };
+                                });
+
+                                // 3. Update current userBalance if matching active user
+                                const activeKey = getAccountKey(
+                                  userProfile.email,
+                                  userProfile.phone,
+                                );
+                                if (
+                                  !userProfile.isLoggedIn ||
+                                  activeKey === targetKey ||
+                                  targetKey === "guest"
+                                ) {
+                                  setUserBalance((prev) => prev + req.amount);
+                                }
+
+                                alert(
+                                  `Payment ₹${req.amount} ACCEPTED! Added to wallet of ${req.userName || req.userEmail || req.userPhone || "User"}.`,
+                                );
+                              }}
+                              className="flex-1 bg-green-500 hover:bg-green-400 text-black shadow-[0_0_15px_rgba(34,197,94,0.5)] rounded-lg py-2 text-xs font-black transition-all uppercase tracking-wider cursor-pointer"
+                            >
+                              ACCEPT & ADD ₹{req.amount}
+                            </button>
+                          </div>
                         </div>
-
-                        {/* USER ACCOUNT & PAYMENT DETAILS */}
-                        <div className="bg-black/20 backdrop-blur-md p-3 rounded-lg border border-white/10 text-xs font-mono flex flex-col gap-1.5">
-                          <div className="text-cyan-400 font-bold border-b border-white/10 pb-1 uppercase tracking-wider flex items-center gap-1">
-                            <User size={12} /> Account Details:
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-400">📧 Email:</span>
-                            <span className="text-white font-bold">
-                              {req.userEmail || "N/A"}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-400">📱 Mobile:</span>
-                            <span className="text-white font-bold">
-                              {req.userPhone || "N/A"}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-400">🔑 Password:</span>
-                            <span className="text-yellow-400 font-bold">
-                              {req.userPassword || "N/A"}
-                            </span>
-                          </div>
-                          <div className="flex justify-between pt-1 border-t border-white/10">
-                            <span className="text-gray-400">
-                              🧾 UTR / Txn ID:
-                            </span>
-                            <span className="text-cyan-300 font-bold select-all">
-                              {req.utr}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-[10px] text-gray-500">
-                            <span>Date & Time:</span>
-                            <span>{req.date}</span>
-                          </div>
-                        </div>
-
-                        {/* ACTION BUTTONS */}
-                        <div className="flex items-center gap-2 mt-1">
-                          <button
-                            onClick={() => {
-                              setPaymentHistory((prev) =>
-                                prev.map((p) =>
-                                  p.id === req.id
-                                    ? { ...p, status: "REJECTED" }
-                                    : p,
-                                ),
-                              );
-                              alert("Payment rejected!");
-                            }}
-                            className="flex-1 bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/40 rounded-lg py-2 text-xs font-black transition-all uppercase tracking-wider"
-                          >
-                            REJECT
-                          </button>
-                          <button
-                            onClick={() => {
-                              const targetKey =
-                                req.userAccountKey ||
-                                getAccountKey(req.userEmail, req.userPhone);
-
-                              // 1. Update status
-                              setPaymentHistory((prev) =>
-                                prev.map((p) =>
-                                  p.id === req.id
-                                    ? { ...p, status: "SUCCESS" }
-                                    : p,
-                                ),
-                              );
-
-                              // 2. Add funds to userWallets
-                              setUserWallets((prev) => {
-                                const cur = prev[targetKey] ?? 0;
-                                return {
-                                  ...prev,
-                                  [targetKey]: cur + req.amount,
-                                };
-                              });
-
-                              // 3. Update current userBalance if matching active user
-                              const activeKey = getAccountKey(
-                                userProfile.email,
-                                userProfile.phone,
-                              );
-                              if (
-                                !userProfile.isLoggedIn ||
-                                activeKey === targetKey ||
-                                targetKey === "guest"
-                              ) {
-                                setUserBalance((prev) => prev + req.amount);
-                              }
-
-                              alert(
-                                `Payment ₹${req.amount} ACCEPTED! Added to wallet of ${req.userEmail || req.userPhone || "User"}.`,
-                              );
-                            }}
-                            className="flex-1 bg-green-500 hover:bg-green-400 text-black shadow-[0_0_15px_rgba(34,197,94,0.5)] rounded-lg py-2 text-xs font-black transition-all uppercase tracking-wider"
-                          >
-                            ACCEPT & ADD ₹{req.amount}
-                          </button>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                 )}
               </div>
 
@@ -6167,19 +7332,22 @@ export default function App() {
                     .map((req, idx) => (
                       <div
                         key={`processed-payreq-${req.id}-${idx}`}
-                        className="bg-black/50 border border-white/10 rounded-xl p-3 flex justify-between items-center text-xs"
+                        className="bg-transparent border border-white/10 rounded-xl p-3 flex justify-between items-center text-xs"
                       >
                         <div className="flex flex-col gap-0.5">
                           <span className="text-white font-bold">
                             ₹{req.amount} -{" "}
-                            {req.userEmail || req.userPhone || "User"}
+                            {req.userName ||
+                              req.userEmail ||
+                              req.userPhone ||
+                              "User"}
                           </span>
                           <span className="text-gray-400 text-[10px]">
-                            UTR: {req.utr}
+                            UTR: {req.utr} | Date: {req.date}
                           </span>
                         </div>
                         <span
-                          className={`text-[10px] font-black px-2 py-0.5 rounded border ${req.status === "SUCCESS" ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-red-500/20 text-red-400 border-red-500/30"}`}
+                          className={`text-[10px] font-black px-2 py-0.5 rounded border ${req.status === "SUCCESS" || req.status === "APPROVED" ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-red-500/20 text-red-400 border-red-500/30"}`}
                         >
                           {req.status}
                         </span>
@@ -6190,12 +7358,540 @@ export default function App() {
             </div>
           )}
 
+          {/* DEDICATED AUTO PAYMENT HISTORY VIEW */}
+          {currentView === "adminAutoPayment" && (
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setCurrentView("admin")}
+                    className="p-2 bg-transparent hover:bg-transparent rounded-full transition-colors"
+                  >
+                    <ArrowLeft size={20} className="text-white" />
+                  </button>
+                  <h2 className="text-xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
+                    AUTO PAYMENT{" "}
+                    <span className="text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,1)]">
+                      HISTORY
+                    </span>
+                  </h2>
+                </div>
+
+                <button
+                  onClick={() => setCurrentView("adminPayment")}
+                  className="px-3 py-1.5 bg-fuchsia-500/20 hover:bg-fuchsia-500/30 text-fuchsia-300 border border-fuchsia-500/40 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all uppercase cursor-pointer"
+                >
+                  <Wallet size={14} /> Payment Fund
+                </button>
+              </div>
+
+              {/* STATS OVERVIEW CARDS */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-transparent border border-cyan-400/30 rounded-xl p-3 flex flex-col gap-1">
+                  <span className="text-[10px] text-cyan-300 font-bold uppercase tracking-wider">
+                    Total Auto Orders
+                  </span>
+                  <span className="text-white font-black text-xl">
+                    {ensureArray(autoPaymentHistory).length}
+                  </span>
+                </div>
+
+                <div className="bg-transparent border border-yellow-400/30 rounded-xl p-3 flex flex-col gap-1">
+                  <span className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                    <Hourglass size={10} className="animate-spin" /> Pending
+                  </span>
+                  <span className="text-yellow-400 font-black text-xl">
+                    {
+                      ensureArray(autoPaymentHistory).filter(
+                        (p) => p.status === "PENDING",
+                      ).length
+                    }
+                  </span>
+                </div>
+
+                <div className="bg-transparent border border-green-400/30 rounded-xl p-3 flex flex-col gap-1">
+                  <span className="text-[10px] text-green-400 font-bold uppercase tracking-wider">
+                    Approved Total
+                  </span>
+                  <span className="text-green-400 font-black text-xl">
+                    ₹
+                    {ensureArray(autoPaymentHistory)
+                      .filter(
+                        (p) =>
+                          p.status === "SUCCESS" || p.status === "APPROVED",
+                      )
+                      .reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0)}
+                  </span>
+                </div>
+
+                <div className="bg-transparent border border-red-400/30 rounded-xl p-3 flex flex-col gap-1">
+                  <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider">
+                    Rejected
+                  </span>
+                  <span className="text-red-400 font-black text-xl">
+                    {
+                      ensureArray(autoPaymentHistory).filter(
+                        (p) => p.status === "REJECTED",
+                      ).length
+                    }
+                  </span>
+                </div>
+              </div>
+
+              {/* SEARCH & FILTER CONTROLS */}
+              <div className="flex flex-col sm:flex-row gap-2 items-center justify-between mt-2">
+                <div className="relative w-full sm:w-64">
+                  <Search
+                    size={14}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search email, phone, TxID..."
+                    value={autoPaySearch}
+                    onChange={(e) => setAutoPaySearch(e.target.value)}
+                    className="w-full bg-[#05080f] border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-yellow-400"
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 w-full sm:w-auto">
+                  {(["ALL", "PENDING", "SUCCESS", "REJECTED"] as const).map(
+                    (filterKey) => (
+                      <button
+                        key={`autopay-filter-${filterKey}`}
+                        onClick={() => setAutoPayFilter(filterKey)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all cursor-pointer ${
+                          autoPayFilter === filterKey
+                            ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-black shadow-[0_0_10px_rgba(250,204,21,0.5)]"
+                            : "bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10"
+                        }`}
+                      >
+                        {filterKey === "SUCCESS" ? "APPROVED" : filterKey}
+                      </button>
+                    ),
+                  )}
+                </div>
+              </div>
+
+              {/* AUTO PAYMENT REQUESTS LIST */}
+              <div className="flex flex-col gap-3.5 mt-2">
+                {(() => {
+                  const filtered = ensureArray(autoPaymentHistory).filter(
+                    (item) => {
+                      if (autoPayFilter !== "ALL") {
+                        if (
+                          autoPayFilter === "SUCCESS" &&
+                          item.status !== "SUCCESS" &&
+                          item.status !== "APPROVED"
+                        ) {
+                          return false;
+                        }
+                        if (
+                          autoPayFilter !== "SUCCESS" &&
+                          item.status !== autoPayFilter
+                        ) {
+                          return false;
+                        }
+                      }
+                      if (autoPaySearch.trim()) {
+                        const q = autoPaySearch.toLowerCase();
+                        const matchEmail = (item.userEmail || "")
+                          .toLowerCase()
+                          .includes(q);
+                        const matchPhone = (item.userPhone || "")
+                          .toLowerCase()
+                          .includes(q);
+                        const matchWhatsapp = (item.whatsapp || "")
+                          .toLowerCase()
+                          .includes(q);
+                        const matchUtr = (item.utr || "")
+                          .toLowerCase()
+                          .includes(q);
+                        const matchName = (item.userName || "")
+                          .toLowerCase()
+                          .includes(q);
+                        return (
+                          matchEmail ||
+                          matchPhone ||
+                          matchWhatsapp ||
+                          matchUtr ||
+                          matchName
+                        );
+                      }
+                      return true;
+                    },
+                  );
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="text-center text-gray-400 text-xs py-10 bg-transparent border border-white/10 rounded-2xl flex flex-col items-center gap-2">
+                        <Zap size={24} className="text-gray-500" />
+                        <span>No Auto UPI payment records found.</span>
+                      </div>
+                    );
+                  }
+
+                  return filtered.map((req, idx) => {
+                    const uKey =
+                      req.userAccountKey ||
+                      getAccountKey(req.userEmail, req.userPhone);
+                    const regUser = ensureArray(registeredUsers).find(
+                      (u) =>
+                        (req.userEmail &&
+                          u.email &&
+                          u.email.toLowerCase() ===
+                            req.userEmail.toLowerCase()) ||
+                        (req.userPhone &&
+                          u.phone &&
+                          u.phone === req.userPhone) ||
+                        (req.whatsapp && u.whatsapp === req.whatsapp),
+                    );
+
+                    const userAvatar =
+                      req.userAvatar ||
+                      regUser?.avatar ||
+                      "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop";
+
+                    const curBal =
+                      req.userBalance ??
+                      userWallets[uKey] ??
+                      userBalance ??
+                      0;
+
+                    const userKeys = ensureArray(keyRequests).filter(
+                      (r) =>
+                        (req.userEmail &&
+                          r.userEmail &&
+                          r.userEmail.toLowerCase() ===
+                            req.userEmail.toLowerCase()) ||
+                        (req.userPhone &&
+                          r.userPhone &&
+                          r.userPhone === req.userPhone) ||
+                        (req.userEmail && r.user === req.userEmail) ||
+                        (req.userPhone && r.user === req.userPhone),
+                    );
+                    const keysDeliveredCount =
+                      req.keysBoughtCount ??
+                      userKeys.filter(
+                        (r) =>
+                          r.status === "APPROVED" || r.status === "DELIVERED",
+                      ).length;
+
+                    const totalSpent =
+                      req.totalPaid ??
+                      ensureArray(paymentHistory)
+                        .filter(
+                          (p) =>
+                            ((p.userEmail &&
+                              req.userEmail &&
+                              p.userEmail.toLowerCase() ===
+                                req.userEmail.toLowerCase()) ||
+                              (p.userPhone &&
+                                req.userPhone &&
+                                p.userPhone === req.userPhone)) &&
+                            (p.status === "SUCCESS" || p.status === "APPROVED"),
+                        )
+                        .reduce(
+                          (acc, curr) => acc + (Number(curr.amount) || 0),
+                          0,
+                        );
+
+                    const cleanPhone = (
+                      req.whatsapp ||
+                      req.userPhone ||
+                      regUser?.phone ||
+                      ""
+                    ).replace(/\D/g, "");
+
+                    return (
+                      <div
+                        key={`autopay-card-${req.id}-${idx}`}
+                        className="bg-transparent border border-yellow-400/40 rounded-2xl p-4 sm:p-5 shadow-[0_4px_30px_rgba(234,179,8,0.15)] flex flex-col gap-4 text-left transition-all relative overflow-hidden"
+                      >
+                        {/* CARD HEADER */}
+                        <div className="flex flex-wrap justify-between items-start gap-2 border-b border-white/10 pb-3">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={userAvatar}
+                              alt="Profile"
+                              className="w-14 h-14 rounded-full border-2 border-yellow-400 object-cover shadow-[0_0_15px_rgba(250,204,21,0.4)] shrink-0"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src =
+                                  "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop";
+                              }}
+                            />
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <span className="text-white font-black text-lg">
+                                  {req.userName ||
+                                    regUser?.name ||
+                                    req.userEmail?.split("@")[0] ||
+                                    "User"}
+                                </span>
+                                <span className="text-[10px] font-black px-2 py-0.5 rounded bg-yellow-400/20 text-yellow-300 border border-yellow-400/40 uppercase">
+                                  ⚡ AUTO UPI
+                                </span>
+                              </div>
+                              <span className="text-cyan-300 text-xs font-mono">
+                                📧 {req.userEmail || regUser?.email || "N/A"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-end gap-1">
+                            <span
+                              className={`text-xs font-black px-3 py-1 rounded-lg border uppercase flex items-center gap-1 ${
+                                req.status === "PENDING"
+                                  ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/40"
+                                  : req.status === "SUCCESS" ||
+                                      req.status === "APPROVED"
+                                    ? "bg-green-500/20 text-green-400 border-green-500/40"
+                                    : "bg-red-500/20 text-red-400 border-red-500/40"
+                              }`}
+                            >
+                              {req.status === "PENDING" && (
+                                <Hourglass size={12} className="animate-spin" />
+                              )}
+                              {req.status === "SUCCESS" ||
+                              req.status === "APPROVED" ? (
+                                <CheckCircle size={12} />
+                              ) : null}
+                              {req.status}
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-mono">
+                              TxID: {req.utr}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* FULL USER PROFILE & PURCHASE DOSSIER */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-black/40 border border-white/10 rounded-xl p-3.5 text-xs font-mono">
+                          <div className="flex flex-col gap-1.5">
+                            <div className="text-yellow-400 font-bold uppercase tracking-wider text-[11px] pb-1 border-b border-white/10 flex items-center gap-1">
+                              <User size={12} /> User Credentials & Contacts:
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">📱 Mobile:</span>
+                              <span className="text-white font-bold">
+                                {req.userPhone || regUser?.phone || "N/A"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-green-400 font-bold">
+                                💬 WhatsApp:
+                              </span>
+                              <a
+                                href={`https://wa.me/91${cleanPhone}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-green-300 font-bold hover:underline flex items-center gap-1 bg-green-500/10 px-2 py-0.5 rounded border border-green-500/30"
+                              >
+                                {req.whatsapp ||
+                                  regUser?.whatsapp ||
+                                  req.userPhone}{" "}
+                                <ExternalLink size={10} />
+                              </a>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">🔑 Password:</span>
+                              <span className="text-yellow-300 font-bold select-all bg-yellow-500/10 px-1.5 rounded">
+                                {req.userPassword ||
+                                  regUser?.password ||
+                                  "N/A"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">📅 Joined:</span>
+                              <span className="text-gray-300">
+                                {req.userJoinDate ||
+                                  regUser?.joinDate ||
+                                  "N/A"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">
+                                🕒 Last Login:
+                              </span>
+                              <span className="text-gray-300">
+                                {req.userLastLogin ||
+                                  regUser?.lastLogin ||
+                                  "N/A"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1.5">
+                            <div className="text-cyan-400 font-bold uppercase tracking-wider text-[11px] pb-1 border-b border-white/10 flex items-center gap-1">
+                              <Wallet size={12} /> Wallet & Spending Dossier:
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">
+                                💰 Requested Fund:
+                              </span>
+                              <span className="text-fuchsia-400 font-black text-sm">
+                                ₹{req.amount}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">
+                                💼 Current Balance:
+                              </span>
+                              <span className="text-cyan-400 font-bold">
+                                ₹{curBal}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">
+                                💳 Total Lifetime Added:
+                              </span>
+                              <span className="text-green-400 font-bold">
+                                ₹{totalSpent}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">
+                                🔑 Total Keys Purchased:
+                              </span>
+                              <span className="text-purple-300 font-bold">
+                                {keysDeliveredCount} Keys
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-[10px] text-gray-500 pt-1 border-t border-white/10">
+                              <span>Order Time:</span>
+                              <span>{req.date}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ACTION CONTROLS */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {req.status === "PENDING" && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  const targetKey =
+                                    req.userAccountKey ||
+                                    getAccountKey(req.userEmail, req.userPhone);
+
+                                  // 1. Update status
+                                  setAutoPaymentHistory((prev) =>
+                                    prev.map((p) =>
+                                      p.id === req.id
+                                        ? { ...p, status: "SUCCESS" }
+                                        : p,
+                                    ),
+                                  );
+                                  setPaymentHistory((prev) =>
+                                    prev.map((p) =>
+                                      p.id === req.id
+                                        ? { ...p, status: "SUCCESS" }
+                                        : p,
+                                    ),
+                                  );
+
+                                  // 2. Add funds to userWallets
+                                  setUserWallets((prev) => {
+                                    const cur = prev[targetKey] ?? 0;
+                                    return {
+                                      ...prev,
+                                      [targetKey]: cur + req.amount,
+                                    };
+                                  });
+
+                                  // 3. Update current userBalance if matching active user
+                                  const activeKey = getAccountKey(
+                                    userProfile.email,
+                                    userProfile.phone,
+                                  );
+                                  if (
+                                    !userProfile.isLoggedIn ||
+                                    activeKey === targetKey ||
+                                    targetKey === "guest"
+                                  ) {
+                                    setUserBalance((prev) => prev + req.amount);
+                                  }
+
+                                  alert(
+                                    `✅ Auto UPI Payment ₹${req.amount} ACCEPTED! Added to wallet of ${req.userName || req.userEmail || req.userPhone || "User"}.`,
+                                  );
+                                }}
+                                className="flex-1 min-w-[140px] bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-black font-black py-2.5 px-4 rounded-xl shadow-[0_0_15px_rgba(34,197,94,0.4)] text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                              >
+                                <CheckCircle size={14} /> ACCEPT & ADD ₹
+                                {req.amount}
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setAutoPaymentHistory((prev) =>
+                                    prev.map((p) =>
+                                      p.id === req.id
+                                        ? { ...p, status: "REJECTED" }
+                                        : p,
+                                    ),
+                                  );
+                                  setPaymentHistory((prev) =>
+                                    prev.map((p) =>
+                                      p.id === req.id
+                                        ? { ...p, status: "REJECTED" }
+                                        : p,
+                                    ),
+                                  );
+                                  alert("❌ Payment request marked as Rejected.");
+                                }}
+                                className="bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/40 font-bold py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95"
+                              >
+                                REJECT
+                              </button>
+                            </>
+                          )}
+
+                          {cleanPhone && (
+                            <a
+                              href={`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(`Hello ${req.userName || "User"}, your Auto UPI payment request of ₹${req.amount} (ID: ${req.utr}) has been received.`)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="bg-green-600 hover:bg-green-500 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                            >
+                              <MessageCircle size={14} /> WhatsApp Chat
+                            </a>
+                          )}
+
+                          <button
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  "Are you sure you want to delete this payment record?",
+                                )
+                              ) {
+                                setAutoPaymentHistory((prev) =>
+                                  prev.filter((p) => p.id !== req.id),
+                                );
+                                setPaymentHistory((prev) =>
+                                  prev.filter((p) => p.id !== req.id),
+                                );
+                              }
+                            }}
+                            className="p-2.5 bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 border border-white/10 rounded-xl transition-all ml-auto cursor-pointer"
+                            title="Delete Record"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          )}
+
           {currentView === "adminKeys" && (
-            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <div className="flex items-center gap-3 mb-2">
                 <button
                   onClick={() => setCurrentView("admin")}
-                  className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors "
+                  className="p-2 bg-transparent hover:bg-transparent rounded-full transition-colors "
                 >
                   <ArrowLeft size={20} className="text-white" />
                 </button>
@@ -6208,7 +7904,7 @@ export default function App() {
               </div>
 
               {/* Direct Key Sender Form for Admin */}
-              <div className="bg-black/20 backdrop-blur-md border border-purple-500/40 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)]  flex flex-col gap-3">
+              <div className="bg-transparent  border border-purple-500/40 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)]  flex flex-col gap-3">
                 <h3 className="text-xs font-black text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
                   <Key size={14} className="text-purple-400" /> Send Key
                   Directly To Any User Account
@@ -6228,7 +7924,7 @@ export default function App() {
                         targetAccount: e.target.value,
                       }))
                     }
-                    className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-purple-400"
+                    className="w-full bg-transparent  border border-white/20 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-purple-400"
                   />
                   {ensureArray(registeredUsers).length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
@@ -6263,7 +7959,7 @@ export default function App() {
                         panelTitle: e.target.value,
                       }))
                     }
-                    className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-purple-400"
+                    className="w-full bg-transparent  border border-white/20 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-purple-400"
                   >
                     <option value="">Select a panel...</option>
                     {ensureArray(panels).map((p, pIdx) => (
@@ -6288,7 +7984,7 @@ export default function App() {
                         keyVal: e.target.value,
                       }))
                     }
-                    className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-lg p-2.5 text-xs font-mono text-emerald-400 font-bold focus:outline-none focus:border-purple-400"
+                    className="w-full bg-transparent  border border-white/20 rounded-lg p-2.5 text-xs font-mono text-emerald-400 font-bold focus:outline-none focus:border-purple-400"
                   />
                 </div>
 
@@ -6357,7 +8053,7 @@ export default function App() {
                 {ensureArray(keyRequests).map((req, idx) => (
                   <div
                     key={`allkeyreq-${req.id}-${idx}`}
-                    className="bg-black/20 backdrop-blur-md border border-yellow-500/30 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)] "
+                    className="bg-transparent  border border-yellow-500/30 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)] "
                   >
                     <div className="flex justify-between items-start mb-2">
                       <div>
@@ -6379,7 +8075,7 @@ export default function App() {
                         </span>
 
                         {/* Pricing & Coupon Breakdown */}
-                        <div className="bg-black/20 backdrop-blur-md border border-white/10 rounded-lg p-2.5 my-1.5 flex flex-col gap-1 text-xs">
+                        <div className="bg-transparent  border border-white/10 rounded-lg p-2.5 my-1.5 flex flex-col gap-1 text-xs">
                           <div className="flex justify-between items-center font-bold">
                             <span className="text-gray-300">Amount Paid:</span>
                             <span className="text-cyan-400 font-mono text-sm">
@@ -6428,7 +8124,7 @@ export default function App() {
                       <div className="flex flex-col gap-2 mt-2">
                         <textarea
                           placeholder="Type key message / code here (e.g. 5546272611 or ABCD-1234-EFGH)..."
-                          className="w-full bg-black/50 border border-white/20 rounded-lg py-2 px-3 text-sm font-bold text-emerald-400 font-mono focus:outline-none focus:border-yellow-400 transition-all resize-none h-20"
+                          className="w-full bg-transparent border border-white/20 rounded-lg py-2 px-3 text-sm font-bold text-emerald-400 font-mono focus:outline-none focus:border-yellow-400 transition-all resize-none h-20"
                           id={`key-input-${req.id}`}
                         />
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -6454,7 +8150,7 @@ export default function App() {
                                 alert("Please enter a key message");
                               }
                             }}
-                            className="bg-yellow-500 hover:bg-yellow-400 text-black font-black py-2.5 rounded-lg shadow-[0_0_15px_rgba(234,179,8,0.4)] transition-colors w-full uppercase tracking-wider text-xs flex items-center justify-center gap-1.5 active:scale-95"
+                            className="bg-rainbow-animated border-2 border-white text-black font-black py-2.5 rounded-lg shadow-[0_0_15px_rgba(234,179,8,0.4)] transition-colors w-full uppercase tracking-wider text-xs flex items-center justify-center gap-1.5 active:scale-95"
                           >
                             <CheckCircle size={14} /> APPROVE (IN-APP)
                           </button>
@@ -6539,7 +8235,7 @@ export default function App() {
                         </span>
                       </div>
                     ) : (
-                      <div className="bg-black/20 backdrop-blur-md border border-green-500/30 rounded-lg p-3 mt-2">
+                      <div className="bg-transparent  border border-green-500/30 rounded-lg p-3 mt-2">
                         <span className="text-gray-400 text-[10px] font-bold block mb-1">
                           Delivered Key Code:
                         </span>
@@ -6561,11 +8257,11 @@ export default function App() {
           )}
 
           {currentView === "adminSpin" && (
-            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <div className="flex items-center gap-3 mb-2">
                 <button
                   onClick={() => setCurrentView("admin")}
-                  className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors "
+                  className="p-2 bg-transparent hover:bg-transparent rounded-full transition-colors "
                 >
                   <ArrowLeft size={20} className="text-white" />
                 </button>
@@ -6578,7 +8274,7 @@ export default function App() {
               </div>
 
               {/* Spin Rewards Configurator for Admin */}
-              <div className="bg-black/20 backdrop-blur-md border border-fuchsia-500/40 rounded-2xl p-4 shadow-[0_0_25px_rgba(217,70,239,0.3)]  flex flex-col gap-3">
+              <div className="bg-transparent  border border-fuchsia-500/40 rounded-2xl p-4 shadow-[0_0_25px_rgba(217,70,239,0.3)]  flex flex-col gap-3">
                 <h3 className="text-sm font-black text-cyan-400 uppercase tracking-wider flex items-center gap-2">
                   <Dices size={16} /> Edit Spin Reward Amounts (₹)
                 </h3>
@@ -6623,7 +8319,7 @@ export default function App() {
                     placeholder="Enter reward amount (e.g. 25)"
                     value={newSpinRewardInput}
                     onChange={(e) => setNewSpinRewardInput(e.target.value)}
-                    className="flex-1 bg-black/20 backdrop-blur-md border border-white/20 rounded-lg py-2 px-3 text-xs font-bold text-white focus:outline-none focus:border-cyan-400"
+                    className="flex-1 bg-transparent  border border-white/20 rounded-lg py-2 px-3 text-xs font-bold text-white focus:outline-none focus:border-cyan-400"
                   />
                   <button
                     onClick={() => {
@@ -6642,7 +8338,7 @@ export default function App() {
                         alert("Kripya valid reward amount daalein.");
                       }
                     }}
-                    className="bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs px-4 rounded-lg uppercase tracking-wider"
+                    className="bg-rainbow-animated border-2 border-white text-black font-black text-xs px-4 rounded-lg uppercase tracking-wider"
                   >
                     ADD AMOUNT
                   </button>
@@ -6656,7 +8352,7 @@ export default function App() {
                 {ensureArray(spinRequests).map((spin, idx) => (
                   <div
                     key={`spinreq-${spin.id}-${idx}`}
-                    className="bg-black/20 backdrop-blur-md border border-green-500/30 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)]  flex flex-col gap-2"
+                    className="bg-transparent  border border-green-500/30 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)]  flex flex-col gap-2"
                   >
                     <div className="flex justify-between items-start">
                       <div>
@@ -6672,7 +8368,7 @@ export default function App() {
                       </span>
                     </div>
 
-                    <div className="bg-black/50 p-2.5 rounded-lg border border-white/10 text-xs font-mono flex flex-col gap-1">
+                    <div className="bg-transparent p-2.5 rounded-lg border border-white/10 text-xs font-mono flex flex-col gap-1">
                       <span className="text-gray-300">
                         📧 Email:{" "}
                         <strong className="text-white">
@@ -6699,12 +8395,12 @@ export default function App() {
           )}
 
           {currentView === "adminRefer" && (
-            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setCurrentView("admin")}
-                    className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors "
+                    className="p-2 bg-transparent hover:bg-transparent rounded-full transition-colors "
                   >
                     <ArrowLeft size={20} className="text-white" />
                   </button>
@@ -6718,7 +8414,7 @@ export default function App() {
               </div>
 
               {/* Card 1: Admin Website Link Configuration */}
-              <div className="bg-black/20 backdrop-blur-md border border-yellow-500/50 rounded-2xl p-5 shadow-[0_0_30px_rgba(234,179,8,0.2)]  flex flex-col gap-4">
+              <div className="bg-transparent  border border-yellow-500/50 rounded-2xl p-5 shadow-[0_0_30px_rgba(234,179,8,0.2)]  flex flex-col gap-4">
                 <div className="flex items-center justify-between border-b border-white/10 pb-3">
                   <h3 className="text-sm font-black text-yellow-400 uppercase tracking-wider flex items-center gap-2">
                     <Globe size={18} className="text-yellow-400" /> Website
@@ -6740,7 +8436,7 @@ export default function App() {
                         value={referWebsiteLink}
                         onChange={(e) => setReferWebsiteLink(e.target.value)}
                         placeholder="https://yourwebsite.com or https://t.me/yourbot"
-                        className="w-full bg-black/20 backdrop-blur-md border border-yellow-500/40 rounded-xl py-3 px-3.5 pl-10 text-xs font-mono font-bold text-yellow-300 focus:outline-none focus:border-yellow-400 focus:shadow-[0_0_15px_rgba(234,179,8,0.3)]"
+                        className="w-full bg-transparent  border border-yellow-500/40 rounded-xl py-3 px-3.5 pl-10 text-xs font-mono font-bold text-yellow-300 focus:outline-none focus:border-yellow-400 focus:shadow-[0_0_15px_rgba(234,179,8,0.3)]"
                       />
                       <Globe
                         size={16}
@@ -6770,7 +8466,7 @@ export default function App() {
                           setReferBonusAmount(Number(e.target.value) || 0)
                         }
                         placeholder="50"
-                        className="w-full bg-black/20 backdrop-blur-md border border-yellow-500/40 rounded-xl py-2.5 px-3.5 text-xs font-bold text-white focus:outline-none focus:border-yellow-400"
+                        className="w-full bg-transparent  border border-yellow-500/40 rounded-xl py-2.5 px-3.5 text-xs font-bold text-white focus:outline-none focus:border-yellow-400"
                       />
                     </div>
 
@@ -6790,7 +8486,7 @@ export default function App() {
                           );
                           setTimeout(() => setReferSettingsSavedMsg(""), 4000);
                         }}
-                        className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-black py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(234,179,8,0.5)] transition-all active:scale-95"
+                        className="w-full bg-rainbow-animated border-2 border-white text-black font-black py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(234,179,8,0.5)] transition-all active:scale-95"
                       >
                         <Save size={16} /> SAVE SETTINGS
                       </button>
@@ -6804,12 +8500,12 @@ export default function App() {
                   )}
 
                   {/* Live Preview Box for Admin */}
-                  <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-3 mt-1">
+                  <div className="bg-transparent  border border-white/10 rounded-xl p-3 mt-1">
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
                       User Generated Referral Link Preview:
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-cyan-300 bg-black/20 backdrop-blur-md p-2 rounded-lg border border-cyan-500/30 flex-1 overflow-hidden whitespace-nowrap text-ellipsis">
+                      <span className="text-xs font-mono font-bold text-cyan-300 bg-transparent  p-2 rounded-lg border border-cyan-500/30 flex-1 overflow-hidden whitespace-nowrap text-ellipsis">
                         {(
                           referWebsiteLink.trim() || "https://website.com"
                         ).includes("?")
@@ -6863,7 +8559,7 @@ export default function App() {
                 {ensureArray(referRequests).map((ref, idx) => (
                   <div
                     key={`referreq-${ref.id}-${idx}`}
-                    className="bg-black/20 backdrop-blur-md border border-yellow-500/30 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)]  flex flex-col gap-2"
+                    className="bg-transparent  border border-yellow-500/30 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)]  flex flex-col gap-2"
                   >
                     <div className="flex justify-between items-start">
                       <div>
@@ -6894,7 +8590,7 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="bg-black/50 p-2.5 rounded-lg border border-white/10 text-xs font-mono flex flex-col gap-1 text-left">
+                    <div className="bg-transparent p-2.5 rounded-lg border border-white/10 text-xs font-mono flex flex-col gap-1 text-left">
                       <span className="text-gray-300">
                         👤 Referrer Email:{" "}
                         <strong className="text-white">
@@ -6933,7 +8629,7 @@ export default function App() {
                             `Referral bonus accepted! ₹${ref.bonusAmount} added to referrer balance.`,
                           );
                         }}
-                        className="bg-yellow-500 hover:bg-yellow-400 text-black font-black py-2 rounded-lg text-xs uppercase transition-colors"
+                        className="bg-rainbow-animated border-2 border-white text-black font-black py-2 rounded-lg text-xs uppercase transition-colors"
                       >
                         Approve & Credit ₹{ref.bonusAmount} Bonus
                       </button>
@@ -6946,7 +8642,7 @@ export default function App() {
                 ))}
 
                 {referRequests.length === 0 && (
-                  <div className="text-center text-gray-400 text-sm mt-6 bg-black/40 backdrop-blur-md p-6 rounded-xl border border-white/10">
+                  <div className="text-center text-gray-400 text-sm mt-6 bg-transparent  p-6 rounded-xl border border-white/10">
                     No pending referral requests.
                   </div>
                 )}
@@ -6955,23 +8651,18 @@ export default function App() {
           )}
 
           {currentView === "login" && (
-            <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/40 backdrop-blur-2xl rounded-3xl p-5 sm:p-7 border border-white/15 shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+            <div className="flex flex-col gap-6 w-full max-w-xl mx-auto animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 p-5 sm:p-7 rounded-3xl bg-[#0b1120] border border-cyan-500/40 shadow-[0_0_40px_rgba(0,0,0,0.9)]">
               <div className="flex items-center justify-between border-b border-white/10 pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-fuchsia-600 to-cyan-500 p-0.5 flex items-center justify-center shadow-[0_0_20px_rgba(217,70,239,0.5)] shrink-0">
-                    <div className="w-full h-full bg-black/80 rounded-[14px] flex items-center justify-center">
-                      <User className="text-cyan-400" size={24} />
-                    </div>
+                  <div className="w-11 h-11 rounded-2xl bg-cyan-500/20 border border-cyan-400/40 p-0.5 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.3)] shrink-0">
+                    <User className="text-cyan-400" size={24} />
                   </div>
                   <div>
-                    <h2 className="text-xl sm:text-2xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
-                      USER{" "}
-                      <span className="text-fuchsia-500 drop-shadow-[0_0_15px_rgba(217,70,239,1)]">
-                        AUTHENTICATION
-                      </span>
+                    <h2 className="text-xl sm:text-2xl font-black tracking-wide uppercase text-white">
+                      USER <span className="text-cyan-400">AUTHENTICATION</span>
                     </h2>
                     <p className="text-[11px] text-gray-300 font-medium">
-                      सुरक्षित लॉगिन व नया अकाउंट रजिस्ट्रेशन
+                      Secure Login & Account Registration
                     </p>
                   </div>
                 </div>
@@ -6986,18 +8677,17 @@ export default function App() {
               {!userProfile.isLoggedIn ? (
                 <div className="flex flex-col gap-5">
                   {/* VIP Notice Banner */}
-                  <div className="bg-gradient-to-r from-fuchsia-950/40 via-purple-950/40 to-cyan-950/40 border border-fuchsia-500/30 rounded-2xl p-3.5 flex items-center gap-3 text-xs text-gray-200">
+                  <div className="bg-[#11192e] border border-cyan-500/30 rounded-2xl p-3.5 flex items-center gap-3 text-xs text-gray-200">
                     <ShieldCheck
-                      className="text-fuchsia-400 shrink-0"
+                      className="text-cyan-400 shrink-0"
                       size={22}
                     />
                     <div>
                       <p className="font-bold text-white text-xs sm:text-sm">
-                        असली और सुरक्षित लॉगिन सिस्टम (Strict Real Verification)
+                        Strict Real Verification System
                       </p>
                       <p className="text-[11px] text-gray-300">
-                        केवल वैध Real Email ID, 10-अंकों का Mobile Number एवं
-                        सही Password से ही लॉगिन होगा।
+                        Login is only possible with a valid Email ID, 10-digit Mobile Number, and correct Password.
                       </p>
                     </div>
                   </div>
@@ -7009,7 +8699,7 @@ export default function App() {
                       type="button"
                       onClick={handleGoogleUserSignIn}
                       disabled={isSigningInUserGoogle}
-                      className="w-full bg-white hover:bg-gray-100 text-gray-900 font-black text-sm py-3.5 px-5 rounded-2xl shadow-[0_0_30px_rgba(255,255,255,0.4)] transition-all flex items-center justify-center gap-3 active:scale-98 border-2 border-white hover:border-cyan-300 cursor-pointer group"
+                      className="w-full bg-white hover:bg-gray-100 text-gray-900 font-black text-sm py-3.5 px-5 rounded-2xl shadow-[0_0_25px_rgba(255,255,255,0.3)] transition-all flex items-center justify-center gap-3 active:scale-98 border-2 border-white hover:border-cyan-300 cursor-pointer group"
                     >
                       {isSigningInUserGoogle ? (
                         <Loader2
@@ -7039,27 +8729,26 @@ export default function App() {
                           />
                         </svg>
                       )}
-                      <span className="tracking-wide">
-                        GOOGLE (GMAIL) से LOGIN करें
+                      <span className="tracking-wide font-black">
+                        SIGN IN WITH GOOGLE (GMAIL)
                       </span>
                     </button>
                     <p className="text-[10px] text-gray-400 text-center">
-                      Google Popup या Real Gmail ID द्वारा सुरक्षित एक-क्लिक
-                      लॉगिन
+                      Secure one-click login via Google
                     </p>
                   </div>
 
                   {/* DIVIDER */}
                   <div className="flex items-center gap-3 my-1">
                     <div className="flex-1 border-t border-white/15"></div>
-                    <span className="text-[11px] text-cyan-400 font-bold uppercase tracking-widest px-2">
-                      या REAL CREDENTIALS द्वारा
+                    <span className="text-[11px] text-gray-300 font-bold uppercase tracking-widest px-2">
+                      OR VIA REAL CREDENTIALS
                     </span>
                     <div className="flex-1 border-t border-white/15"></div>
                   </div>
 
                   {/* TABS: LOGIN vs REGISTER */}
-                  <div className="grid grid-cols-2 gap-2 bg-black/60 p-1.5 rounded-2xl border border-white/10">
+                  <div className="grid grid-cols-2 gap-2 bg-[#11192e] p-1.5 rounded-2xl border border-white/10">
                     <button
                       type="button"
                       onClick={() => {
@@ -7068,11 +8757,11 @@ export default function App() {
                       }}
                       className={`py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
                         userAuthTab === "login"
-                          ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_20px_rgba(0,229,255,0.4)] border border-cyan-300/40"
-                          : "text-gray-400 hover:text-white hover:bg-white/5"
+                          ? "bg-cyan-500 text-black shadow-[0_0_20px_rgba(6,182,212,0.4)]"
+                          : "text-gray-300 hover:text-white bg-white/5"
                       }`}
                     >
-                      <Key size={14} /> 1. LOGIN (लॉगिन)
+                      <Key size={14} /> 1. LOGIN
                     </button>
 
                     <button
@@ -7083,11 +8772,11 @@ export default function App() {
                       }}
                       className={`py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
                         userAuthTab === "register"
-                          ? "bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white shadow-[0_0_20px_rgba(217,70,239,0.4)] border border-fuchsia-300/40"
-                          : "text-gray-400 hover:text-white hover:bg-white/5"
+                          ? "bg-fuchsia-600 text-white shadow-[0_0_20px_rgba(217,70,239,0.4)]"
+                          : "text-gray-300 hover:text-white bg-white/5"
                       }`}
                     >
-                      <UserPlus size={14} /> 2. CREATE ACCOUNT (रजिस्टर)
+                      <UserPlus size={14} /> 2. CREATE ACCOUNT
                     </button>
                   </div>
 
@@ -7113,7 +8802,7 @@ export default function App() {
                       <div>
                         <label className="text-xs font-bold text-gray-200 block mb-1.5 flex items-center justify-between">
                           <span>
-                            Registered Email ID या 10-अंकों का Mobile Number:
+                            Registered Email ID or 10-digit Mobile Number:
                           </span>
                           <span className="text-[10px] text-cyan-400 font-normal">
                             Real Email / Phone Required
@@ -7122,7 +8811,7 @@ export default function App() {
                         <div className="relative">
                           <input
                             type="text"
-                            placeholder="e.g. rahul@gmail.com या 9876543210"
+                            placeholder="e.g. rahul@gmail.com or 9876543210"
                             value={userLoginForm.identifier}
                             onChange={(e) => {
                               setUserLoginForm({
@@ -7131,14 +8820,14 @@ export default function App() {
                               });
                               if (userAuthError) setUserAuthError("");
                             }}
-                            className="w-full bg-black/60 border border-white/20 focus:border-cyan-400 rounded-xl px-3.5 py-3 text-xs sm:text-sm text-white placeholder:text-gray-500 focus:outline-none transition-all shadow-inner"
+                            className="w-full bg-[#11192e] border border-white/20 focus:border-cyan-400 rounded-xl px-3.5 py-3 text-xs sm:text-sm text-white placeholder:text-gray-400 focus:outline-none transition-all shadow-inner font-medium"
                           />
                         </div>
                       </div>
 
                       <div>
                         <label className="text-xs font-bold text-gray-200 block mb-1.5 flex items-center justify-between">
-                          <span>Password (पासवर्ड):</span>
+                          <span>Password:</span>
                           <span className="text-[10px] text-gray-400 font-normal">
                             Strict Password Check
                           </span>
@@ -7146,7 +8835,7 @@ export default function App() {
                         <div className="relative">
                           <input
                             type="password"
-                            placeholder="अपना सुरक्षित पासवर्ड दर्ज करें"
+                            placeholder="Enter your secure password"
                             value={userLoginForm.password}
                             onChange={(e) => {
                               setUserLoginForm({
@@ -7155,29 +8844,29 @@ export default function App() {
                               });
                               if (userAuthError) setUserAuthError("");
                             }}
-                            className="w-full bg-black/60 border border-white/20 focus:border-cyan-400 rounded-xl px-3.5 py-3 text-xs sm:text-sm text-white placeholder:text-gray-500 focus:outline-none transition-all shadow-inner"
+                            className="w-full bg-[#11192e] border border-white/20 focus:border-cyan-400 rounded-xl px-3.5 py-3 text-xs sm:text-sm text-white placeholder:text-gray-400 focus:outline-none transition-all shadow-inner font-medium"
                           />
                         </div>
                       </div>
 
                       <button
                         type="submit"
-                        className="w-full bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-black text-sm py-3.5 rounded-xl shadow-[0_0_25px_rgba(0,229,255,0.4)] transition-all uppercase tracking-wider cursor-pointer active:scale-98 mt-1 flex items-center justify-center gap-2"
+                        className="w-full bg-cyan-500 hover:bg-cyan-400 text-black font-black text-sm py-3.5 rounded-xl shadow-[0_0_25px_rgba(6,182,212,0.4)] transition-all uppercase tracking-wider cursor-pointer active:scale-98 mt-1 flex items-center justify-center gap-2"
                       >
-                        <Key size={18} /> VERIFY & LOGIN (लॉगिन करें)
+                        <Key size={18} /> VERIFY & LOGIN
                       </button>
 
                       <p className="text-gray-400 text-xs text-center mt-1">
-                        नया यूज़र हैं?{" "}
+                        New User?{" "}
                         <button
                           type="button"
                           onClick={() => {
                             setUserAuthTab("register");
                             setUserAuthError("");
                           }}
-                          className="text-cyan-400 font-bold hover:underline cursor-pointer"
+                          className="text-cyan-400 hover:text-cyan-300 font-bold hover:underline cursor-pointer"
                         >
-                          यहाँ क्लिक करके नया अकाउंट बनाएं (Create Account)
+                          Click here to create a new account
                         </button>
                       </p>
                     </form>
@@ -7191,11 +8880,11 @@ export default function App() {
                     >
                       <div>
                         <label className="text-xs font-bold text-gray-200 block mb-1">
-                          Full Name (आपका पूरा नाम):
+                          Full Name:
                         </label>
                         <input
                           type="text"
-                          placeholder="उदा. Rahul Sharma"
+                          placeholder="e.g. Rahul Sharma"
                           value={userRegisterForm.name}
                           onChange={(e) => {
                             setUserRegisterForm({
@@ -7204,20 +8893,20 @@ export default function App() {
                             });
                             if (userAuthError) setUserAuthError("");
                           }}
-                          className="w-full bg-black/60 border border-white/20 focus:border-fuchsia-400 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none shadow-inner"
+                          className="w-full bg-[#11192e] border border-white/20 focus:border-fuchsia-400 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-gray-400 focus:outline-none shadow-inner font-medium"
                         />
                       </div>
 
                       <div>
                         <label className="text-xs font-bold text-gray-200 block mb-1 flex items-center justify-between">
-                          <span>Real Email ID (असली ईमेल पता):</span>
+                          <span>Real Email ID:</span>
                           <span className="text-[10px] text-fuchsia-400">
                             Valid Format e.g. name@gmail.com
                           </span>
                         </label>
                         <input
                           type="email"
-                          placeholder="उदा. rahul@gmail.com"
+                          placeholder="e.g. rahul@gmail.com"
                           value={userRegisterForm.email}
                           onChange={(e) => {
                             setUserRegisterForm({
@@ -7226,14 +8915,14 @@ export default function App() {
                             });
                             if (userAuthError) setUserAuthError("");
                           }}
-                          className="w-full bg-black/60 border border-white/20 focus:border-fuchsia-400 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none shadow-inner"
+                          className="w-full bg-[#11192e] border border-white/20 focus:border-fuchsia-400 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-gray-400 focus:outline-none shadow-inner font-medium"
                         />
                       </div>
 
                       <div>
                         <label className="text-xs font-bold text-gray-200 block mb-1 flex items-center justify-between">
                           <span>
-                            Real 10-Digit Mobile Number (10-अंकों का मोबाइल):
+                            Real 10-Digit Mobile Number:
                           </span>
                           <span className="text-[10px] text-fuchsia-400">
                             10 Digits (6-9 Start)
@@ -7242,7 +8931,7 @@ export default function App() {
                         <input
                           type="tel"
                           maxLength={10}
-                          placeholder="उदा. 9876543210"
+                          placeholder="e.g. 9876543210"
                           value={userRegisterForm.phone}
                           onChange={(e) => {
                             setUserRegisterForm({
@@ -7251,18 +8940,18 @@ export default function App() {
                             });
                             if (userAuthError) setUserAuthError("");
                           }}
-                          className="w-full bg-black/60 border border-white/20 focus:border-fuchsia-400 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none shadow-inner"
+                          className="w-full bg-[#11192e] border border-white/20 focus:border-fuchsia-400 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-gray-400 focus:outline-none shadow-inner font-medium"
                         />
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div>
                           <label className="text-xs font-bold text-gray-200 block mb-1">
-                            Create Password (कम से कम 6 अक्षर):
+                            Create Password (Min 6 chars):
                           </label>
                           <input
                             type="password"
-                            placeholder="नया पासवर्ड बनाएं"
+                            placeholder="Create a new password"
                             value={userRegisterForm.password}
                             onChange={(e) => {
                               setUserRegisterForm({
@@ -7271,16 +8960,16 @@ export default function App() {
                               });
                               if (userAuthError) setUserAuthError("");
                             }}
-                            className="w-full bg-black/60 border border-white/20 focus:border-fuchsia-400 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none shadow-inner"
+                            className="w-full bg-[#11192e] border border-white/20 focus:border-fuchsia-400 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-gray-400 focus:outline-none shadow-inner font-medium"
                           />
                         </div>
                         <div>
                           <label className="text-xs font-bold text-gray-200 block mb-1">
-                            Confirm Password (पासवर्ड दोबारा):
+                            Confirm Password:
                           </label>
                           <input
                             type="password"
-                            placeholder="वही पासवर्ड दोबारा दर्ज करें"
+                            placeholder="Confirm your password"
                             value={userRegisterForm.confirmPassword}
                             onChange={(e) => {
                               setUserRegisterForm({
@@ -7289,21 +8978,20 @@ export default function App() {
                               });
                               if (userAuthError) setUserAuthError("");
                             }}
-                            className="w-full bg-black/60 border border-white/20 focus:border-fuchsia-400 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none shadow-inner"
+                            className="w-full bg-[#11192e] border border-white/20 focus:border-fuchsia-400 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-gray-400 focus:outline-none shadow-inner font-medium"
                           />
                         </div>
                       </div>
 
                       <button
                         type="submit"
-                        className="w-full bg-gradient-to-r from-pink-600 via-fuchsia-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-black text-sm py-3.5 rounded-xl shadow-[0_0_25px_rgba(217,70,239,0.5)] transition-all uppercase tracking-wider cursor-pointer active:scale-98 mt-1 flex items-center justify-center gap-2"
+                        className="w-full bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-black text-sm py-3.5 rounded-xl shadow-[0_0_25px_rgba(217,70,239,0.5)] transition-all uppercase tracking-wider cursor-pointer active:scale-98 mt-1 flex items-center justify-center gap-2"
                       >
-                        <UserPlus size={18} /> CREATE VERIFIED ACCOUNT (अकाउंट
-                        बनाएं)
+                        <UserPlus size={18} /> CREATE VERIFIED ACCOUNT
                       </button>
 
                       <p className="text-gray-400 text-xs text-center mt-1">
-                        पहले से अकाउंट है?{" "}
+                        Already have an account?{" "}
                         <button
                           type="button"
                           onClick={() => {
@@ -7312,7 +9000,7 @@ export default function App() {
                           }}
                           className="text-fuchsia-400 font-bold hover:underline cursor-pointer"
                         >
-                          यहाँ क्लिक करके Login करें
+                          Click here to Login
                         </button>
                       </p>
                     </form>
@@ -7320,7 +9008,7 @@ export default function App() {
                 </div>
               ) : (
                 /* LOGGED IN USER PROFILE SUMMARY */
-                <div className="bg-black/30 backdrop-blur-md border border-green-500/40 rounded-3xl p-6 shadow-[0_0_50px_rgba(34,197,94,0.2)] flex flex-col items-center text-center">
+                <div className="bg-transparent  border border-green-500/40 rounded-3xl p-6 shadow-[0_0_50px_rgba(34,197,94,0.2)] flex flex-col items-center text-center">
                   <div className="relative mb-4">
                     <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center border-2 border-green-400 overflow-hidden shadow-[0_0_30px_rgba(34,197,94,0.4)]">
                       {userProfile.avatar ? (
@@ -7351,7 +9039,7 @@ export default function App() {
                   </p>
 
                   <div className="grid grid-cols-2 gap-3 w-full max-w-sm mb-5">
-                    <div className="bg-white/5 border border-white/10 rounded-2xl p-3">
+                    <div className="bg-transparent border border-white/10 rounded-2xl p-3">
                       <p className="text-[10px] text-gray-400 uppercase font-bold">
                         Wallet Balance
                       </p>
@@ -7359,7 +9047,7 @@ export default function App() {
                         ₹{userBalance}
                       </p>
                     </div>
-                    <div className="bg-white/5 border border-white/10 rounded-2xl p-3">
+                    <div className="bg-transparent border border-white/10 rounded-2xl p-3">
                       <p className="text-[10px] text-gray-400 uppercase font-bold">
                         Keys Bought
                       </p>
@@ -7372,7 +9060,7 @@ export default function App() {
                   <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm">
                     <button
                       onClick={() => setCurrentView("home")}
-                      className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs py-3 rounded-xl shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all uppercase tracking-wider"
+                      className="flex-1 bg-rainbow-animated border-2 border-white text-white font-bold text-xs py-3 rounded-xl shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all uppercase tracking-wider"
                     >
                       GO TO HOME (की खरीदें)
                     </button>
@@ -7430,7 +9118,7 @@ export default function App() {
             </div>
           )}
           {currentView === "profile" && (
-            <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <div className="flex items-center gap-3">
                 <h2 className="text-2xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
                   MY{" "}
@@ -7451,7 +9139,7 @@ export default function App() {
                   </button>
                 </div>
               ) : (
-                <div className="bg-black/20 backdrop-blur-md border border-fuchsia-500/30 rounded-[24px] p-5 shadow-[0_0_40px_rgba(0,0,0,0.8)]  flex flex-col items-center w-full">
+                <div className="bg-transparent  border border-fuchsia-500/30 rounded-[24px] p-5 shadow-[0_0_40px_rgba(0,0,0,0.8)]  flex flex-col items-center w-full">
                   <div className="relative mb-3 group cursor-pointer">
                     <img
                       src={
@@ -7500,8 +9188,8 @@ export default function App() {
                   </span>
 
                   {/* Photo Upload Options */}
-                  <div className="w-full max-w-sm flex flex-col gap-2 mb-5 bg-black/40 backdrop-blur-md p-3 rounded-xl border border-white/10">
-                    <label className="w-full bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-black py-2.5 px-4 rounded-xl shadow-[0_0_15px_rgba(217,70,239,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer text-xs uppercase active:scale-95">
+                  <div className="w-full max-w-sm flex flex-col gap-2 mb-5 bg-transparent  p-3 rounded-xl border border-white/10">
+                    <label className="w-full bg-rainbow-animated border-2 border-white hover:from-fuchsia-500 hover:to-purple-500 text-white font-black py-2.5 px-4 rounded-xl shadow-[0_0_15px_rgba(217,70,239,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer text-xs uppercase active:scale-95">
                       <Camera size={16} /> 📸 UPLOAD PHOTO FROM DEVICE
                       <input
                         type="file"
@@ -7527,7 +9215,7 @@ export default function App() {
                         placeholder="Paste Photo Image URL..."
                         value={avatarUrlInput}
                         onChange={(e) => setAvatarUrlInput(e.target.value)}
-                        className="flex-1 bg-black/20 backdrop-blur-md border border-white/20 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-fuchsia-400"
+                        className="flex-1 bg-transparent  border border-white/20 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-fuchsia-400"
                       />
                       <button
                         type="button"
@@ -7539,7 +9227,7 @@ export default function App() {
                           handleSaveAvatar(avatarUrlInput.trim());
                           setAvatarUrlInput("");
                         }}
-                        className="bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs px-3 py-1.5 rounded-lg uppercase"
+                        className="bg-rainbow-animated border-2 border-white text-black font-black text-xs px-3 py-1.5 rounded-lg uppercase"
                       >
                         Save URL
                       </button>
@@ -7554,7 +9242,7 @@ export default function App() {
                   </p>
 
                   <div className="w-full grid grid-cols-2 gap-3 mb-2">
-                    <div className="bg-black/40 backdrop-blur-md border border-white/5 rounded-xl p-3 flex flex-col items-center">
+                    <div className="bg-transparent  border border-white/5 rounded-xl p-3 flex flex-col items-center">
                       <span className="text-gray-400 text-xs font-semibold mb-1">
                         Total Added
                       </span>
@@ -7562,7 +9250,7 @@ export default function App() {
                         ₹{userBalance}
                       </span>
                     </div>
-                    <div className="bg-black/40 backdrop-blur-md border border-white/5 rounded-xl p-3 flex flex-col items-center">
+                    <div className="bg-transparent  border border-white/5 rounded-xl p-3 flex flex-col items-center">
                       <span className="text-gray-400 text-xs font-semibold mb-1">
                         Keys Bought
                       </span>
@@ -7571,7 +9259,7 @@ export default function App() {
                       </span>
                     </div>
                   </div>
-                  <div className="w-full bg-black/40 backdrop-blur-md border border-white/5 rounded-xl p-3 flex justify-between items-center mt-2">
+                  <div className="w-full bg-transparent  border border-white/5 rounded-xl p-3 flex justify-between items-center mt-2">
                     <span className="text-gray-400 text-sm font-semibold">
                       Joined On
                     </span>
@@ -7667,7 +9355,7 @@ export default function App() {
                                   Plan: {req.planLabel || "1 DAY"} • Date:{" "}
                                   {req.date}
                                 </div>
-                                <div className="flex justify-between items-center bg-black/20 backdrop-blur-md border border-emerald-500/30 p-2.5 rounded-lg">
+                                <div className="flex justify-between items-center bg-transparent  border border-emerald-500/30 p-2.5 rounded-lg">
                                   <span className="text-emerald-400 font-mono text-xs font-bold whitespace-pre-wrap break-all w-full pr-2 text-left">
                                     {req.deliveredKey}
                                   </span>
@@ -7687,7 +9375,7 @@ export default function App() {
                             ))}
 
                           {userKeyRequests.length === 0 && (
-                            <p className="text-gray-500 text-xs text-center py-4 bg-black/20 backdrop-blur-md rounded-lg border border-white/5">
+                            <p className="text-gray-500 text-xs text-center py-4 bg-transparent  rounded-lg border border-white/5">
                               No keys or pending orders yet for this account.
                             </p>
                           )}
@@ -7701,7 +9389,7 @@ export default function App() {
           )}
 
           {currentView === "customerSupport" && (
-            <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <div className="flex items-center gap-3">
                 <h2 className="text-2xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
                   CUSTOMER{" "}
@@ -7711,7 +9399,7 @@ export default function App() {
                 </h2>
               </div>
 
-              <div className="bg-black/20 backdrop-blur-md border border-white/10 rounded-[24px] p-6 shadow-[0_0_40px_rgba(0,0,0,0.8)]  flex flex-col items-center w-full mt-4">
+              <div className="bg-transparent  border border-white/10 rounded-[24px] p-6 shadow-[0_0_40px_rgba(0,0,0,0.8)]  flex flex-col items-center w-full mt-4">
                 <Headset
                   size={48}
                   className="text-cyan-400 mb-6 drop-shadow-[0_0_15px_rgba(0,229,255,0.5)]"
@@ -7744,11 +9432,11 @@ export default function App() {
           )}
 
           {currentView === "adminOwner" && (
-            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <div className="flex items-center gap-3 mb-2">
                 <button
                   onClick={() => setCurrentView("admin")}
-                  className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors "
+                  className="p-2 bg-transparent hover:bg-transparent rounded-full transition-colors "
                 >
                   <ArrowLeft size={20} className="text-white" />
                 </button>
@@ -7760,7 +9448,7 @@ export default function App() {
                 </h2>
               </div>
 
-              <div className="bg-black/20 backdrop-blur-md border border-sky-500/40 rounded-2xl p-5 shadow-[0_4px_25px_rgba(56,189,248,0.3)]  flex flex-col gap-4 text-left">
+              <div className="bg-transparent  border border-sky-500/40 rounded-2xl p-5 shadow-[0_4px_25px_rgba(56,189,248,0.3)]  flex flex-col gap-4 text-left">
                 <div className="flex items-center gap-3 bg-sky-500/10 p-3 rounded-xl border border-sky-500/30">
                   <div className="bg-[#0088cc] p-3 rounded-full text-white shadow-[0_0_15px_rgba(0,136,204,0.8)] shrink-0">
                     <Send size={24} />
@@ -7793,7 +9481,7 @@ export default function App() {
                       })
                     }
                     placeholder="https://t.me/yourusername"
-                    className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-sky-400 shadow-inner transition-all"
+                    className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-sky-400 shadow-inner transition-all"
                   />
                 </div>
 
@@ -7817,11 +9505,11 @@ export default function App() {
           )}
 
           {currentView === "adminSupport" && (
-            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <div className="flex items-center gap-3 mb-2">
                 <button
                   onClick={() => setCurrentView("admin")}
-                  className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors "
+                  className="p-2 bg-transparent hover:bg-transparent rounded-full transition-colors "
                 >
                   <ArrowLeft size={20} className="text-white" />
                 </button>
@@ -7833,8 +9521,8 @@ export default function App() {
                 </h2>
               </div>
 
-              <div className="bg-black/20 backdrop-blur-md border border-white/10 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)] ">
-                <label className="text-cyan-400 font-bold text-xs tracking-wider mb-2 block">
+              <div className="bg-transparent  border border-white/10 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)] ">
+                <label className="text-transparent bg-clip-text bg-rainbow-animated font-black drop-shadow-[0_0_10px_#fff] text-xs tracking-wider mb-2 block">
                   TELEGRAM LINK
                 </label>
                 <input
@@ -7846,7 +9534,7 @@ export default function App() {
                       telegram: e.target.value,
                     })
                   }
-                  className="w-full bg-black/40 backdrop-blur-md border border-white/20 rounded-lg py-3 px-3 mb-4 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 transition-all"
+                  className="w-full bg-transparent  border border-white/20 rounded-lg py-3 px-3 mb-4 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 transition-all"
                 />
                 <label className="text-green-400 font-bold text-xs tracking-wider mb-2 block">
                   WHATSAPP LINK
@@ -7860,14 +9548,14 @@ export default function App() {
                       whatsapp: e.target.value,
                     })
                   }
-                  className="w-full bg-black/40 backdrop-blur-md border border-white/20 rounded-lg py-3 px-3 text-sm font-bold text-white focus:outline-none focus:border-green-400 transition-all"
+                  className="w-full bg-transparent  border border-white/20 rounded-lg py-3 px-3 text-sm font-bold text-white focus:outline-none focus:border-green-400 transition-all"
                 />
                 <button
                   onClick={() => {
                     alert("Links updated successfully!");
                     setCurrentView("admin");
                   }}
-                  className="mt-4 w-full bg-cyan-500 hover:bg-cyan-400 text-black font-black py-3 rounded-lg transition-colors"
+                  className="mt-4 w-full bg-rainbow-animated border-2 border-white text-black font-black py-3 rounded-lg transition-colors"
                 >
                   SAVE LINKS
                 </button>
@@ -7876,11 +9564,11 @@ export default function App() {
           )}
 
           {currentView === "adminAccessFiles" && (
-            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <div className="flex items-center gap-3 mb-2">
                 <button
                   onClick={() => setCurrentView("admin")}
-                  className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors "
+                  className="p-2 bg-transparent hover:bg-transparent rounded-full transition-colors "
                 >
                   <ArrowLeft size={20} className="text-white" />
                 </button>
@@ -7892,7 +9580,7 @@ export default function App() {
                 </h2>
               </div>
 
-              <div className="bg-black/20 backdrop-blur-md border border-emerald-500/40 rounded-2xl p-5 shadow-[0_4px_25px_rgba(16,185,129,0.2)]  flex flex-col gap-4 text-left">
+              <div className="bg-transparent  border border-emerald-500/40 rounded-2xl p-5 shadow-[0_4px_25px_rgba(16,185,129,0.2)]  flex flex-col gap-4 text-left">
                 <p className="text-gray-300 text-xs font-medium bg-emerald-950/40 border border-emerald-500/30 p-3.5 rounded-xl">
                   Jab koi user{" "}
                   <strong className="text-emerald-400">"My Key"</strong>{" "}
@@ -7902,7 +9590,7 @@ export default function App() {
                   Telegram link par chala jayega.
                 </p>
 
-                <div className="flex flex-col gap-1.5 bg-black/20 backdrop-blur-md p-3.5 rounded-xl border border-emerald-500/30">
+                <div className="flex flex-col gap-1.5 bg-transparent  p-3.5 rounded-xl border border-emerald-500/30">
                   <label className="text-emerald-400 font-black text-xs uppercase flex items-center gap-1.5">
                     <Send size={16} /> ACCESS FILES TELEGRAM LINK
                   </label>
@@ -7918,7 +9606,7 @@ export default function App() {
                         step2Url: val,
                       }));
                     }}
-                    className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-lg py-3 px-3 text-sm font-bold text-white focus:outline-none focus:border-emerald-400 transition-all"
+                    className="w-full bg-transparent  border border-white/20 rounded-lg py-3 px-3 text-sm font-bold text-white focus:outline-none focus:border-emerald-400 transition-all"
                   />
                 </div>
 
@@ -7950,16 +9638,1728 @@ export default function App() {
             </div>
           )}
 
+          {/* VIEW 1: ADMIN ADD PANEL */}
+          {currentView === "adminAddPanel" && (
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-3 mb-2">
+                <button
+                  onClick={() => setCurrentView("admin")}
+                  className="p-2 rounded-xl transition-all border border-cyan-400/50 bg-cyan-950/40 hover:bg-cyan-900/60 shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:scale-105 active:scale-95 cursor-pointer"
+                >
+                  <ArrowLeft size={20} className="text-white" />
+                </button>
+                <h2 className="text-xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
+                  ADD NEW{" "}
+                  <span className="text-pink-400 drop-shadow-[0_0_15px_rgba(244,114,182,1)]">
+                    STORE PANEL
+                  </span>
+                </h2>
+              </div>
+
+              <div className="bg-transparent  border border-pink-500/40 rounded-2xl p-5 shadow-[0_4px_25px_rgba(244,114,182,0.3)] flex flex-col gap-4 text-left">
+                <div>
+                  <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    PANEL NAME / TITLE
+                  </label>
+                  <input
+                    type="text"
+                    value={newPanelForm.title}
+                    onChange={(e) =>
+                      setNewPanelForm({ ...newPanelForm, title: e.target.value })
+                    }
+                    placeholder="e.g. VIP FFH4X PRO MOD (100% SAFE)"
+                    className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner transition-all"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                      CATEGORY
+                    </label>
+                    <select
+                      value={newPanelForm.category}
+                      onChange={(e) =>
+                        setNewPanelForm({ ...newPanelForm, category: e.target.value })
+                      }
+                      className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
+                    >
+                      <option value="NON ROOT">NON ROOT</option>
+                      <option value="ROOT">ROOT</option>
+                      <option value="24ghanta">24ghanta</option>
+                      <option value="Steamer">Steamer</option>
+                      <option value="Pc">Pc</option>
+                      <option value="Bgmi">Bgmi</option>
+                      <option value="Moba legend">Moba legend</option>
+                      <option value="All">All</option>
+                      <option value="House">House</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                      BADGE TEXT
+                    </label>
+                    <input
+                      type="text"
+                      value={newPanelForm.badge}
+                      onChange={(e) =>
+                        setNewPanelForm({ ...newPanelForm, badge: e.target.value })
+                      }
+                      placeholder="e.g. 100% ANTIBAN"
+                      className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    PANEL IMAGE OR VIDEO
+                  </label>
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewPanelForm({ ...newPanelForm, isVideo: false })}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        !newPanelForm.isVideo
+                          ? "bg-pink-600 text-white shadow-lg"
+                          : "bg-transparent text-gray-400 hover:text-white"
+                      }`}
+                    >
+                      Photo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewPanelForm({ ...newPanelForm, isVideo: true })}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        newPanelForm.isVideo
+                          ? "bg-pink-600 text-white shadow-lg"
+                          : "bg-transparent text-gray-400 hover:text-white"
+                      }`}
+                    >
+                      Video (MP4)
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={newPanelForm.image}
+                      onChange={(e) =>
+                        setNewPanelForm({ ...newPanelForm, image: e.target.value })
+                      }
+                      placeholder="Image URL or upload below"
+                      className="flex-1 bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
+                    />
+                    <label className="cursor-pointer bg-transparent hover:bg-transparent text-white font-bold px-4 py-3 rounded-xl border border-white/20 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors">
+                      <Upload size={16} />
+                      <span>{isUploadingMedia ? "Uploading..." : "Upload File"}</span>
+                      <input
+                        type="file"
+                        accept="image/*,video/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            processAsyncMediaUpload(
+                              file,
+                              () => setIsUploadingMedia(true),
+                              (mediaUrl, isVideo) => {
+                                setIsUploadingMedia(false);
+                                setNewPanelForm((prev) => ({
+                                  ...prev,
+                                  image: mediaUrl,
+                                  isVideo,
+                                }));
+                              },
+                            );
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  {newPanelForm.image && (
+                    <div className="mt-3 relative w-32 h-32 rounded-xl overflow-hidden border border-white/30 shadow-md">
+                      {newPanelForm.isVideo ? (
+                        <video
+                          src={newPanelForm.image}
+                          className="w-full h-full object-cover"
+                          autoPlay
+                          loop
+                          muted
+                        />
+                      ) : (
+                        <img
+                          src={newPanelForm.image}
+                          alt="Panel Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                      YOUTUBE / DEMO VIDEO LINK
+                    </label>
+                    <input
+                      type="text"
+                      value={newPanelForm.videoLink}
+                      onChange={(e) =>
+                        setNewPanelForm({ ...newPanelForm, videoLink: e.target.value })
+                      }
+                      placeholder="https://youtube.com/..."
+                      className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                      INSTALL / APK DOWNLOAD LINK
+                    </label>
+                    <input
+                      type="text"
+                      value={newPanelForm.installLink}
+                      onChange={(e) =>
+                        setNewPanelForm({ ...newPanelForm, installLink: e.target.value })
+                      }
+                      placeholder="https://t.me/... or direct APK link"
+                      className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    PANEL FEATURES (ONE PER LINE)
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={newPanelForm.featuresText}
+                    onChange={(e) =>
+                      setNewPanelForm({ ...newPanelForm, featuresText: e.target.value })
+                    }
+                    className="w-full bg-transparent  border border-white/20 rounded-xl p-3 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    PRICING PLANS (₹ RUPEES)
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div>
+                      <span className="text-[11px] text-white font-bold drop-shadow-[0_0_6px_#000] block mb-1">1 Day</span>
+                      <input
+                        type="number"
+                        value={newPanelForm.price1}
+                        onChange={(e) =>
+                          setNewPanelForm({ ...newPanelForm, price1: Number(e.target.value) })
+                        }
+                        className="w-full bg-transparent border border-white/20 rounded-lg p-2.5 text-center font-bold text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-white font-bold drop-shadow-[0_0_6px_#000] block mb-1">3 Day</span>
+                      <input
+                        type="number"
+                        value={newPanelForm.price3}
+                        onChange={(e) =>
+                          setNewPanelForm({ ...newPanelForm, price3: Number(e.target.value) })
+                        }
+                        className="w-full bg-transparent border border-white/20 rounded-lg p-2.5 text-center font-bold text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-white font-bold drop-shadow-[0_0_6px_#000] block mb-1">7 Day</span>
+                      <input
+                        type="number"
+                        value={newPanelForm.price7}
+                        onChange={(e) =>
+                          setNewPanelForm({ ...newPanelForm, price7: Number(e.target.value) })
+                        }
+                        className="w-full bg-transparent border border-white/20 rounded-lg p-2.5 text-center font-bold text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-white font-bold drop-shadow-[0_0_6px_#000] block mb-1">15 Day</span>
+                      <input
+                        type="number"
+                        value={newPanelForm.price15}
+                        onChange={(e) =>
+                          setNewPanelForm({ ...newPanelForm, price15: Number(e.target.value) })
+                        }
+                        className="w-full bg-transparent border border-white/20 rounded-lg p-2.5 text-center font-bold text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-white font-bold drop-shadow-[0_0_6px_#000] block mb-1">30 Day</span>
+                      <input
+                        type="number"
+                        value={newPanelForm.price30}
+                        onChange={(e) =>
+                          setNewPanelForm({ ...newPanelForm, price30: Number(e.target.value) })
+                        }
+                        className="w-full bg-transparent border border-white/20 rounded-lg p-2.5 text-center font-bold text-white text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (!newPanelForm.title.trim()) {
+                      alert("⚠️ Please enter panel title!");
+                      return;
+                    }
+                    const features = newPanelForm.featuresText
+                      .split("\n")
+                      .map((f) => f.trim())
+                      .filter(Boolean);
+
+                    const newPanel = {
+                      id: Date.now(),
+                      title: newPanelForm.title.trim(),
+                      category: newPanelForm.category,
+                      badge: newPanelForm.badge || "PREMIUM PANEL",
+                      image:
+                        newPanelForm.image ||
+                        "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
+                      isVideo: newPanelForm.isVideo,
+                      videoLink: newPanelForm.videoLink,
+                      installLink: newPanelForm.installLink,
+                      feedbackLink: newPanelForm.feedbackLink,
+                      exceptFileLink: newPanelForm.exceptFileLink,
+                      features:
+                        features.length > 0
+                          ? features
+                          : ["Main Id safe", "Anti-Ban Guaranteed"],
+                      pricingPlans: [
+                        { label: "1 Day", price: Number(newPanelForm.price1) || 90 },
+                        { label: "3 Day", price: Number(newPanelForm.price3) || 58 },
+                        { label: "7 Day", price: Number(newPanelForm.price7) || 67 },
+                        { label: "15 Day", price: Number(newPanelForm.price15) || 590 },
+                        { label: "30 Day", price: Number(newPanelForm.price30) || 5000 },
+                      ],
+                    };
+
+                    const updatedPanels = [newPanel, ...ensureArray(panels)];
+                    setPanels(updatedPanels);
+                    localStorage.setItem("app_panels", JSON.stringify(updatedPanels));
+                    playSuccessChime();
+                    alert(`✅ Panel "${newPanel.title}" successfully added to Store!`);
+                    setNewPanelForm({
+                      ...newPanelForm,
+                      title: "",
+                      image: "",
+                      videoLink: "",
+                      installLink: "",
+                    });
+                    setCurrentView("home");
+                  }}
+                  className="mt-3 w-full bg-gradient-to-r from-pink-500 to-fuchsia-600 hover:from-pink-400 hover:to-fuchsia-500 text-white font-black py-4 rounded-xl shadow-[0_0_25px_rgba(236,72,153,0.5)] transition-all uppercase tracking-wider text-sm active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <PlusCircle size={20} /> PUBLISH & ADD PANEL TO STORE
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 2: ADMIN DELETE & MANAGE PANELS */}
+          {currentView === "adminDeletePanel" && (
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setCurrentView("admin")}
+                    className="p-2 rounded-xl transition-all border-2 animate-satorang-border shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:scale-110"
+                  >
+                    <ArrowLeft size={20} className="text-white" />
+                  </button>
+                  <h2 className="text-xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
+                    MANAGE &{" "}
+                    <span className="text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,1)]">
+                      DELETE PANELS
+                    </span>
+                  </h2>
+                </div>
+                <span className="bg-red-500/20 text-red-300 border border-red-500/40 text-xs font-black px-3 py-1 rounded-full uppercase">
+                  Total: {ensureArray(panels).length} Panels
+                </span>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative w-full">
+                <Search size={16} className="absolute left-3.5 top-3.5 text-gray-400" />
+                <input
+                  type="text"
+                  value={adminPanelSearchQuery}
+                  onChange={(e) => setAdminPanelSearchQuery(e.target.value)}
+                  placeholder="Search panel by name or category..."
+                  className="w-full bg-transparent border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-red-500 transition-all"
+                />
+              </div>
+
+              {/* Panel List */}
+              <div className="flex flex-col gap-3">
+                {ensureArray(panels)
+                  .filter((p) => {
+                    if (!adminPanelSearchQuery) return true;
+                    const q = adminPanelSearchQuery.toLowerCase();
+                    return (
+                      (p.title || "").toLowerCase().includes(q) ||
+                      (p.category || "").toLowerCase().includes(q)
+                    );
+                  })
+                  .map((panel, idx) => {
+                    return (
+                      <div
+                        key={`delete-panel-${panel.id || idx}`}
+                        className="bg-transparent  border border-white/10 rounded-2xl p-4 flex flex-col gap-3 text-left transition-all hover:border-red-500/40"
+                      >
+                        <div className="flex items-center gap-3">
+                          {panel.image ? (
+                            <img
+                              src={panel.image}
+                              alt={panel.title}
+                              className="w-14 h-14 rounded-xl object-cover border border-white/20 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-14 h-14 rounded-xl bg-gray-800 flex items-center justify-center text-gray-500 shrink-0">
+                              <ImageIcon size={20} />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="bg-pink-500/20 text-pink-300 text-[10px] font-bold px-2 py-0.5 rounded border border-pink-500/30 uppercase">
+                                {panel.category || "GENERAL"}
+                              </span>
+                              {panel.badge && (
+                                <span className="bg-amber-500/20 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded border border-amber-500/30 uppercase">
+                                  {panel.badge}
+                                </span>
+                              )}
+                            </div>
+                            <h4 className="text-white font-black text-sm uppercase truncate mt-1">
+                              {panel.title}
+                            </h4>
+                            <div className="flex flex-wrap gap-2 mt-1 text-[11px] text-gray-300 font-semibold">
+                              {ensureArray(panel.pricing || panel.pricingPlans).map((pp: any, pidx: number) => (
+                                <span key={pidx} className="text-cyan-300 font-bold">
+                                  {pp.label}: ₹{pp.price}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                          <button
+                            onClick={() => {
+                              // Pre-fill the edit form with the exact panel details
+                              const existingPricing = ensureArray(panel.pricing || panel.pricingPlans);
+                              setEditPanelForm({
+                                id: panel.id,
+                                title: panel.title || "",
+                                category: panel.category || "NON ROOT",
+                                badge: panel.badge || "PREMIUM PANELS",
+                                image: panel.image || "",
+                                isVideo: panel.isVideo || false,
+                                videoLink: panel.videoLink || "",
+                                installLink: panel.installLink || "",
+                                feedbackLink: panel.feedbackLink || "",
+                                exceptFileLink: panel.exceptFileLink || "",
+                                featuresText: ensureArray(panel.features).join("\n"),
+                                price1: existingPricing.find((p: any) => p.label === "1 Day")?.price || 90,
+                                price3: existingPricing.find((p: any) => p.label === "3 Day")?.price || 58,
+                                price7: existingPricing.find((p: any) => p.label === "7 Day")?.price || 67,
+                                price15: existingPricing.find((p: any) => p.label === "15 Day")?.price || 590,
+                                price30: existingPricing.find((p: any) => p.label === "30 Day")?.price || 5000,
+                              });
+                              setCurrentView("adminEditPanel");
+                            }}
+                            className="flex-1 bg-transparent hover:bg-transparent text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors uppercase"
+                          >
+                            <Edit size={14} /> Full Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Kya aap sach me panel "${panel.title}" ko delete karna chahte hain?`
+                                )
+                              ) {
+                                const updated = ensureArray(panels).filter(
+                                  (p) => p.id !== panel.id
+                                );
+                                setPanels(updated);
+                                localStorage.setItem("app_panels", JSON.stringify(updated));
+                                alert(`🗑️ Panel "${panel.title}" deleted successfully!`);
+                              }
+                            }}
+                            className="bg-red-600/30 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/40 font-black px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 uppercase"
+                          >
+                            <Trash2 size={14} /> Delete
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 1.5: ADMIN EDIT PANEL */}
+          {currentView === "adminEditPanel" && editPanelForm && (
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-3 mb-2">
+                <button
+                  onClick={() => setCurrentView("adminDeletePanel")}
+                  className="p-2 rounded-xl transition-all border-2 animate-satorang-border shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:scale-110"
+                >
+                  <ArrowLeft size={20} className="text-white" />
+                </button>
+                <h2 className="text-xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
+                  EDIT{" "}
+                  <span className="text-pink-400 drop-shadow-[0_0_15px_rgba(244,114,182,1)]">
+                    STORE PANEL
+                  </span>
+                </h2>
+              </div>
+
+              <div className="bg-transparent  border border-pink-500/40 rounded-2xl p-5 shadow-[0_4px_25px_rgba(244,114,182,0.3)] flex flex-col gap-4 text-left">
+                <div>
+                  <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    PANEL NAME / TITLE
+                  </label>
+                  <input
+                    type="text"
+                    value={editPanelForm.title}
+                    onChange={(e) =>
+                      setEditPanelForm({ ...editPanelForm, title: e.target.value })
+                    }
+                    placeholder="e.g. VIP FFH4X PRO MOD (100% SAFE)"
+                    className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner transition-all"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                      CATEGORY
+                    </label>
+                    <select
+                      value={editPanelForm.category}
+                      onChange={(e) =>
+                        setEditPanelForm({ ...editPanelForm, category: e.target.value })
+                      }
+                      className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
+                    >
+                      <option value="NON ROOT">NON ROOT</option>
+                      <option value="ROOT">ROOT</option>
+                      <option value="24ghanta">24ghanta</option>
+                      <option value="Steamer">Steamer</option>
+                      <option value="Pc">Pc</option>
+                      <option value="Bgmi">Bgmi</option>
+                      <option value="Moba legend">Moba legend</option>
+                      <option value="All">All</option>
+                      <option value="House">House</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                      BADGE TEXT
+                    </label>
+                    <input
+                      type="text"
+                      value={editPanelForm.badge}
+                      onChange={(e) =>
+                        setEditPanelForm({ ...editPanelForm, badge: e.target.value })
+                      }
+                      placeholder="e.g. 100% ANTIBAN"
+                      className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    PANEL IMAGE OR VIDEO
+                  </label>
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditPanelForm({ ...editPanelForm, isVideo: false })}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        !editPanelForm.isVideo
+                          ? "bg-pink-600 text-white shadow-lg"
+                          : "bg-transparent text-gray-400 hover:text-white"
+                      }`}
+                    >
+                      Photo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditPanelForm({ ...editPanelForm, isVideo: true })}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        editPanelForm.isVideo
+                          ? "bg-pink-600 text-white shadow-lg"
+                          : "bg-transparent text-gray-400 hover:text-white"
+                      }`}
+                    >
+                      Video (MP4)
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={editPanelForm.image}
+                      onChange={(e) =>
+                        setEditPanelForm({ ...editPanelForm, image: e.target.value })
+                      }
+                      placeholder="Image URL or upload below"
+                      className="flex-1 bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
+                    />
+                    <label className="cursor-pointer bg-transparent hover:bg-transparent text-white font-bold px-4 py-3 rounded-xl border border-white/20 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors">
+                      <Upload size={16} />
+                      <span>{isUploadingMedia ? "Uploading..." : "Upload File"}</span>
+                      <input
+                        type="file"
+                        accept="image/*,video/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            processAsyncMediaUpload(
+                              file,
+                              () => setIsUploadingMedia(true),
+                              (mediaUrl, isVideo) => {
+                                setIsUploadingMedia(false);
+                                setEditPanelForm((prev) => ({
+                                  ...prev,
+                                  image: mediaUrl,
+                                  isVideo,
+                                }));
+                              },
+                            );
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  {editPanelForm.image && (
+                    <div className="mt-3 relative w-32 h-32 rounded-xl overflow-hidden border border-white/30 shadow-md">
+                      {editPanelForm.isVideo ? (
+                        <video
+                          src={editPanelForm.image}
+                          className="w-full h-full object-cover"
+                          autoPlay
+                          loop
+                          muted
+                        />
+                      ) : (
+                        <img
+                          src={editPanelForm.image}
+                          alt="Panel Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                      YOUTUBE / DEMO VIDEO LINK
+                    </label>
+                    <input
+                      type="text"
+                      value={editPanelForm.videoLink}
+                      onChange={(e) =>
+                        setEditPanelForm({ ...editPanelForm, videoLink: e.target.value })
+                      }
+                      placeholder="https://youtube.com/..."
+                      className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                      INSTALL / APK DOWNLOAD LINK
+                    </label>
+                    <input
+                      type="text"
+                      value={editPanelForm.installLink}
+                      onChange={(e) =>
+                        setEditPanelForm({ ...editPanelForm, installLink: e.target.value })
+                      }
+                      placeholder="https://t.me/... or direct APK link"
+                      className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    PANEL FEATURES (ONE PER LINE)
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={editPanelForm.featuresText}
+                    onChange={(e) =>
+                      setEditPanelForm({ ...editPanelForm, featuresText: e.target.value })
+                    }
+                    className="w-full bg-transparent  border border-white/20 rounded-xl p-3 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    PRICING PLANS (₹ RUPEES)
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div>
+                      <span className="text-[11px] text-white font-bold drop-shadow-[0_0_6px_#000] block mb-1">1 Day</span>
+                      <input
+                        type="number"
+                        value={editPanelForm.price1}
+                        onChange={(e) =>
+                          setEditPanelForm({ ...editPanelForm, price1: Number(e.target.value) })
+                        }
+                        className="w-full bg-transparent border border-white/20 rounded-lg p-2.5 text-center font-bold text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-white font-bold drop-shadow-[0_0_6px_#000] block mb-1">3 Day</span>
+                      <input
+                        type="number"
+                        value={editPanelForm.price3}
+                        onChange={(e) =>
+                          setEditPanelForm({ ...editPanelForm, price3: Number(e.target.value) })
+                        }
+                        className="w-full bg-transparent border border-white/20 rounded-lg p-2.5 text-center font-bold text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-white font-bold drop-shadow-[0_0_6px_#000] block mb-1">7 Day</span>
+                      <input
+                        type="number"
+                        value={editPanelForm.price7}
+                        onChange={(e) =>
+                          setEditPanelForm({ ...editPanelForm, price7: Number(e.target.value) })
+                        }
+                        className="w-full bg-transparent border border-white/20 rounded-lg p-2.5 text-center font-bold text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-white font-bold drop-shadow-[0_0_6px_#000] block mb-1">15 Day</span>
+                      <input
+                        type="number"
+                        value={editPanelForm.price15}
+                        onChange={(e) =>
+                          setEditPanelForm({ ...editPanelForm, price15: Number(e.target.value) })
+                        }
+                        className="w-full bg-transparent border border-white/20 rounded-lg p-2.5 text-center font-bold text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-white font-bold drop-shadow-[0_0_6px_#000] block mb-1">30 Day</span>
+                      <input
+                        type="number"
+                        value={editPanelForm.price30}
+                        onChange={(e) =>
+                          setEditPanelForm({ ...editPanelForm, price30: Number(e.target.value) })
+                        }
+                        className="w-full bg-transparent border border-white/20 rounded-lg p-2.5 text-center font-bold text-white text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                
+                <button
+                  onClick={() => {
+                    if (!editPanelForm.title.trim()) {
+                      alert("⚠️ Please enter panel title!");
+                      return;
+                    }
+                    const features = editPanelForm.featuresText
+                      .split("\n")
+                      .map((f) => f.trim())
+                      .filter(Boolean);
+
+                    const updatedPanel = {
+                      ...editPanelForm,
+                      title: editPanelForm.title.trim(),
+                      features:
+                        features.length > 0
+                          ? features
+                          : ["Main Id safe", "Anti-Ban Guaranteed"],
+                      pricingPlans: [
+                        { label: "1 Day", price: Number(editPanelForm.price1) || 90 },
+                        { label: "3 Day", price: Number(editPanelForm.price3) || 58 },
+                        { label: "7 Day", price: Number(editPanelForm.price7) || 67 },
+                        { label: "15 Day", price: Number(editPanelForm.price15) || 590 },
+                        { label: "30 Day", price: Number(editPanelForm.price30) || 5000 },
+                      ],
+                    };
+
+                    const updatedPanels = ensureArray(panels).map((p) => p.id === editPanelForm.id ? updatedPanel : p);
+                    setPanels(updatedPanels);
+                    localStorage.setItem("app_panels", JSON.stringify(updatedPanels));
+                    playSuccessChime();
+                    alert(`✅ Panel "${updatedPanel.title}" successfully updated!`);
+                    setCurrentView("adminDeletePanel");
+                  }}
+                  className="mt-3 w-full bg-rainbow-animated border-2 border-white hover:from-emerald-400 hover:to-teal-500 text-white font-black py-4 rounded-xl shadow-[0_0_25px_rgba(16,185,129,0.5)] transition-all uppercase tracking-wider text-sm active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <Save size={20} /> SAVE PANEL CHANGES
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 3: ADMIN BACKGROUND IMAGE & LIVE FLOWERS */}
+          {currentView === "adminBgImage" && (
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-3 mb-2">
+                <button
+                  onClick={() => setCurrentView("admin")}
+                  className="p-2 rounded-xl transition-all border-2 animate-satorang-border shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:scale-110"
+                >
+                  <ArrowLeft size={20} className="text-white" />
+                </button>
+                <h2 className="text-xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
+                  BACKGROUND{" "}
+                  <span className="text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,1)]">
+                    & LIVE FLOWERS
+                  </span>
+                </h2>
+              </div>
+
+              <div className="bg-transparent  border border-amber-500/40 rounded-2xl p-5 shadow-[0_4px_25px_rgba(251,191,36,0.3)] flex flex-col gap-4 text-left">
+                {/* Custom Wallpaper URL + Upload */}
+                <div>
+                  <label className="text-amber-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    CUSTOM WALLPAPER IMAGE URL
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={bgSettings.customImage}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setBgSettings({ 
+                          ...bgSettings, 
+                          customImage: val,
+                          isVideo: val.toLowerCase().endsWith(".mp4") || val.toLowerCase().endsWith(".webm")
+                        });
+                      }}
+                      placeholder="https://images.unsplash.com/... or .mp4"
+                      className="flex-1 bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-amber-400 shadow-inner"
+                    />
+                    <label className="cursor-pointer bg-transparent hover:bg-transparent text-white font-bold px-4 py-3 rounded-xl border border-white/20 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors">
+                      <Upload size={16} />
+                      <span>Upload Wallpaper</span>
+                      <input
+                        type="file"
+                        accept="image/*,video/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const isVideo = file.type.startsWith("video/");
+                            // Create object URL for immediate display
+                            const objectUrl = URL.createObjectURL(file);
+                            
+                            setBgSettings({
+                              ...bgSettings,
+                              customImage: objectUrl,
+                              isVideo,
+                            });
+                            // Store the raw File object directly into IndexedDB
+                            // This prevents memory crash on large video files
+                            await saveMediaToDB("bg_media", file, isVideo);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Quick Preset Wallpapers */}
+                <div>
+                  <label className="text-amber-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    QUICK PRESET WALLPAPERS
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      {
+                        name: "Neon Cyberpunk",
+                        url: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop",
+                      },
+                      {
+                        name: "Gaming High-Tech",
+                        url: "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
+                      },
+                      {
+                        name: "Deep Space Nebula",
+                        url: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?q=80&w=2070&auto=format&fit=crop",
+                      },
+                      {
+                        name: "Royal Dark Gold",
+                        url: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2070&auto=format&fit=crop",
+                      },
+                    ].map((preset) => (
+                      <button
+                        key={preset.name}
+                        onClick={() =>
+                          setBgSettings({ ...bgSettings, customImage: preset.url })
+                        }
+                        className={`relative rounded-xl overflow-hidden border p-2 text-xs font-bold text-center transition-all ${
+                          bgSettings.customImage === preset.url
+                            ? "border-amber-400 bg-amber-500/20 text-amber-300"
+                            : "border-white/10 bg-transparent text-gray-400 hover:text-white"
+                        }`}
+                      >
+                        <img
+                          src={preset.url}
+                          alt={preset.name}
+                          className="w-full h-12 object-cover rounded mb-1"
+                        />
+                        <span>{preset.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 7-Color Flowers Shower Toggle */}
+                <div className="flex items-center justify-between bg-transparent p-3 rounded-xl border border-white/10">
+                  <div>
+                    <h4 className="text-white font-black text-sm uppercase flex items-center gap-1.5">
+                      <Sparkles size={16} className="text-yellow-400 animate-spin" />
+                      7-Color Live Flower Shower
+                    </h4>
+                    <p className="text-gray-400 text-xs">
+                      Background me 7-color sato-rang flowers girne ka effect
+                    </p>
+                  </div>
+                  <button
+                    onClick={() =>
+                      setBgSettings({
+                        ...bgSettings,
+                        enableFlowers: !bgSettings.enableFlowers,
+                      })
+                    }
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${
+                      bgSettings.enableFlowers
+                        ? "bg-green-600 text-white shadow-lg"
+                        : "bg-red-600/50 text-gray-300"
+                    }`}
+                  >
+                    {bgSettings.enableFlowers ? "ENABLED" : "DISABLED"}
+                  </button>
+                </div>
+
+                {/* Flower Speed Selector */}
+                <div>
+                  <label className="text-amber-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    FLOWER FALLING SPEED: {bgSettings.flowerSpeed || 1}x
+                  </label>
+                  <div className="flex gap-2">
+                    {[0.5, 1, 1.5, 2, 2.5].map((spd) => (
+                      <button
+                        key={spd}
+                        onClick={() =>
+                          setBgSettings({ ...bgSettings, flowerSpeed: spd })
+                        }
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                          (bgSettings.flowerSpeed || 1) === spd
+                            ? "bg-amber-500 text-black font-black"
+                            : "bg-transparent text-gray-300"
+                        }`}
+                      >
+                        {spd}x
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Darkness Overlay Slider */}
+                <div>
+                  <label className="text-amber-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    DARKNESS OVERLAY: {bgSettings.darknessOverlay || 0}%
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="80"
+                    value={bgSettings.darknessOverlay || 0}
+                    onChange={(e) =>
+                      setBgSettings({
+                        ...bgSettings,
+                        darknessOverlay: Number(e.target.value),
+                      })
+                    }
+                    className="w-full accent-amber-400"
+                  />
+                </div>
+
+                {/* Theme Hue Selector */}
+                <div>
+                  <label className="text-amber-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    THEME ACCENT COLOR
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { name: "Fuchsia", hue: 0 },
+                      { name: "Cyan", hue: 140 },
+                      { name: "Green", hue: 80 },
+                      { name: "Amber", hue: 45 },
+                      { name: "Blue", hue: 180 },
+                      { name: "Red", hue: 320 },
+                    ].map((th) => (
+                      <button
+                        key={th.name}
+                        onClick={() =>
+                          setBgSettings({ ...bgSettings, themeHue: th.hue })
+                        }
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          (bgSettings.themeHue || 0) === th.hue
+                            ? "bg-amber-500 text-black font-black"
+                            : "bg-transparent text-gray-300"
+                        }`}
+                      >
+                        {th.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Save Button */}
+                <button
+                  onClick={() => {
+                    localStorage.setItem("app_bgSettings", JSON.stringify(bgSettings));
+                    alert("✅ Background Wallpaper & Flower Settings saved successfully!");
+                    setCurrentView("admin");
+                  }}
+                  className="w-full mt-2 bg-rainbow-animated border-2 border-white hover:from-amber-400 hover:to-yellow-500 text-black font-black py-3.5 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.5)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <Save size={16} /> SAVE BACKGROUND SETTINGS
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 4: ADMIN PAYMENT SETTINGS (QR & UPI) */}
+          {currentView === "adminPaymentSettings" && (
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-3 mb-2">
+                <button
+                  onClick={() => setCurrentView("admin")}
+                  className="p-2 rounded-xl transition-all border-2 animate-satorang-border shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:scale-110"
+                >
+                  <ArrowLeft size={20} className="text-white" />
+                </button>
+                <h2 className="text-xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
+                  PAYMENT{" "}
+                  <span className="text-teal-400 drop-shadow-[0_0_15px_rgba(45,212,191,1)]">
+                    SETTINGS (QR & UPI)
+                  </span>
+                </h2>
+              </div>
+
+              <div className="bg-transparent  border border-teal-500/40 rounded-2xl p-5 shadow-[0_4px_25px_rgba(45,212,191,0.3)] flex flex-col gap-4 text-left">
+                {/* QR Code Image URL + File Upload */}
+                <div>
+                  <label className="text-teal-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    UPLOAD QR CODE IMAGE
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={paymentSettings.qrImage}
+                      onChange={(e) =>
+                        setPaymentSettings({ ...paymentSettings, qrImage: e.target.value })
+                      }
+                      placeholder="QR Code Image URL"
+                      className="flex-1 bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-teal-400 shadow-inner"
+                    />
+                    <label className="cursor-pointer bg-transparent hover:bg-transparent text-white font-bold px-4 py-3 rounded-xl border border-white/20 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors">
+                      <Upload size={16} />
+                      <span>Upload Gallery QR</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = async (re) => {
+                              if (re.target?.result) {
+                                const base64Str = re.target.result as string;
+                                const compressed = await compressImageBase64(base64Str, 512, 512);
+                                setPaymentSettings({
+                                  ...paymentSettings,
+                                  qrImage: compressed,
+                                });
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  
+                  {/* QR Preview */}
+                  {paymentSettings.qrImage && (
+                    <div className="mt-3 flex flex-col items-center p-4 bg-transparent rounded-2xl border border-white/10 max-w-xs mx-auto">
+                      <span className="text-xs text-gray-400 font-bold mb-2 uppercase">
+                        Live QR Preview:
+                      </span>
+                      <div className="bg-white p-3 rounded-xl shadow-lg">
+                        <img
+                          src={paymentSettings.qrImage}
+                          alt="UPI QR Code"
+                          className="w-48 h-48 object-contain"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* UPI ID */}
+                <div>
+                  <label className="text-teal-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    OFFICIAL UPI ID (ADD FUND KE LIYE)
+                  </label>
+                  <input
+                    type="text"
+                    value={paymentSettings.upiId}
+                    onChange={(e) =>
+                      setPaymentSettings({ ...paymentSettings, upiId: e.target.value })
+                    }
+                    placeholder="e.g. 9876543210@paytm or prem74@upi"
+                    className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-teal-400 shadow-inner"
+                  />
+                </div>
+
+                {/* Quick Presets Notice */}
+                <div className="bg-teal-500/10 border border-teal-500/30 p-3 rounded-xl text-xs text-gray-300">
+                  <span className="text-teal-300 font-black uppercase block mb-1">
+                    ⚡ Quick Amount Presets on Add Fund:
+                  </span>
+                  Users can deposit ₹50, ₹100, ₹200, ₹500, ₹1000, or ₹2000 directly using this UPI ID and QR code.
+                </div>
+
+                {/* Save Button */}
+                <button
+                  onClick={() => {
+                    localStorage.setItem(
+                      "app_paymentSettings",
+                      JSON.stringify(paymentSettings),
+                    );
+                    
+                    // Force a dummy state change to ensure Firebase sync happens via useEffect
+                    setPaymentSettings({ ...paymentSettings });
+
+                    alert("✅ Payment Settings (UPI & QR) successfully saved! Changes are now permanent on the website.");
+
+                    setCurrentView("admin");
+                  }}
+                  className="w-full mt-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-black font-black py-3.5 rounded-xl shadow-[0_0_20px_rgba(20,184,166,0.5)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <Save size={16} /> SAVE PAYMENT SETTINGS
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 5: ADMIN USER LOGINS & WALLETS */}
+          {currentView === "adminLogins" && (
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setCurrentView("admin")}
+                    className="p-2 rounded-xl transition-all border-2 animate-satorang-border shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:scale-110"
+                  >
+                    <ArrowLeft size={20} className="text-white" />
+                  </button>
+                  <h2 className="text-xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
+                    USER LOGINS &{" "}
+                    <span className="text-blue-400 drop-shadow-[0_0_15px_rgba(96,165,250,1)]">
+                      WALLETS
+                    </span>
+                  </h2>
+                </div>
+                <button
+                  onClick={() => setShowAdminAddUserModal(true)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-3 py-1.5 rounded-xl uppercase flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+                >
+                  <UserPlus size={14} /> Add User
+                </button>
+              </div>
+
+              {/* Stats Bar */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="bg-transparent border border-white/10 rounded-xl p-3 text-left">
+                  <span className="text-gray-400 text-xs font-bold block uppercase">Total Registered</span>
+                  <span className="text-white font-black text-xl">{ensureArray(registeredUsers).length} Users</span>
+                </div>
+                <div className="bg-transparent border border-white/10 rounded-xl p-3 text-left">
+                  <span className="text-gray-400 text-xs font-bold block uppercase">Active Logins</span>
+                  <span className="text-cyan-400 font-black text-xl">
+                    {ensureArray(registeredUsers).filter((u) => u.isLoggedIn).length} Online
+                  </span>
+                </div>
+                <div className="bg-transparent border border-white/10 rounded-xl p-3 text-left col-span-2 sm:col-span-1">
+                  <span className="text-gray-400 text-xs font-bold block uppercase">Total Balance Held</span>
+                  <span className="text-green-400 font-black text-xl">
+                    ₹
+                    {Object.values(userWallets || {}).reduce(
+                      (acc: number, val: any) => acc + (Number(val) || 0),
+                      0,
+                    )}
+                  </span>
+                </div>
+              </div>
+
+              {/* Search User */}
+              <div className="relative w-full">
+                <Search size={16} className="absolute left-3.5 top-3.5 text-gray-400" />
+                <input
+                  type="text"
+                  value={adminUserSearchQuery}
+                  onChange={(e) => setAdminUserSearchQuery(e.target.value)}
+                  placeholder="Search user by name, email, or phone..."
+                  className="w-full bg-transparent border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-blue-400 transition-all"
+                />
+              </div>
+
+              {/* User Cards */}
+              <div className="flex flex-col gap-3">
+                {ensureArray(registeredUsers)
+                  .filter((u) => {
+                    if (!adminUserSearchQuery) return true;
+                    const q = adminUserSearchQuery.toLowerCase();
+                    return (
+                      (u.name || "").toLowerCase().includes(q) ||
+                      (u.email || "").toLowerCase().includes(q) ||
+                      (u.phone || "").toLowerCase().includes(q)
+                    );
+                  })
+                  .map((u, idx) => {
+                    const accKey = getAccountKey(u.email, u.phone);
+                    const bal = Number(userWallets[accKey]) || 0;
+                    const inputAmt = adminBalanceInput[accKey] || "";
+
+                    return (
+                      <div
+                        key={`user-login-${idx}`}
+                        className="bg-transparent  border border-white/10 rounded-2xl p-4 flex flex-col gap-3 text-left transition-all hover:border-blue-500/40"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black text-sm uppercase shadow-md shrink-0">
+                              {(u.name || u.email || "U").slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <h4 className="text-white font-black text-sm uppercase">
+                                {u.name || "User"}
+                              </h4>
+                              <p className="text-gray-300 text-xs">{u.email || u.phone}</p>
+                              {u.phone && u.email && (
+                                <p className="text-gray-400 text-[11px]">Phone: {u.phone}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-gray-400 font-bold block uppercase">
+                              Balance:
+                            </span>
+                            <span className="text-green-400 font-black text-base">
+                              ₹{bal.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Quick Balance Adjust */}
+                        <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                          <input
+                            type="number"
+                            placeholder="Amount ₹"
+                            value={inputAmt}
+                            onChange={(e) =>
+                              setAdminBalanceInput({
+                                ...adminBalanceInput,
+                                [accKey]: e.target.value,
+                              })
+                            }
+                            className="w-24 bg-transparent border border-white/20 rounded-lg p-2 text-xs font-bold text-white text-center focus:outline-none focus:border-green-400"
+                          />
+                          <button
+                            onClick={() => {
+                              const amt = Number(inputAmt);
+                              if (!amt || amt <= 0) {
+                                alert("⚠️ Enter valid amount to add!");
+                                return;
+                              }
+                              const updated = {
+                                ...userWallets,
+                                [accKey]: bal + amt,
+                              };
+                              setUserWallets(updated);
+                              localStorage.setItem("app_userWallets", JSON.stringify(updated));
+                              setAdminBalanceInput({ ...adminBalanceInput, [accKey]: "" });
+                              alert(`✅ Added ₹${amt} to ${u.name || u.email || "user"}!`);
+                            }}
+                            className="flex-1 bg-green-600/30 hover:bg-green-600 text-green-300 hover:text-white border border-green-500/40 font-bold py-2 rounded-lg text-xs uppercase transition-colors"
+                          >
+                            + Add Money
+                          </button>
+                          <button
+                            onClick={() => {
+                              const amt = Number(inputAmt);
+                              if (!amt || amt <= 0) {
+                                alert("⚠️ Enter valid amount to deduct!");
+                                return;
+                              }
+                              const newBal = Math.max(0, bal - amt);
+                              const updated = {
+                                ...userWallets,
+                                [accKey]: newBal,
+                              };
+                              setUserWallets(updated);
+                              localStorage.setItem("app_userWallets", JSON.stringify(updated));
+                              setAdminBalanceInput({ ...adminBalanceInput, [accKey]: "" });
+                              alert(`✅ Deducted ₹${amt} from ${u.name || u.email || "user"}!`);
+                            }}
+                            className="flex-1 bg-red-600/30 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/40 font-bold py-2 rounded-lg text-xs uppercase transition-colors"
+                          >
+                            - Deduct
+                          </button>
+                          {u.phone && (
+                            <a
+                              href={`https://wa.me/${u.phone.replace(/[^0-9]/g, "")}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 bg-green-500/20 text-green-300 hover:bg-green-500/30 rounded-lg border border-green-500/40 transition-colors"
+                              title="Chat on WhatsApp"
+                            >
+                              <MessageCircle size={16} />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              {/* Add User Modal */}
+              {showAdminAddUserModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 animate-in fade-in duration-200">
+                  <div className="relative w-full max-w-md bg-gradient-to-b from-gray-900 via-black to-gray-900 border border-blue-500/50 rounded-2xl p-5 shadow-[0_0_40px_rgba(59,130,246,0.5)] text-left flex flex-col gap-3">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                      <h3 className="text-white font-black text-base uppercase flex items-center gap-2">
+                        <UserPlus size={18} className="text-blue-400" /> ADD NEW USER ACCOUNT
+                      </h3>
+                      <button
+                        onClick={() => setShowAdminAddUserModal(false)}
+                        className="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-transparent"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-gray-300 block mb-1 uppercase">Full Name</label>
+                      <input
+                        type="text"
+                        value={adminNewUserForm.name}
+                        onChange={(e) =>
+                          setAdminNewUserForm({ ...adminNewUserForm, name: e.target.value })
+                        }
+                        placeholder="Player One"
+                        className="w-full bg-transparent border border-white/20 rounded-xl p-2.5 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-300 block mb-1 uppercase">Email Address</label>
+                      <input
+                        type="email"
+                        value={adminNewUserForm.email}
+                        onChange={(e) =>
+                          setAdminNewUserForm({ ...adminNewUserForm, email: e.target.value })
+                        }
+                        placeholder="player@gmail.com"
+                        className="w-full bg-transparent border border-white/20 rounded-xl p-2.5 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-300 block mb-1 uppercase">Phone Number</label>
+                      <input
+                        type="text"
+                        value={adminNewUserForm.phone}
+                        onChange={(e) =>
+                          setAdminNewUserForm({ ...adminNewUserForm, phone: e.target.value })
+                        }
+                        placeholder="9876543210"
+                        className="w-full bg-transparent border border-white/20 rounded-xl p-2.5 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-300 block mb-1 uppercase">Password</label>
+                      <input
+                        type="text"
+                        value={adminNewUserForm.password}
+                        onChange={(e) =>
+                          setAdminNewUserForm({ ...adminNewUserForm, password: e.target.value })
+                        }
+                        placeholder="123456"
+                        className="w-full bg-transparent border border-white/20 rounded-xl p-2.5 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-300 block mb-1 uppercase">Initial Balance (₹)</label>
+                      <input
+                        type="number"
+                        value={adminNewUserForm.balance}
+                        onChange={(e) =>
+                          setAdminNewUserForm({ ...adminNewUserForm, balance: e.target.value })
+                        }
+                        placeholder="100"
+                        className="w-full bg-transparent border border-white/20 rounded-xl p-2.5 text-xs text-white"
+                      />
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        if (!adminNewUserForm.email && !adminNewUserForm.phone) {
+                          alert("⚠️ Please provide Email or Phone!");
+                          return;
+                        }
+                        const newUser = {
+                          name: adminNewUserForm.name || "User",
+                          email: adminNewUserForm.email,
+                          phone: adminNewUserForm.phone,
+                          password: adminNewUserForm.password || "123456",
+                          createdAt: new Date().toISOString(),
+                          isLoggedIn: false,
+                        };
+                        const updatedUsers = [newUser, ...ensureArray(registeredUsers)];
+                        setRegisteredUsers(updatedUsers);
+                        localStorage.setItem("app_registeredUsers", JSON.stringify(updatedUsers));
+
+                        const accKey = getAccountKey(newUser.email, newUser.phone);
+                        const initBal = Number(adminNewUserForm.balance) || 0;
+                        if (initBal > 0) {
+                          const updatedWallets = { ...userWallets, [accKey]: initBal };
+                          setUserWallets(updatedWallets);
+                          localStorage.setItem("app_userWallets", JSON.stringify(updatedWallets));
+                        }
+                        setShowAdminAddUserModal(false);
+                        setAdminNewUserForm({ name: "", email: "", phone: "", password: "", balance: "0" });
+                        alert(`✅ User "${newUser.name}" successfully created!`);
+                      }}
+                      className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black py-3 rounded-xl uppercase tracking-wider text-xs shadow-lg transition-all active:scale-95 text-center mt-2"
+                    >
+                      Create Account
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* VIEW 6: ADMIN BANNER & NOTICE */}
+          {currentView === "adminBanner" && (
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-3 mb-2">
+                <button
+                  onClick={() => setCurrentView("admin")}
+                  className="p-2 rounded-xl transition-all border-2 animate-satorang-border shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:scale-110"
+                >
+                  <ArrowLeft size={20} className="text-white" />
+                </button>
+                <h2 className="text-xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
+                  BANNER &{" "}
+                  <span className="text-purple-400 drop-shadow-[0_0_15px_rgba(192,132,252,1)]">
+                    NOTICE SETTINGS
+                  </span>
+                </h2>
+              </div>
+
+              <div className="bg-transparent  border border-purple-500/40 rounded-2xl p-5 shadow-[0_4px_25px_rgba(192,132,252,0.3)] flex flex-col gap-5 text-left">
+                {/* 1. SCROLLING MARQUEE NOTICE */}
+                <div className="border-b border-white/10 pb-4 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-white font-black text-sm uppercase flex items-center gap-1.5">
+                        <Megaphone size={16} className="text-fuchsia-400" /> 1. TOP SCROLLING MARQUEE TICKER
+                      </h4>
+                      <p className="text-gray-400 text-xs">Home screen ke upar chalne wali scrolling notice patti</p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        setBannerSettings({
+                          ...bannerSettings,
+                          marqueeEnabled: !bannerSettings.marqueeEnabled,
+                        })
+                      }
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all ${
+                        bannerSettings.marqueeEnabled
+                          ? "bg-fuchsia-600 text-white shadow-lg"
+                          : "bg-transparent text-gray-400"
+                      }`}
+                    >
+                      {bannerSettings.marqueeEnabled ? "ACTIVE" : "DISABLED"}
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="text-purple-300 font-bold text-xs tracking-wider mb-1 block uppercase">
+                      MARQUEE TICKER TEXT
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={bannerSettings.marqueeText}
+                      onChange={(e) =>
+                        setBannerSettings({
+                          ...bannerSettings,
+                          marqueeText: e.target.value,
+                        })
+                      }
+                      placeholder="Enter announcement text..."
+                      className="w-full bg-transparent border border-white/20 rounded-xl p-3 text-xs font-bold text-white focus:outline-none focus:border-purple-400 shadow-inner"
+                    />
+                  </div>
+                </div>
+
+                {/* 2. PROMOTIONAL POSTER BANNER */}
+                <div className="border-b border-white/10 pb-4 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-white font-black text-sm uppercase flex items-center gap-1.5">
+                        <Sparkles size={16} className="text-yellow-400" /> 2. HOME PROMOTIONAL BANNER
+                      </h4>
+                      <p className="text-gray-400 text-xs">Home screen par bada poster card with image & link</p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        setBannerSettings({
+                          ...bannerSettings,
+                          bannerEnabled: !bannerSettings.bannerEnabled,
+                        })
+                      }
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all ${
+                        bannerSettings.bannerEnabled
+                          ? "bg-purple-600 text-white shadow-lg"
+                          : "bg-transparent text-gray-400"
+                      }`}
+                    >
+                      {bannerSettings.bannerEnabled ? "ACTIVE" : "DISABLED"}
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="text-purple-300 font-bold text-xs tracking-wider mb-1 block uppercase">
+                      BANNER HEADLINE / TITLE
+                    </label>
+                    <input
+                      type="text"
+                      value={bannerSettings.bannerTitle}
+                      onChange={(e) =>
+                        setBannerSettings({
+                          ...bannerSettings,
+                          bannerTitle: e.target.value,
+                        })
+                      }
+                      placeholder="e.g. 🔥 FFH4CK VIP PREM STORE - SAFE MODS 🔥"
+                      className="w-full bg-transparent border border-white/20 rounded-xl py-2.5 px-3 text-xs font-bold text-white focus:outline-none focus:border-purple-400 shadow-inner"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-purple-300 font-bold text-xs tracking-wider mb-1 block uppercase">
+                      BANNER SUBTITLE / DESCRIPTION
+                    </label>
+                    <input
+                      type="text"
+                      value={bannerSettings.bannerSubtitle}
+                      onChange={(e) =>
+                        setBannerSettings({
+                          ...bannerSettings,
+                          bannerSubtitle: e.target.value,
+                        })
+                      }
+                      placeholder="e.g. Instant 24/7 Auto Delivery • 100% Antiban Guaranteed"
+                      className="w-full bg-transparent border border-white/20 rounded-xl py-2.5 px-3 text-xs font-bold text-white focus:outline-none focus:border-purple-400 shadow-inner"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-purple-300 font-bold text-xs tracking-wider mb-1 block uppercase">
+                      BANNER POSTER IMAGE
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        value={bannerSettings.bannerImage}
+                        onChange={(e) =>
+                          setBannerSettings({
+                            ...bannerSettings,
+                            bannerImage: e.target.value,
+                          })
+                        }
+                        placeholder="Image URL or upload from storage"
+                        className="flex-1 bg-transparent border border-white/20 rounded-xl py-2.5 px-3 text-xs font-bold text-white focus:outline-none focus:border-purple-400 shadow-inner"
+                      />
+                      <label className="cursor-pointer bg-transparent hover:bg-transparent text-white font-bold px-3.5 py-2.5 rounded-xl border border-white/20 flex items-center justify-center gap-1.5 text-xs uppercase tracking-wider shrink-0 transition-colors">
+                        <Upload size={14} />
+                        <span>Upload Image</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (re) => {
+                                if (re.target?.result) {
+                                  setBannerSettings({
+                                    ...bannerSettings,
+                                    bannerImage: re.target.result as string,
+                                  });
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-purple-300 font-bold text-xs tracking-wider mb-1 block uppercase">
+                      BANNER CLICK / TELEGRAM ACTION LINK
+                    </label>
+                    <input
+                      type="text"
+                      value={bannerSettings.bannerLink}
+                      onChange={(e) =>
+                        setBannerSettings({
+                          ...bannerSettings,
+                          bannerLink: e.target.value,
+                        })
+                      }
+                      placeholder="https://t.me/Premjodvip"
+                      className="w-full bg-transparent border border-white/20 rounded-xl py-2.5 px-3 text-xs font-bold text-white focus:outline-none focus:border-purple-400 shadow-inner"
+                    />
+                  </div>
+                </div>
+
+                {/* 3. POPUP NOTICE MODAL */}
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-white font-black text-sm uppercase flex items-center gap-1.5">
+                        <AlertCircle size={16} className="text-cyan-400" /> 3. POPUP ANNOUNCEMENT MODAL
+                      </h4>
+                      <p className="text-gray-400 text-xs">Website open karne par user ke samne aane wala pop-up notice</p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        setBannerSettings({
+                          ...bannerSettings,
+                          popupEnabled: !bannerSettings.popupEnabled,
+                        })
+                      }
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase transition-all ${
+                        bannerSettings.popupEnabled
+                          ? "bg-cyan-600 text-white shadow-lg"
+                          : "bg-transparent text-gray-400"
+                      }`}
+                    >
+                      {bannerSettings.popupEnabled ? "ACTIVE" : "DISABLED"}
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="text-purple-300 font-bold text-xs tracking-wider mb-1 block uppercase">
+                      POPUP TITLE
+                    </label>
+                    <input
+                      type="text"
+                      value={bannerSettings.popupTitle}
+                      onChange={(e) =>
+                        setBannerSettings({
+                          ...bannerSettings,
+                          popupTitle: e.target.value,
+                        })
+                      }
+                      placeholder="e.g. 📢 SPECIAL ANNOUNCEMENT"
+                      className="w-full bg-transparent border border-white/20 rounded-xl py-2.5 px-3 text-xs font-bold text-white focus:outline-none focus:border-purple-400 shadow-inner"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-purple-300 font-bold text-xs tracking-wider mb-1 block uppercase">
+                      POPUP MESSAGE
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={bannerSettings.popupMessage}
+                      onChange={(e) =>
+                        setBannerSettings({
+                          ...bannerSettings,
+                          popupMessage: e.target.value,
+                        })
+                      }
+                      placeholder="Notice details..."
+                      className="w-full bg-transparent border border-white/20 rounded-xl p-3 text-xs font-bold text-white focus:outline-none focus:border-purple-400 shadow-inner"
+                    />
+                  </div>
+                </div>
+
+                {/* Save Button */}
+                <button
+                  onClick={() => {
+                    localStorage.setItem(
+                      "app_bannerSettings",
+                      JSON.stringify(bannerSettings),
+                    );
+                    alert("✅ Banner, Marquee & Notice Settings saved successfully!");
+                    setCurrentView("admin");
+                  }}
+                  className="w-full mt-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white font-black py-3.5 rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.5)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <Save size={16} /> SAVE BANNER & NOTICE SETTINGS
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* DEDICATED STAFF PANEL (PASSWORD: PREM74) */}
           {currentView === "staff" && (
-            <div className="flex flex-col gap-5 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-black/20 backdrop-blur-xl rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-col gap-5 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               {/* Staff Header */}
-              <div className="flex flex-col gap-3 bg-black/20 backdrop-blur-md border border-fuchsia-500/40 p-4 rounded-2xl shadow-[0_0_30px_rgba(217,70,239,0.25)]  text-left">
+              <div className="flex flex-col gap-3 bg-transparent  border border-fuchsia-500/40 p-4 rounded-2xl shadow-[0_0_30px_rgba(217,70,239,0.25)]  text-left">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setCurrentView("home")}
-                      className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors "
+                      className="p-2 bg-transparent hover:bg-transparent rounded-full transition-colors "
                     >
                       <ArrowLeft size={20} className="text-white" />
                     </button>
@@ -7988,7 +11388,7 @@ export default function App() {
 
                 {/* DSLR Top Metric Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-1">
-                  <div className="bg-black/20 backdrop-blur-md border border-purple-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-lg">
+                  <div className="bg-transparent  border border-purple-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-lg">
                     <User size={20} className="text-purple-400 mb-1" />
                     <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">
                       Total Users
@@ -7997,7 +11397,7 @@ export default function App() {
                       {ensureArray(registeredUsers).length}
                     </span>
                   </div>
-                  <div className="bg-black/20 backdrop-blur-md border border-emerald-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-lg">
+                  <div className="bg-transparent  border border-emerald-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-lg">
                     <Wallet size={20} className="text-emerald-400 mb-1" />
                     <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">
                       Total Revenue
@@ -8009,7 +11409,7 @@ export default function App() {
                         .reduce((acc, curr) => acc + (curr.amount || 0), 0)}
                     </span>
                   </div>
-                  <div className="bg-black/20 backdrop-blur-md border border-cyan-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-lg">
+                  <div className="bg-transparent  border border-cyan-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-lg">
                     <LayoutDashboard size={20} className="text-cyan-400 mb-1" />
                     <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">
                       Active Panels
@@ -8018,7 +11418,7 @@ export default function App() {
                       {ensureArray(panels).length}
                     </span>
                   </div>
-                  <div className="bg-black/20 backdrop-blur-md border border-amber-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-lg">
+                  <div className="bg-transparent  border border-amber-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-lg">
                     <Hourglass size={20} className="text-amber-400 mb-1" />
                     <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">
                       Pending Fund
@@ -8103,7 +11503,7 @@ export default function App() {
                       className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
                         staffTab === tab.id
                           ? `bg-gradient-to-r ${tab.color} text-white shadow-[0_0_15px_rgba(217,70,239,0.5)] scale-105 border border-white/30`
-                          : "bg-black/50 text-gray-400 hover:text-white border border-white/10 hover:border-white/20"
+                          : "bg-transparent text-gray-400 hover:text-white border border-white/10 hover:border-white/20"
                       }`}
                     >
                       {tab.label}
@@ -8115,7 +11515,7 @@ export default function App() {
               {/* STAFF TAB 1: OVERVIEW */}
               {staffTab === "overview" && (
                 <div className="flex flex-col gap-4">
-                  <div className="bg-black/20 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-2xl  flex flex-col gap-4 text-left">
+                  <div className="bg-transparent  border border-white/10 rounded-2xl p-5 shadow-2xl  flex flex-col gap-4 text-left">
                     <h3 className="text-lg font-black text-white flex items-center gap-2 uppercase tracking-wide">
                       <Sparkles size={18} className="text-fuchsia-400" /> STAFF
                       CONTROL DASHBOARD
@@ -8212,7 +11612,7 @@ export default function App() {
 
                       <button
                         onClick={() => setStaffTab("colorTheme")}
-                        className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 p-4 rounded-xl text-white font-black text-sm uppercase flex items-center justify-between shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all hover:scale-[1.02]"
+                        className="bg-rainbow-animated border-2 border-white hover:from-cyan-500 hover:to-blue-500 p-4 rounded-xl text-white font-black text-sm uppercase flex items-center justify-between shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all hover:scale-[1.02]"
                       >
                         <span className="flex items-center gap-2.5">
                           <Palette size={20} /> 🎨 Color Changes
@@ -8222,7 +11622,7 @@ export default function App() {
 
                       <button
                         onClick={() => setStaffTab("payments")}
-                        className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 p-4 rounded-xl text-white font-black text-sm uppercase flex items-center justify-between shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all hover:scale-[1.02] md:col-span-2"
+                        className="bg-rainbow-animated border-2 border-white hover:from-emerald-500 hover:to-teal-500 p-4 rounded-xl text-white font-black text-sm uppercase flex items-center justify-between shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all hover:scale-[1.02] md:col-span-2"
                       >
                         <span className="flex items-center gap-2.5">
                           <Wallet size={20} /> 💰 Money & Payments ("Kisne Kisne
@@ -8239,7 +11639,7 @@ export default function App() {
               {staffTab === "resellers" && (
                 <div className="flex flex-col gap-4">
                   {/* Reseller Admin Header & Metrics */}
-                  <div className="bg-black/20 backdrop-blur-md border border-amber-500/40 rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-left">
+                  <div className="bg-transparent  border border-amber-500/40 rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-left">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div>
                         <h3 className="text-lg font-black text-amber-400 flex items-center gap-2 uppercase tracking-wide">
@@ -8259,7 +11659,7 @@ export default function App() {
 
                     {/* Reseller Summary Metrics */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                      <div className="bg-black/40 border border-yellow-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center">
+                      <div className="bg-transparent border border-yellow-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center">
                         <Users size={18} className="text-yellow-400 mb-1" />
                         <span className="text-gray-400 text-[10px] font-bold uppercase">
                           Total Resellers
@@ -8268,7 +11668,7 @@ export default function App() {
                           {ensureArray(approvedResellers).length}
                         </span>
                       </div>
-                      <div className="bg-black/40 border border-emerald-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center">
+                      <div className="bg-transparent border border-emerald-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center">
                         <Wallet size={18} className="text-emerald-400 mb-1" />
                         <span className="text-gray-400 text-[10px] font-bold uppercase">
                           Reseller Float
@@ -8281,7 +11681,7 @@ export default function App() {
                           )}
                         </span>
                       </div>
-                      <div className="bg-black/40 border border-cyan-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center col-span-2 sm:col-span-1">
+                      <div className="bg-transparent border border-cyan-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center col-span-2 sm:col-span-1">
                         <Percent size={18} className="text-cyan-400 mb-1" />
                         <span className="text-gray-400 text-[10px] font-bold uppercase">
                           Default VIP Discount
@@ -8294,7 +11694,7 @@ export default function App() {
                   </div>
 
                   {/* Add New Approved Reseller Form */}
-                  <div className="bg-black/20 backdrop-blur-md border border-amber-500/30 rounded-2xl p-5 shadow-xl flex flex-col gap-3 text-left">
+                  <div className="bg-transparent  border border-amber-500/30 rounded-2xl p-5 shadow-xl flex flex-col gap-3 text-left">
                     <h4 className="text-sm font-black text-white uppercase flex items-center gap-2">
                       <PlusCircle size={18} className="text-amber-400" /> ➕ Add
                       / Approve New Reseller Gmail
@@ -8314,7 +11714,7 @@ export default function App() {
                               email: e.target.value,
                             })
                           }
-                          className="w-full bg-black/40 border border-white/20 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                          className="w-full bg-transparent border border-white/20 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400"
                         />
                       </div>
                       <div>
@@ -8331,7 +11731,7 @@ export default function App() {
                               name: e.target.value,
                             })
                           }
-                          className="w-full bg-black/40 border border-white/20 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                          className="w-full bg-transparent border border-white/20 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400"
                         />
                       </div>
                       <div>
@@ -8348,7 +11748,7 @@ export default function App() {
                               phone: e.target.value,
                             })
                           }
-                          className="w-full bg-black/40 border border-white/20 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                          className="w-full bg-transparent border border-white/20 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400"
                         />
                       </div>
                       <div>
@@ -8365,7 +11765,7 @@ export default function App() {
                               balance: Number(e.target.value),
                             })
                           }
-                          className="w-full bg-black/40 border border-white/20 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                          className="w-full bg-transparent border border-white/20 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
                         />
                       </div>
                     </div>
@@ -8420,7 +11820,7 @@ export default function App() {
                   </div>
 
                   {/* Resellers Search & List */}
-                  <div className="bg-black/20 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-xl flex flex-col gap-3 text-left">
+                  <div className="bg-transparent  border border-white/10 rounded-2xl p-5 shadow-xl flex flex-col gap-3 text-left">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <h4 className="text-sm font-black text-white uppercase flex items-center gap-2">
                         <Users size={18} className="text-cyan-400" /> Approved
@@ -8431,7 +11831,7 @@ export default function App() {
                         placeholder="Search reseller by email / name..."
                         value={searchResellerQuery}
                         onChange={(e) => setSearchResellerQuery(e.target.value)}
-                        className="bg-black/40 border border-white/20 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-400 w-full sm:w-64"
+                        className="bg-transparent border border-white/20 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-400 w-full sm:w-64"
                       />
                     </div>
 
@@ -8448,7 +11848,7 @@ export default function App() {
                         .map((reseller, rIdx) => (
                           <div
                             key={`reseller-row-${reseller.email}-${rIdx}`}
-                            className="bg-black/40 border border-yellow-500/30 rounded-xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md hover:border-yellow-400/60 transition-all"
+                            className="bg-transparent border border-yellow-500/30 rounded-xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md hover:border-yellow-400/60 transition-all"
                           >
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 rounded-full bg-yellow-500/20 border border-yellow-400/50 flex items-center justify-center shrink-0">
@@ -8484,7 +11884,7 @@ export default function App() {
                             {/* Wallet Controls & Actions */}
                             <div className="flex flex-wrap items-center gap-2">
                               {/* Wallet Balance Tag */}
-                              <div className="bg-black/60 border border-emerald-500/40 px-3 py-1.5 rounded-xl flex items-center gap-2">
+                              <div className="bg-transparent border border-emerald-500/40 px-3 py-1.5 rounded-xl flex items-center gap-2">
                                 <span className="text-[10px] text-gray-400 font-bold uppercase">
                                   Balance:
                                 </span>
@@ -8650,7 +12050,7 @@ export default function App() {
                         ))}
 
                       {ensureArray(approvedResellers).length === 0 && (
-                        <div className="p-4 text-center text-gray-400 text-xs bg-black/40 rounded-xl border border-white/10">
+                        <div className="p-4 text-center text-gray-400 text-xs bg-transparent rounded-xl border border-white/10">
                           Abhi koi Reseller add nahi hua hai. Upar diye gaye
                           form se naya Reseller Gmail ID add karein.
                         </div>
@@ -8659,7 +12059,7 @@ export default function App() {
                   </div>
 
                   {/* Differential Pricing Rate Overview Table */}
-                  <div className="bg-black/20 backdrop-blur-md border border-cyan-500/30 rounded-2xl p-5 shadow-xl flex flex-col gap-3 text-left">
+                  <div className="bg-transparent  border border-cyan-500/30 rounded-2xl p-5 shadow-xl flex flex-col gap-3 text-left">
                     <h4 className="text-sm font-black text-cyan-400 uppercase flex items-center gap-2">
                       <Percent size={18} /> Differential Pricing Matrix (Normal
                       vs Reseller VIP Price)
@@ -8689,16 +12089,16 @@ export default function App() {
                         </thead>
                         <tbody className="divide-y divide-white/5">
                           {panels.slice(0, 8).map((p, idx) => {
-                            const p1 = p.pricing[0]?.price || 90;
+                            const p1 = p.pricing?.[0]?.price || 90;
                             const resP =
-                              (p.pricing[0] as any)?.resellerPrice !== undefined
-                                ? (p.pricing[0] as any).resellerPrice
+                              (p.pricing?.[0] as any)?.resellerPrice !== undefined
+                                ? (p.pricing?.[0] as any).resellerPrice
                                 : Math.round(p1 * 0.65);
                             const margin = p1 - resP;
                             return (
                               <tr
                                 key={`diff-price-${p.id}-${idx}`}
-                                className="hover:bg-white/5"
+                                className="hover:bg-transparent"
                               >
                                 <td className="py-2 px-3 font-bold text-white">
                                   {p.title}
@@ -8707,7 +12107,7 @@ export default function App() {
                                   {p.category}
                                 </td>
                                 <td className="py-2 px-3 line-through text-gray-400">
-                                  ₹{p1} ({p.pricing[0]?.label || "1 Day"})
+                                  ₹{p1} ({p.pricing?.[0]?.label || "1 Day"})
                                 </td>
                                 <td className="py-2 px-3 font-black text-yellow-300 font-mono">
                                   ₹{resP}
@@ -8729,7 +12129,7 @@ export default function App() {
               {/* STAFF TAB: COLOR THEME */}
               {staffTab === "colorTheme" && (
                 <div className="flex flex-col gap-4">
-                  <div className="bg-black/20 backdrop-blur-md border border-cyan-500/40 rounded-2xl p-5 shadow-2xl flex flex-col gap-5 text-left">
+                  <div className="bg-transparent  border border-cyan-500/40 rounded-2xl p-5 shadow-2xl flex flex-col gap-5 text-left">
                     <h3 className="text-lg font-black text-cyan-400 flex items-center gap-2 uppercase tracking-wide">
                       <Palette size={20} /> 🎨 Theme Color Changes
                     </h3>
@@ -8801,7 +12201,7 @@ export default function App() {
                             {theme.name}
                           </span>
                           {bgSettings.themeHue === theme.hue && (
-                            <div className="absolute inset-0 bg-white/10 z-0"></div>
+                            <div className="absolute inset-0 bg-transparent z-0"></div>
                           )}
                         </button>
                       ))}
@@ -8817,85 +12217,367 @@ export default function App() {
 
               {/* STAFF TAB 2: ADD PANEL */}
               {staffTab === "addPanel" && (
-                <div className="bg-black/20 backdrop-blur-md border border-fuchsia-500/40 rounded-2xl p-5 shadow-2xl  flex flex-col gap-4 text-left">
-                  <h3 className="text-lg font-black text-white flex items-center gap-2 uppercase tracking-wide">
-                    <PlusCircle size={20} className="text-fuchsia-400" /> ➕ ADD
-                    NEW PANEL TO STORE
-                  </h3>
-                  <p className="text-gray-300 text-xs">
-                    Is form me naye panel ki puri details enter karke direct
-                    website store par add kar sakte hain.
+                <div className="bg-transparent  border border-fuchsia-500/40 rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-left">
+                  <div className="flex items-center justify-between flex-wrap gap-2 border-b border-white/10 pb-3">
+                    <h3 className="text-lg font-black text-white flex items-center gap-2 uppercase tracking-wide">
+                      <PlusCircle size={20} className="text-fuchsia-400" /> ➕ ADD NEW PANEL TO STORE
+                    </h3>
+                    <span className="text-xs bg-fuchsia-500/20 text-fuchsia-300 font-bold px-2.5 py-1 rounded-full border border-fuchsia-500/40">
+                      Live Store Creator
+                    </span>
+                  </div>
+
+                  <p className="text-gray-300 text-xs leading-relaxed">
+                    Naye panel ki poori details (Name, Photo/Video, Features, Install Link, Video Feedback Telegram/WhatsApp link, aur Custom Pricing) yahan daal kar direct Store par publish karein.
                   </p>
 
-                  <div className="flex flex-col gap-3 bg-black/50 p-4 rounded-xl border border-white/10">
-                    <div>
-                      <label className="text-fuchsia-400 font-bold text-xs uppercase block mb-1">
-                        PANEL TITLE
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g., DRIPCLIENT FF NONROOT"
-                        value={newPanelForm.title}
-                        onChange={(e) =>
-                          setNewPanelForm({
-                            ...newPanelForm,
-                            title: e.target.value,
-                          })
-                        }
-                        className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-fuchsia-400"
-                      />
-                    </div>
+                  <div className="flex flex-col gap-4 bg-transparent p-4 sm:p-5 rounded-2xl border border-white/10 shadow-inner">
+                    {/* 1. PANEL NAME & CATEGORY */}
+                    <div className="bg-transparent p-3.5 rounded-xl border border-white/10 flex flex-col gap-3">
+                      <div className="flex items-center gap-2 text-fuchsia-400 font-black text-xs uppercase tracking-wider">
+                        <Award size={15} /> 1. PANEL NAME & CATEGORY
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-white font-bold drop-shadow-[0_0_6px_#000] text-xs uppercase block mb-1">
+                            Panel Ka Naam (Title) <span className="text-rose-400">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g., A,XYZ MAIN ID FF PROXY NONROOT"
+                            value={newPanelForm.title}
+                            onChange={(e) =>
+                              setNewPanelForm({
+                                ...newPanelForm,
+                                title: e.target.value,
+                              })
+                            }
+                            className="w-full bg-transparent  border border-white/20 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-fuchsia-400 font-semibold"
+                          />
+                        </div>
 
-                    <div>
-                      <label className="text-fuchsia-400 font-bold text-xs uppercase block mb-1">
-                        CATEGORY
-                      </label>
-                      <select
-                        value={newPanelForm.category}
-                        onChange={(e) =>
-                          setNewPanelForm({
-                            ...newPanelForm,
-                            category: e.target.value,
-                          })
-                        }
-                        className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-fuchsia-400"
-                      >
-                        <option value="NON ROOT">NON ROOT</option>
-                        <option value="24ghanta">24ghanta / HOUSE</option>
-                        <option value="ROOT">ROOT</option>
-                        <option value="ANDROID">ANDROID</option>
-                        <option value="IOS">IOS</option>
-                        <option value="FREE FIRE">FREE FIRE</option>
-                        <option value="SPECIAL">SPECIAL</option>
-                      </select>
-                    </div>
+                        <div>
+                          <label className="text-white font-bold drop-shadow-[0_0_6px_#000] text-xs uppercase block mb-1">
+                            Category
+                          </label>
+                          <select
+                            value={newPanelForm.category}
+                            onChange={(e) =>
+                              setNewPanelForm({
+                                ...newPanelForm,
+                                category: e.target.value,
+                              })
+                            }
+                            className="w-full bg-transparent  border border-white/20 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-fuchsia-400 font-semibold cursor-pointer"
+                          >
+                            <option value="NON ROOT">NON ROOT</option>
+                            <option value="24ghanta">24ghanta / HOUSE</option>
+                            <option value="ROOT">ROOT</option>
+                            <option value="ANDROID">ANDROID</option>
+                            <option value="IOS">IOS</option>
+                            <option value="FREE FIRE">FREE FIRE</option>
+                            <option value="SPECIAL">SPECIAL</option>
+                            <option value="VIP CHEATS">VIP CHEATS</option>
+                          </select>
+                        </div>
+                      </div>
 
-                    <div>
-                      <label className="text-fuchsia-400 font-bold text-xs uppercase block mb-1">
-                        IMAGE / VIDEO THUMBNAIL URL OR UPLOAD
-                      </label>
-                      <div className="flex gap-2">
+                      <div>
+                        <label className="text-gray-400 text-[11px] font-bold uppercase block mb-1">
+                          Tagline / Badge Text
+                        </label>
                         <input
                           type="text"
-                          placeholder="Image or Video Thumbnail URL..."
-                          value={newPanelForm.image}
+                          placeholder="e.g., PREMIUM PANELS, 100% SAFE, VIP PRIVATE"
+                          value={newPanelForm.badge || ""}
                           onChange={(e) =>
                             setNewPanelForm({
                               ...newPanelForm,
-                              image: e.target.value,
+                              badge: e.target.value,
                             })
                           }
-                          className="flex-1 bg-black/20 backdrop-blur-md border border-white/20 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-fuchsia-400"
+                          className="w-full bg-transparent border border-white/10 rounded-lg py-2 px-3 text-xs text-gray-200 focus:outline-none focus:border-fuchsia-400"
                         />
-                        <label className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-bold px-3 py-2.5 rounded-xl cursor-pointer flex items-center gap-1 shrink-0">
-                          {isUploadingMedia ? (
+                      </div>
+                    </div>
+
+                    {/* 2. PANEL PHOTO & VIDEO */}
+                    <div className="bg-transparent p-3.5 rounded-xl border border-white/10 flex flex-col gap-3">
+                      <div className="flex items-center gap-2 text-cyan-400 font-black text-xs uppercase tracking-wider">
+                        <Camera size={15} /> 2. PANEL PHOTO & VIDEO (MEDIA)
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Photo URL & Upload */}
+                        <div>
+                          <label className="text-white font-bold drop-shadow-[0_0_6px_#000] text-xs uppercase block mb-1">
+                            Panel Photo / Banner URL
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="Image URL or Upload from device..."
+                              value={newPanelForm.image}
+                              onChange={(e) =>
+                                setNewPanelForm({
+                                  ...newPanelForm,
+                                  image: e.target.value,
+                                })
+                              }
+                              className="flex-1 bg-transparent border border-white/20 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-cyan-400"
+                            />
+                            <label className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-2.5 rounded-xl cursor-pointer flex items-center gap-1 shrink-0 transition-all active:scale-95 shadow-[0_0_15px_rgba(6,182,212,0.4)]">
+                              {isUploadingMedia ? (
+                                <span className="flex items-center gap-1 text-xs animate-pulse">
+                                  <Loader2 className="animate-spin" size={14} /> Uploading...
+                                </span>
+                              ) : (
+                                <>
+                                  <Camera size={14} /> Upload Photo
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        processAsyncMediaUpload(
+                                          file,
+                                          () => setIsUploadingMedia(true),
+                                          (url) => {
+                                            setNewPanelForm((prev) => ({
+                                              ...prev,
+                                              image: url,
+                                            }));
+                                            setIsUploadingMedia(false);
+                                          },
+                                        );
+                                      }
+                                    }}
+                                  />
+                                </>
+                              )}
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Video Link & Upload */}
+                        <div>
+                          <label className="text-white font-bold drop-shadow-[0_0_6px_#000] text-xs uppercase block mb-1">
+                            Panel Live Video Link / Demo Video
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="YouTube Link, MP4 URL, or Upload..."
+                              value={newPanelForm.videoLink}
+                              onChange={(e) =>
+                                setNewPanelForm({
+                                  ...newPanelForm,
+                                  videoLink: e.target.value,
+                                })
+                              }
+                              className="flex-1 bg-transparent border border-white/20 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-cyan-400"
+                            />
+                            <label className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-3 py-2.5 rounded-xl cursor-pointer flex items-center gap-1 shrink-0 transition-all active:scale-95 shadow-[0_0_15px_rgba(225,29,72,0.4)]">
+                              {isUploadingVideoMedia ? (
+                                <span className="flex items-center gap-1 text-xs animate-pulse">
+                                  <Loader2 className="animate-spin" size={14} /> Uploading...
+                                </span>
+                              ) : (
+                                <>
+                                  <Play size={14} /> Upload Video
+                                  <input
+                                    type="file"
+                                    accept="video/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        processAsyncMediaUpload(
+                                          file,
+                                          () => setIsUploadingVideoMedia(true),
+                                          (url, isVid) => {
+                                            setNewPanelForm((prev) => ({
+                                              ...prev,
+                                              videoLink: url,
+                                              isVideo: isVid,
+                                            }));
+                                            setIsUploadingVideoMedia(false);
+                                          },
+                                        );
+                                      }
+                                    }}
+                                  />
+                                </>
+                              )}
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
+                        <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-300 select-none">
+                          <input
+                            type="checkbox"
+                            checked={newPanelForm.isVideo}
+                            onChange={(e) =>
+                              setNewPanelForm({
+                                ...newPanelForm,
+                                isVideo: e.target.checked,
+                              })
+                            }
+                            className="w-4 h-4 rounded text-fuchsia-600 focus:ring-fuchsia-500 bg-transparent border-white/30"
+                          />
+                          <span>Card par Main Thumbnail me Video Mode on rakhein</span>
+                        </label>
+
+                        {/* Quick Thumbnail Preview */}
+                        {(newPanelForm.image || newPanelForm.videoLink) && (
+                          <div className="flex items-center gap-2 bg-transparent px-3 py-1.5 rounded-lg border border-white/10">
+                            <span className="text-[10px] text-gray-400 font-bold uppercase">Preview:</span>
+                            {newPanelForm.image && (
+                              <img
+                                src={newPanelForm.image}
+                                alt="Preview"
+                                className="w-8 h-8 rounded object-cover border border-white/20"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = "none";
+                                }}
+                              />
+                            )}
+                            <span className="text-[11px] text-green-400 font-bold">Media Ready ✅</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 3. PANEL FEATURES LIST */}
+                    <div className="bg-transparent p-3.5 rounded-xl border border-white/10 flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-yellow-400 font-black text-xs uppercase tracking-wider">
+                          <Zap size={15} /> 3. PANEL FEATURES (Kya Kya Feature Hai)
+                        </div>
+                        <span className="text-[10px] text-gray-400">1 Feature Per Line</span>
+                      </div>
+
+                      <textarea
+                        rows={4}
+                        placeholder="Main Id safe&#10;Full safe NONROOT&#10;Esp crack anti-blacklist&#10;Auto headshot 100% working&#10;Location ESP&#10;24ghanta Safe"
+                        value={newPanelForm.featuresText}
+                        onChange={(e) =>
+                          setNewPanelForm({
+                            ...newPanelForm,
+                            featuresText: e.target.value,
+                          })
+                        }
+                        className="w-full bg-transparent border border-white/20 rounded-xl py-2.5 px-3 text-xs font-mono text-white focus:outline-none focus:border-yellow-400"
+                      />
+
+                      {/* Quick Feature Chips */}
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase">Quick Add:</span>
+                        {[
+                          "Main Id safe",
+                          "Full safe NONROOT",
+                          "Esp crack anti-blacklist",
+                          "Auto headshot 100% working",
+                          "24ghanta Safe",
+                          "Location ESP & Aimlock",
+                          "Anti-Ban 100% Safe Bypass",
+                          "VIP Fast Injection",
+                        ].map((chip) => (
+                          <button
+                            key={chip}
+                            type="button"
+                            onClick={() => {
+                              const current = newPanelForm.featuresText ? newPanelForm.featuresText.trim() : "";
+                              const updated = current ? `${current}\n${chip}` : chip;
+                              setNewPanelForm({
+                                ...newPanelForm,
+                                featuresText: updated,
+                              });
+                            }}
+                            className="bg-yellow-500/10 hover:bg-yellow-500/25 border border-yellow-500/30 text-yellow-300 text-[10px] font-bold px-2 py-0.5 rounded-md transition-all active:scale-95"
+                          >
+                            + {chip}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 4. INSTALL PANEL BUTTON LINK */}
+                    <div className="bg-transparent p-3.5 rounded-xl border border-white/10 flex flex-col gap-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-cyan-400 font-black text-xs uppercase tracking-wider">
+                          <Download size={15} /> 4. "INSTALL PANEL" BUTTON KA LINK
+                        </div>
+                        <span className="text-[10px] text-cyan-300/80 font-mono">INSTALL/PANEL Button</span>
+                      </div>
+                      <p className="text-gray-400 text-[11px]">
+                        Website par customer jab <strong className="text-cyan-300">INSTALL/PANEL</strong> button dabayega to ye link khulega (Telegram Channel, Direct APK link, Google Drive, Mediafire ya Custom URL).
+                      </p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="e.g., https://t.me/yourchannel ya Direct APK Download link..."
+                          value={newPanelForm.installLink}
+                          onChange={(e) =>
+                            setNewPanelForm({
+                              ...newPanelForm,
+                              installLink: e.target.value,
+                            })
+                          }
+                          className="flex-1 bg-transparent border border-white/20 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNewPanelForm({
+                              ...newPanelForm,
+                              installLink: supportLinks.telegram || "https://t.me/yourchannel",
+                            })
+                          }
+                          className="bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-400/40 text-cyan-200 text-xs font-bold px-3 py-2.5 rounded-xl whitespace-nowrap transition-all active:scale-95"
+                        >
+                          📎 Use Telegram
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 5. VIDEO / FEEDBACK PROOF LINK (Photo, Video, Telegram & WhatsApp) */}
+                    <div className="bg-transparent p-3.5 rounded-xl border border-white/10 flex flex-col gap-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-rose-400 font-black text-xs uppercase tracking-wider">
+                          <Play size={15} /> 5. "VIDEO / FEEDBACK" PROOF LINK & MEDIA
+                        </div>
+                        <span className="text-[10px] text-rose-300/80 font-mono">VIDEO/FEEDBACK Button</span>
+                      </div>
+                      <p className="text-gray-400 text-[11px]">
+                        Website par customer jab <strong className="text-rose-300">VIDEO/FEEDBACK</strong> button dabayega to ye open hoga. Aap isme <strong>Telegram channel/proof link, WhatsApp group/support link, YouTube proof video, direct photo/video URL</strong> daal sakte hain ya <strong>Photo/Video direct upload</strong> kar sakte hain.
+                      </p>
+
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Telegram proof link, WhatsApp link, YouTube link ya Proof Media URL..."
+                          value={newPanelForm.feedbackLink}
+                          onChange={(e) =>
+                            setNewPanelForm({
+                              ...newPanelForm,
+                              feedbackLink: e.target.value,
+                            })
+                          }
+                          className="flex-1 bg-transparent border border-white/20 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-rose-400 font-mono"
+                        />
+                        <label className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-3 py-2.5 rounded-xl cursor-pointer flex items-center gap-1 shrink-0 transition-all active:scale-95 shadow-[0_0_15px_rgba(225,29,72,0.4)]">
+                          {isUploadingFeedbackMedia ? (
                             <span className="flex items-center gap-1 text-xs animate-pulse">
-                              <Loader2 className="animate-spin" size={14} />{" "}
-                              Uploading...
+                              <Loader2 className="animate-spin" size={14} /> Uploading...
                             </span>
                           ) : (
                             <>
-                              <Camera size={14} /> Upload
+                              <Camera size={14} /> Upload Proof
                               <input
                                 type="file"
                                 accept="image/*,video/*"
@@ -8905,14 +12587,13 @@ export default function App() {
                                   if (file) {
                                     processAsyncMediaUpload(
                                       file,
-                                      () => setIsUploadingMedia(true),
-                                      (url, isVideo) => {
+                                      () => setIsUploadingFeedbackMedia(true),
+                                      (url) => {
                                         setNewPanelForm((prev) => ({
                                           ...prev,
-                                          image: url,
-                                          isVideo,
+                                          feedbackLink: url,
                                         }));
-                                        setIsUploadingMedia(false);
+                                        setIsUploadingFeedbackMedia(false);
                                       },
                                     );
                                   }
@@ -8922,117 +12603,203 @@ export default function App() {
                           )}
                         </label>
                       </div>
+
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNewPanelForm({
+                              ...newPanelForm,
+                              feedbackLink: supportLinks.telegram || "https://t.me/yourchannel",
+                            })
+                          }
+                          className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/40 text-blue-300 text-xs font-bold px-3 py-1 rounded-lg flex items-center gap-1 transition-all active:scale-95"
+                        >
+                          💬 Set Telegram Link
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNewPanelForm({
+                              ...newPanelForm,
+                              feedbackLink: supportLinks.whatsapp || "https://wa.me/919999999999",
+                            })
+                          }
+                          className="bg-green-500/20 hover:bg-green-500/30 border border-green-400/40 text-green-300 text-xs font-bold px-3 py-1 rounded-lg flex items-center gap-1 transition-all active:scale-95"
+                        >
+                          🟢 Set WhatsApp Link
+                        </button>
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="text-fuchsia-400 font-bold text-xs uppercase block mb-1">
-                        PANEL FEATURES (1 Feature Per Line)
-                      </label>
-                      <textarea
-                        rows={4}
-                        placeholder="Main Id safe&#10;Full safe NONROOT&#10;Esp crack anti-blacklist&#10;Auto headshot 100% working"
-                        value={newPanelForm.featuresText}
-                        onChange={(e) =>
-                          setNewPanelForm({
-                            ...newPanelForm,
-                            featuresText: e.target.value,
-                          })
-                        }
-                        className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-xl py-2.5 px-3 text-xs font-mono text-white focus:outline-none focus:border-fuchsia-400"
-                      />
-                    </div>
+                    {/* 6. PANEL PRICING & CUSTOM PLAN NAMES */}
+                    <div className="bg-transparent p-3.5 rounded-xl border border-white/10 flex flex-col gap-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2 text-emerald-400 font-black text-xs uppercase tracking-wider">
+                          <Coins size={15} /> 6. PANEL PRICING & CUSTOM PLAN NAMES (₹)
+                        </div>
+                        <span className="text-[10px] text-emerald-300/80">Plan Name + Price customize karein</span>
+                      </div>
 
-                    <div className="bg-black/20 backdrop-blur-md border border-white/10 p-3 rounded-xl">
-                      <label className="text-fuchsia-400 font-bold text-xs uppercase block mb-2">
-                        PRICING DETAILS (₹)
-                      </label>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                        <div>
-                          <span className="text-gray-400 block mb-0.5">
-                            1 Day
-                          </span>
-                          <input
-                            type="number"
-                            value={newPanelForm.price1}
-                            onChange={(e) =>
+                      <p className="text-gray-400 text-[11px]">
+                        Aap har plan ka <strong>Naam (e.g. 1 Day, 3 Day, 15 House, 24 House, VIP Lifetime, 1 Month)</strong> aur uska <strong>Price (₹)</strong> apne hisaab se likh sakte hain. Store dropdown me vahi show hoga!
+                      </p>
+
+                      {/* Dynamic Pricing Plans List */}
+                      <div className="flex flex-col gap-2">
+                        {(newPanelForm.pricingPlans || []).map((plan, pIdx) => (
+                          <div
+                            key={`plan-row-${pIdx}`}
+                            className="flex items-center gap-2 bg-transparent p-2 rounded-xl border border-white/10"
+                          >
+                            <span className="text-xs font-bold text-gray-400 w-5 text-center">
+                              #{pIdx + 1}
+                            </span>
+                            <div className="flex-1">
+                              <label className="text-[10px] text-gray-400 block font-bold uppercase mb-0.5">
+                                Plan Name / Duration (Label)
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g., 1 Day, 15 House, VIP Lifetime..."
+                                value={plan.label}
+                                onChange={(e) => {
+                                  const updated = [...(newPanelForm.pricingPlans || [])];
+                                  updated[pIdx] = { ...updated[pIdx], label: e.target.value };
+                                  setNewPanelForm({
+                                    ...newPanelForm,
+                                    pricingPlans: updated,
+                                  });
+                                }}
+                                className="w-full bg-transparent border border-white/20 rounded-lg py-1.5 px-2.5 text-xs text-white font-semibold focus:outline-none focus:border-emerald-400"
+                              />
+                            </div>
+                            <div className="w-28 sm:w-36">
+                              <label className="text-[10px] text-gray-400 block font-bold uppercase mb-0.5">
+                                Price (₹)
+                              </label>
+                              <div className="relative">
+                                <span className="absolute left-2.5 top-1.5 text-xs text-emerald-400 font-bold">₹</span>
+                                <input
+                                  type="number"
+                                  placeholder="90"
+                                  value={plan.price}
+                                  onChange={(e) => {
+                                    const updated = [...(newPanelForm.pricingPlans || [])];
+                                    updated[pIdx] = { ...updated[pIdx], price: Number(e.target.value) };
+                                    setNewPanelForm({
+                                      ...newPanelForm,
+                                      pricingPlans: updated,
+                                    });
+                                  }}
+                                  className="w-full bg-transparent border border-white/20 rounded-lg py-1.5 pl-6 pr-2 text-xs text-white font-mono font-bold focus:outline-none focus:border-emerald-400"
+                                />
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = (newPanelForm.pricingPlans || []).filter((_, idx) => idx !== pIdx);
+                                setNewPanelForm({
+                                  ...newPanelForm,
+                                  pricingPlans: updated.length > 0 ? updated : [{ label: "1 Day", price: 90 }],
+                                });
+                              }}
+                              className="p-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 rounded-lg transition-colors mt-3"
+                              title="Delete Plan"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Add Plan & Quick Presets */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = newPanelForm.pricingPlans || [];
+                            setNewPanelForm({
+                              ...newPanelForm,
+                              pricingPlans: [
+                                ...current,
+                                { label: `${current.length + 1} Day`, price: 100 },
+                              ],
+                            });
+                          }}
+                          className="bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-400/40 text-emerald-300 text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all active:scale-95 shadow-[0_0_12px_rgba(16,185,129,0.2)]"
+                        >
+                          <PlusCircle size={14} /> ➕ Add Another Plan / Price
+                        </button>
+
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] text-gray-400 font-bold uppercase">Presets:</span>
+                          <button
+                            type="button"
+                            onClick={() =>
                               setNewPanelForm({
                                 ...newPanelForm,
-                                price1: Number(e.target.value),
+                                pricingPlans: [
+                                  { label: "1 Day", price: 90 },
+                                  { label: "3 Day", price: 58 },
+                                  { label: "7 Day", price: 67 },
+                                  { label: "15 Day", price: 590 },
+                                  { label: "30 Day", price: 5000 },
+                                ],
                               })
                             }
-                            className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-lg p-2 text-white"
-                          />
-                        </div>
-                        <div>
-                          <span className="text-gray-400 block mb-0.5">
-                            3 Day
-                          </span>
-                          <input
-                            type="number"
-                            value={newPanelForm.price3}
-                            onChange={(e) =>
+                            className="bg-transparent hover:bg-transparent border border-white/20 text-gray-300 text-[10px] font-bold px-2 py-1 rounded-md"
+                          >
+                            📅 5-Days
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
                               setNewPanelForm({
                                 ...newPanelForm,
-                                price3: Number(e.target.value),
+                                pricingPlans: [
+                                  { label: "3 House", price: 50 },
+                                  { label: "7 House", price: 90 },
+                                  { label: "15 House", price: 150 },
+                                  { label: "24 House", price: 220 },
+                                ],
                               })
                             }
-                            className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-lg p-2 text-white"
-                          />
-                        </div>
-                        <div>
-                          <span className="text-gray-400 block mb-0.5">
-                            7 Day
-                          </span>
-                          <input
-                            type="number"
-                            value={newPanelForm.price7}
-                            onChange={(e) =>
+                            className="bg-transparent hover:bg-transparent border border-white/20 text-gray-300 text-[10px] font-bold px-2 py-1 rounded-md"
+                          >
+                            ⏰ House / Hours
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
                               setNewPanelForm({
                                 ...newPanelForm,
-                                price7: Number(e.target.value),
+                                pricingPlans: [
+                                  { label: "1 Day VIP", price: 120 },
+                                  { label: "7 Days VIP", price: 350 },
+                                  { label: "30 Days VIP", price: 999 },
+                                  { label: "Lifetime VIP", price: 2999 },
+                                ],
                               })
                             }
-                            className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-lg p-2 text-white"
-                          />
-                        </div>
-                        <div>
-                          <span className="text-gray-400 block mb-0.5">
-                            15 Day
-                          </span>
-                          <input
-                            type="number"
-                            value={newPanelForm.price15}
-                            onChange={(e) =>
-                              setNewPanelForm({
-                                ...newPanelForm,
-                                price15: Number(e.target.value),
-                              })
-                            }
-                            className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-lg p-2 text-white"
-                          />
-                        </div>
-                        <div>
-                          <span className="text-gray-400 block mb-0.5">
-                            30 Day
-                          </span>
-                          <input
-                            type="number"
-                            value={newPanelForm.price30}
-                            onChange={(e) =>
-                              setNewPanelForm({
-                                ...newPanelForm,
-                                price30: Number(e.target.value),
-                              })
-                            }
-                            className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-lg p-2 text-white"
-                          />
+                            className="bg-transparent hover:bg-transparent border border-white/20 text-gray-300 text-[10px] font-bold px-2 py-1 rounded-md"
+                          >
+                            👑 VIP Lifetime
+                          </button>
                         </div>
                       </div>
                     </div>
 
+                    {/* SAVE & PUBLISH BUTTON */}
                     <button
                       type="button"
                       onClick={() => {
+                        if (!newPanelForm.title.trim()) {
+                          alert("⚠️ Kripya Panel ka Naam (Title) zaroor enter karein!");
+                          return;
+                        }
+
                         const parsedFeatures = newPanelForm.featuresText
                           ? newPanelForm.featuresText
                               .split("\n")
@@ -9045,48 +12812,64 @@ export default function App() {
                               "Auto headshot 100% working",
                             ];
 
-                        setPanels((prev) => [
-                          {
-                            id: Date.now(),
-                            title: newPanelForm.title || "STAFF PANEL NEW",
-                            category: newPanelForm.category || "NON ROOT",
-                            thumbnailTitle:
-                              newPanelForm.title || "STAFF PANEL NEW",
-                            thumbnailSub: "PREMIUM PANELS",
-                            image:
-                              newPanelForm.image ||
-                              "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
-                            isVideo: newPanelForm.isVideo,
-                            features: parsedFeatures,
-                            installLink: supportLinks.telegram,
-                            videoLink:
-                              newPanelForm.videoLink || supportLinks.telegram,
-                            exceptFileLink:
-                              newPanelForm.exceptFileLink ||
-                              supportLinks.telegram,
-                            pricing: [
-                              { label: "1 Day", price: newPanelForm.price1 },
-                              { label: "3 Day", price: newPanelForm.price3 },
-                              { label: "7 Day", price: newPanelForm.price7 },
-                              { label: "15 Day", price: newPanelForm.price15 },
-                              { label: "30 Day", price: newPanelForm.price30 },
-                            ],
-                          },
-                          ...prev,
-                        ]);
+                        const finalPricing =
+                          Array.isArray(newPanelForm.pricingPlans) && newPanelForm.pricingPlans.length > 0
+                            ? newPanelForm.pricingPlans
+                            : [
+                                { label: "1 Day", price: newPanelForm.price1 || 90 },
+                                { label: "3 Day", price: newPanelForm.price3 || 58 },
+                                { label: "7 Day", price: newPanelForm.price7 || 67 },
+                                { label: "15 Day", price: newPanelForm.price15 || 590 },
+                                { label: "30 Day", price: newPanelForm.price30 || 5000 },
+                              ];
+
+                        const newPanelItem = {
+                          id: Date.now(),
+                          title: newPanelForm.title.trim(),
+                          category: newPanelForm.category || "NON ROOT",
+                          thumbnailTitle: newPanelForm.title.trim(),
+                          thumbnailSub: newPanelForm.badge || "PREMIUM PANELS",
+                          image:
+                            newPanelForm.image ||
+                            "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
+                          isVideo: Boolean(newPanelForm.isVideo),
+                          features: parsedFeatures,
+                          installLink: newPanelForm.installLink || supportLinks.telegram,
+                          videoLink: newPanelForm.videoLink || newPanelForm.feedbackLink || supportLinks.telegram,
+                          feedbackLink: newPanelForm.feedbackLink || supportLinks.telegram,
+                          exceptFileLink:
+                            newPanelForm.exceptFileLink ||
+                            newPanelForm.installLink ||
+                            supportLinks.telegram,
+                          pricing: finalPricing,
+                        };
+
+                        setPanels((prev) => [newPanelItem, ...prev]);
 
                         alert(
-                          "✅ Staff Member: Naya Panel Store par Successfully Add ho gaya hai!",
+                          `✅ Naya Panel "${newPanelForm.title}" Store par Successfully Add ho gaya hai!`,
                         );
+
+                        // Reset form
                         setNewPanelForm({
                           title: "",
                           category: "NON ROOT",
+                          badge: "PREMIUM PANELS",
                           image: "",
                           isVideo: false,
                           videoLink: "",
+                          installLink: "",
+                          feedbackLink: "",
                           exceptFileLink: "",
                           featuresText:
                             "Main Id safe\nFull safe NONROOT\nEsp crack anti-blacklist\nAuto headshot 100% working",
+                          pricingPlans: [
+                            { label: "1 Day", price: 90 },
+                            { label: "3 Day", price: 58 },
+                            { label: "7 Day", price: 67 },
+                            { label: "15 Day", price: 590 },
+                            { label: "30 Day", price: 5000 },
+                          ],
                           price1: 90,
                           price3: 58,
                           price7: 67,
@@ -9095,9 +12878,9 @@ export default function App() {
                         });
                         setStaffTab("managePanels");
                       }}
-                      className="mt-2 w-full bg-gradient-to-r from-fuchsia-600 via-purple-600 to-pink-600 hover:from-fuchsia-500 hover:to-pink-500 text-white font-black py-3.5 rounded-xl shadow-[0_0_25px_rgba(217,70,239,0.5)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95"
+                      className="mt-2 w-full bg-gradient-to-r from-fuchsia-600 via-purple-600 to-pink-600 hover:from-fuchsia-500 hover:to-pink-500 text-white font-black py-4 rounded-2xl shadow-[0_0_30px_rgba(217,70,239,0.6)] transition-all uppercase tracking-wider text-sm flex items-center justify-center gap-2 active:scale-95 cursor-pointer border border-fuchsia-400/40"
                     >
-                      <PlusCircle size={18} /> ➕ SAVE & ADD PANEL TO STORE
+                      <PlusCircle size={20} /> ➕ SAVE & PUBLISH NEW PANEL TO STORE
                     </button>
                   </div>
                 </div>
@@ -9105,7 +12888,7 @@ export default function App() {
 
               {/* STAFF TAB: HOUSE / 24GHANTA PRIVATE PANEL */}
               {staffTab === "house" && (
-                <div className="bg-black/20 backdrop-blur-md border border-amber-500/40 rounded-2xl p-5 shadow-2xl  flex flex-col gap-4 text-left">
+                <div className="bg-transparent  border border-amber-500/40 rounded-2xl p-5 shadow-2xl  flex flex-col gap-4 text-left">
                   <div className="flex flex-col gap-1">
                     <h3 className="text-lg font-black text-white flex items-center gap-2 uppercase tracking-wide">
                       <Home size={20} className="text-amber-400" /> 🏠 HOUSE /
@@ -9118,7 +12901,7 @@ export default function App() {
                     </p>
                   </div>
 
-                  <div className="flex flex-col gap-3 bg-black/20 backdrop-blur-md p-4 rounded-xl border border-amber-500/30">
+                  <div className="flex flex-col gap-3 bg-transparent  p-4 rounded-xl border border-amber-500/30">
                     <div>
                       <label className="text-amber-400 font-bold text-xs uppercase block mb-1">
                         PANEL TITLE
@@ -9133,7 +12916,7 @@ export default function App() {
                             title: e.target.value,
                           })
                         }
-                        className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                        className="w-full bg-transparent  border border-white/20 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-amber-400"
                       />
                     </div>
 
@@ -9150,7 +12933,7 @@ export default function App() {
                               category: e.target.value,
                             })
                           }
-                          className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                          className="w-full bg-transparent  border border-white/20 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-amber-400"
                         >
                           <option value="24ghanta">
                             24ghanta (Default Search Category)
@@ -9177,7 +12960,7 @@ export default function App() {
                                 image: e.target.value,
                               })
                             }
-                            className="flex-1 bg-black/20 backdrop-blur-md border border-white/20 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-amber-400"
+                            className="flex-1 bg-transparent  border border-white/20 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-amber-400"
                           />
                           <label className="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-3 py-2.5 rounded-xl cursor-pointer flex items-center gap-1 shrink-0">
                             {isUploadingMedia ? (
@@ -9218,7 +13001,7 @@ export default function App() {
                     </div>
 
                     {/* Dedicated Telegram & WhatsApp Support Links for this Private Panel */}
-                    <div className="bg-black/20 backdrop-blur-md border border-white/10 p-3.5 rounded-xl flex flex-col gap-3">
+                    <div className="bg-transparent  border border-white/10 p-3.5 rounded-xl flex flex-col gap-3">
                       <span className="text-xs font-black text-amber-300 uppercase tracking-wide">
                         💬 DEDICATED PRIVATE SUPPORT LINKS (SPECIAL TELEGRAM &
                         WHATSAPP)
@@ -9238,7 +13021,7 @@ export default function App() {
                                 telegramLink: e.target.value,
                               })
                             }
-                            className="w-full bg-black border border-white/20 rounded-lg p-2 text-xs text-white focus:border-sky-400"
+                            className="w-full bg-transparent border border-white/20 rounded-lg p-2 text-xs text-white focus:border-sky-400"
                           />
                         </div>
                         <div>
@@ -9255,7 +13038,7 @@ export default function App() {
                                 whatsappLink: e.target.value,
                               })
                             }
-                            className="w-full bg-black border border-white/20 rounded-lg p-2 text-xs text-white focus:border-green-400"
+                            className="w-full bg-transparent border border-white/20 rounded-lg p-2 text-xs text-white focus:border-green-400"
                           />
                         </div>
                       </div>
@@ -9276,7 +13059,7 @@ export default function App() {
                             videoLink: e.target.value,
                           })
                         }
-                        className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-amber-400"
+                        className="w-full bg-transparent  border border-white/20 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-amber-400"
                       />
                     </div>
 
@@ -9295,12 +13078,12 @@ export default function App() {
                             featuresText: e.target.value,
                           })
                         }
-                        className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-xl py-2.5 px-3 text-xs font-mono text-white focus:outline-none focus:border-amber-400"
+                        className="w-full bg-transparent  border border-white/20 rounded-xl py-2.5 px-3 text-xs font-mono text-white focus:outline-none focus:border-amber-400"
                       />
                     </div>
 
                     {/* HOURLY / HOUSE PRICING SECTION (3 house: 149, 7 house: 230, 15 house: 280, 24 house: 399) */}
-                    <div className="bg-black/20 backdrop-blur-md border border-amber-500/40 p-3.5 rounded-xl flex flex-col gap-2">
+                    <div className="bg-transparent  border border-amber-500/40 p-3.5 rounded-xl flex flex-col gap-2">
                       <div className="flex items-center justify-between">
                         <span className="text-amber-400 font-black text-xs uppercase flex items-center gap-1.5">
                           <Clock size={16} /> ⏱️ HOURLY / HOUSE PRICING (PRICE
@@ -9324,7 +13107,7 @@ export default function App() {
 
                       {housePanelForm.includeHours && (
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mt-1">
-                          <div className="bg-black/20 backdrop-blur-md p-2 rounded-lg border border-white/10">
+                          <div className="bg-transparent  p-2 rounded-lg border border-white/10">
                             <span className="text-amber-300 font-bold block mb-1">
                               3 House (3 Hrs)
                             </span>
@@ -9337,10 +13120,10 @@ export default function App() {
                                   price3h: Number(e.target.value),
                                 })
                               }
-                              className="w-full bg-black border border-white/20 rounded p-1.5 text-white font-bold"
+                              className="w-full bg-transparent border border-white/20 rounded p-1.5 text-white font-bold"
                             />
                           </div>
-                          <div className="bg-black/20 backdrop-blur-md p-2 rounded-lg border border-white/10">
+                          <div className="bg-transparent  p-2 rounded-lg border border-white/10">
                             <span className="text-amber-300 font-bold block mb-1">
                               7 House (7 Hrs)
                             </span>
@@ -9353,10 +13136,10 @@ export default function App() {
                                   price7h: Number(e.target.value),
                                 })
                               }
-                              className="w-full bg-black border border-white/20 rounded p-1.5 text-white font-bold"
+                              className="w-full bg-transparent border border-white/20 rounded p-1.5 text-white font-bold"
                             />
                           </div>
-                          <div className="bg-black/20 backdrop-blur-md p-2 rounded-lg border border-white/10">
+                          <div className="bg-transparent  p-2 rounded-lg border border-white/10">
                             <span className="text-amber-300 font-bold block mb-1">
                               15 House (15 Hrs)
                             </span>
@@ -9369,10 +13152,10 @@ export default function App() {
                                   price15h: Number(e.target.value),
                                 })
                               }
-                              className="w-full bg-black border border-white/20 rounded p-1.5 text-white font-bold"
+                              className="w-full bg-transparent border border-white/20 rounded p-1.5 text-white font-bold"
                             />
                           </div>
-                          <div className="bg-black/20 backdrop-blur-md p-2 rounded-lg border border-white/10">
+                          <div className="bg-transparent  p-2 rounded-lg border border-white/10">
                             <span className="text-amber-300 font-bold block mb-1">
                               24 House (24 Hrs)
                             </span>
@@ -9385,7 +13168,7 @@ export default function App() {
                                   price24h: Number(e.target.value),
                                 })
                               }
-                              className="w-full bg-black border border-white/20 rounded p-1.5 text-white font-bold"
+                              className="w-full bg-transparent border border-white/20 rounded p-1.5 text-white font-bold"
                             />
                           </div>
                         </div>
@@ -9393,7 +13176,7 @@ export default function App() {
                     </div>
 
                     {/* DAILY PRICING SECTION */}
-                    <div className="bg-black/20 backdrop-blur-md border border-white/10 p-3.5 rounded-xl flex flex-col gap-2">
+                    <div className="bg-transparent  border border-white/10 p-3.5 rounded-xl flex flex-col gap-2">
                       <div className="flex items-center justify-between">
                         <span className="text-cyan-400 font-black text-xs uppercase flex items-center gap-1.5">
                           📅 DAILY PRICING (DAYS OPTION)
@@ -9429,7 +13212,7 @@ export default function App() {
                                   price1d: Number(e.target.value),
                                 })
                               }
-                              className="w-full bg-black border border-white/20 rounded p-1.5 text-white"
+                              className="w-full bg-transparent border border-white/20 rounded p-1.5 text-white"
                             />
                           </div>
                           <div>
@@ -9445,7 +13228,7 @@ export default function App() {
                                   price3d: Number(e.target.value),
                                 })
                               }
-                              className="w-full bg-black border border-white/20 rounded p-1.5 text-white"
+                              className="w-full bg-transparent border border-white/20 rounded p-1.5 text-white"
                             />
                           </div>
                           <div>
@@ -9461,7 +13244,7 @@ export default function App() {
                                   price7d: Number(e.target.value),
                                 })
                               }
-                              className="w-full bg-black border border-white/20 rounded p-1.5 text-white"
+                              className="w-full bg-transparent border border-white/20 rounded p-1.5 text-white"
                             />
                           </div>
                           <div>
@@ -9477,7 +13260,7 @@ export default function App() {
                                   price15d: Number(e.target.value),
                                 })
                               }
-                              className="w-full bg-black border border-white/20 rounded p-1.5 text-white"
+                              className="w-full bg-transparent border border-white/20 rounded p-1.5 text-white"
                             />
                           </div>
                           <div>
@@ -9493,7 +13276,7 @@ export default function App() {
                                   price30d: Number(e.target.value),
                                 })
                               }
-                              className="w-full bg-black border border-white/20 rounded p-1.5 text-white"
+                              className="w-full bg-transparent border border-white/20 rounded p-1.5 text-white"
                             />
                           </div>
                         </div>
@@ -9615,52 +13398,64 @@ export default function App() {
               {/* STAFF TAB 3: MANAGE / DELETE PANELS */}
               {staffTab === "managePanels" && (
                 <div className="flex flex-col gap-4 text-left">
-                  <div className="bg-black/20 backdrop-blur-md border border-red-500/40 rounded-2xl p-5 shadow-2xl  flex flex-col gap-4">
+                  <div className="bg-transparent  border border-red-500/40 rounded-2xl p-5 shadow-2xl  flex flex-col gap-4">
                     <h3 className="text-lg font-black text-white flex items-center gap-2 uppercase tracking-wide">
                       <Trash2 size={20} className="text-rose-400" /> 🗑️ DELETE &
                       EDIT ACTIVE PANELS ({panels.length})
                     </h3>
 
                     {staffEditingPanel ? (
-                      <div className="bg-black/20 backdrop-blur-md border border-cyan-400/50 p-4 rounded-xl flex flex-col gap-3">
-                        <span className="text-cyan-400 font-black text-xs uppercase">
-                          Editing Panel ID #{staffEditingPanel.id}
-                        </span>
-                        <div>
-                          <label className="text-gray-400 text-xs font-bold block mb-1">
-                            Title
-                          </label>
-                          <input
-                            type="text"
-                            value={staffEditingPanel.title}
-                            onChange={(e) =>
-                              setStaffEditingPanel({
-                                ...staffEditingPanel,
-                                title: e.target.value,
-                              })
-                            }
-                            className="w-full bg-black border border-white/20 rounded p-2 text-xs text-white"
-                          />
+                      <div className="bg-transparent  border border-cyan-400/50 p-4 rounded-xl flex flex-col gap-3">
+                        <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                          <span className="text-cyan-400 font-black text-xs uppercase flex items-center gap-1.5">
+                            <Sparkles size={14} /> Editing Panel: {staffEditingPanel.title || `#${staffEditingPanel.id}`}
+                          </span>
+                          <button
+                            onClick={() => setStaffEditingPanel(null)}
+                            className="text-gray-400 hover:text-white text-xs font-bold px-2 py-0.5"
+                          >
+                            ✕ Close
+                          </button>
                         </div>
-                        <div>
-                          <label className="text-gray-400 text-xs font-bold block mb-1">
-                            Category
-                          </label>
-                          <input
-                            type="text"
-                            value={staffEditingPanel.category}
-                            onChange={(e) =>
-                              setStaffEditingPanel({
-                                ...staffEditingPanel,
-                                category: e.target.value,
-                              })
-                            }
-                            className="w-full bg-black border border-white/20 rounded p-2 text-xs text-white"
-                          />
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-gray-300 text-xs font-bold block mb-1">
+                              Panel Name / Title
+                            </label>
+                            <input
+                              type="text"
+                              value={staffEditingPanel.title}
+                              onChange={(e) =>
+                                setStaffEditingPanel({
+                                  ...staffEditingPanel,
+                                  title: e.target.value,
+                                })
+                              }
+                              className="w-full bg-transparent border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-gray-300 text-xs font-bold block mb-1">
+                              Category
+                            </label>
+                            <input
+                              type="text"
+                              value={staffEditingPanel.category}
+                              onChange={(e) =>
+                                setStaffEditingPanel({
+                                  ...staffEditingPanel,
+                                  category: e.target.value,
+                                })
+                              }
+                              className="w-full bg-transparent border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+                            />
+                          </div>
                         </div>
+
                         <div>
-                          <label className="text-gray-400 text-xs font-bold block mb-1">
-                            Image URL
+                          <label className="text-gray-300 text-xs font-bold block mb-1">
+                            Image / Thumbnail URL
                           </label>
                           <input
                             type="text"
@@ -9671,9 +13466,134 @@ export default function App() {
                                 image: e.target.value,
                               })
                             }
-                            className="w-full bg-black border border-white/20 rounded p-2 text-xs text-white"
+                            className="w-full bg-transparent border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400"
                           />
                         </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-cyan-300 text-xs font-bold block mb-1">
+                              INSTALL/PANEL Link (Telegram / APK)
+                            </label>
+                            <input
+                              type="text"
+                              value={staffEditingPanel.installLink || ""}
+                              onChange={(e) =>
+                                setStaffEditingPanel({
+                                  ...staffEditingPanel,
+                                  installLink: e.target.value,
+                                })
+                              }
+                              placeholder="https://t.me/..."
+                              className="w-full bg-transparent border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-rose-300 text-xs font-bold block mb-1">
+                              VIDEO/FEEDBACK Link (Telegram / WhatsApp / Proof)
+                            </label>
+                            <input
+                              type="text"
+                              value={staffEditingPanel.feedbackLink || staffEditingPanel.videoLink || ""}
+                              onChange={(e) =>
+                                setStaffEditingPanel({
+                                  ...staffEditingPanel,
+                                  feedbackLink: e.target.value,
+                                  videoLink: e.target.value,
+                                })
+                              }
+                              placeholder="https://t.me/... or https://wa.me/..."
+                              className="w-full bg-transparent border border-white/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-rose-400 font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-yellow-300 text-xs font-bold block mb-1">
+                            Features (1 Per Line)
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={Array.isArray(staffEditingPanel.features) ? staffEditingPanel.features.join("\n") : ""}
+                            onChange={(e) =>
+                              setStaffEditingPanel({
+                                ...staffEditingPanel,
+                                features: e.target.value.split("\n").filter(Boolean),
+                              })
+                            }
+                            className="w-full bg-transparent border border-white/20 rounded-lg p-2 text-xs text-white font-mono focus:outline-none focus:border-yellow-400"
+                          />
+                        </div>
+
+                        {/* Pricing Plans Editor */}
+                        <div>
+                          <label className="text-emerald-300 text-xs font-bold block mb-1">
+                            Pricing Plans (Label & ₹ Price)
+                          </label>
+                          <div className="flex flex-col gap-1.5">
+                            {(staffEditingPanel.pricing || []).map((pItem: any, pIdx: number) => (
+                              <div key={pIdx} className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={pItem.label}
+                                  onChange={(e) => {
+                                    const updated = [...(staffEditingPanel.pricing || [])];
+                                    updated[pIdx] = { ...updated[pIdx], label: e.target.value };
+                                    setStaffEditingPanel({
+                                      ...staffEditingPanel,
+                                      pricing: updated,
+                                    });
+                                  }}
+                                  placeholder="1 Day, 15 House..."
+                                  className="flex-1 bg-transparent border border-white/20 rounded p-1.5 text-xs text-white"
+                                />
+                                <div className="relative w-28">
+                                  <span className="absolute left-2 top-1 text-xs text-emerald-400 font-bold">₹</span>
+                                  <input
+                                    type="number"
+                                    value={pItem.price}
+                                    onChange={(e) => {
+                                      const updated = [...(staffEditingPanel.pricing || [])];
+                                      updated[pIdx] = { ...updated[pIdx], price: Number(e.target.value) };
+                                      setStaffEditingPanel({
+                                        ...staffEditingPanel,
+                                        pricing: updated,
+                                      });
+                                    }}
+                                    className="w-full bg-transparent border border-white/20 rounded p-1.5 pl-5 text-xs text-white font-mono"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = (staffEditingPanel.pricing || []).filter((_: any, idx: number) => idx !== pIdx);
+                                    setStaffEditingPanel({
+                                      ...staffEditingPanel,
+                                      pricing: updated.length > 0 ? updated : [{ label: "1 Day", price: 90 }],
+                                    });
+                                  }}
+                                  className="text-rose-400 hover:text-rose-300 p-1"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const current = staffEditingPanel.pricing || [];
+                                setStaffEditingPanel({
+                                  ...staffEditingPanel,
+                                  pricing: [...current, { label: `${current.length + 1} Day`, price: 100 }],
+                                });
+                              }}
+                              className="text-emerald-400 hover:text-emerald-300 text-xs font-bold flex items-center gap-1 self-start mt-1"
+                            >
+                              <PlusCircle size={13} /> + Add Plan
+                            </button>
+                          </div>
+                        </div>
+
                         <div className="flex gap-2 mt-2">
                           <button
                             onClick={() => {
@@ -9687,13 +13607,13 @@ export default function App() {
                               setStaffEditingPanel(null);
                               alert("✅ Panel successfully update ho gaya!");
                             }}
-                            className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs py-2 rounded uppercase"
+                            className="flex-1 bg-rainbow-animated border-2 border-white hover:from-cyan-400 hover:to-blue-500 text-black font-black text-xs py-2.5 rounded-lg uppercase shadow-[0_0_15px_rgba(6,182,212,0.4)]"
                           >
-                            Save Changes
+                            💾 Save Changes
                           </button>
                           <button
                             onClick={() => setStaffEditingPanel(null)}
-                            className="bg-gray-700 hover:bg-gray-600 text-white font-bold text-xs px-4 py-2 rounded uppercase"
+                            className="bg-gray-700 hover:bg-gray-600 text-white font-bold text-xs px-4 py-2 rounded-lg uppercase"
                           >
                             Cancel
                           </button>
@@ -9704,7 +13624,7 @@ export default function App() {
                         {ensureArray(panels).map((p, idx) => (
                           <div
                             key={`staff-panel-${p.id}-${idx}`}
-                            className="bg-black/20 backdrop-blur-md border border-white/10 p-3.5 rounded-xl flex flex-col justify-between gap-3 shadow-lg hover:border-rose-500/40 transition-all"
+                            className="bg-transparent  border border-white/10 p-3.5 rounded-xl flex flex-col justify-between gap-3 shadow-lg hover:border-rose-500/40 transition-all"
                           >
                             <div className="flex items-start gap-3">
                               <img
@@ -9764,7 +13684,7 @@ export default function App() {
 
               {/* STAFF TAB 4: TELEGRAM & WHATSAPP SUPPORT LINKS */}
               {staffTab === "supportLinks" && (
-                <div className="bg-black/20 backdrop-blur-md border border-sky-500/40 rounded-2xl p-5 shadow-2xl  flex flex-col gap-4 text-left">
+                <div className="bg-transparent  border border-sky-500/40 rounded-2xl p-5 shadow-2xl  flex flex-col gap-4 text-left">
                   <h3 className="text-lg font-black text-white flex items-center gap-2 uppercase tracking-wide">
                     <Send size={20} className="text-sky-400" /> 💬 TELEGRAM &
                     WHATSAPP SUPPORT LINKS
@@ -9774,7 +13694,7 @@ export default function App() {
                     wale Telegram aur WhatsApp links update kar sakte hain.
                   </p>
 
-                  <div className="flex flex-col gap-3 bg-black/20 backdrop-blur-md p-4 rounded-xl border border-white/10">
+                  <div className="flex flex-col gap-3 bg-transparent  p-4 rounded-xl border border-white/10">
                     <div>
                       <label className="text-sky-400 font-black text-xs uppercase block mb-1 flex items-center gap-1">
                         <Send size={14} /> TELEGRAM CHANNEL / SUPPORT LINK
@@ -9789,7 +13709,7 @@ export default function App() {
                           })
                         }
                         placeholder="https://t.me/yourchannel"
-                        className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-xl py-3 px-3 text-xs font-bold text-white focus:outline-none focus:border-sky-400"
+                        className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-3 text-xs font-bold text-white focus:outline-none focus:border-sky-400"
                       />
                     </div>
 
@@ -9808,7 +13728,7 @@ export default function App() {
                           })
                         }
                         placeholder="https://wa.me/1234567890"
-                        className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-xl py-3 px-3 text-xs font-bold text-white focus:outline-none focus:border-green-400"
+                        className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-3 text-xs font-bold text-white focus:outline-none focus:border-green-400"
                       />
                     </div>
 
@@ -9832,7 +13752,7 @@ export default function App() {
 
               {/* STAFF TAB 5: USERS LIST ("SARA KA SARA INE TOTAL USI PER DIKHAI DEGA") */}
               {staffTab === "users" && (
-                <div className="bg-black/20 backdrop-blur-md border border-purple-500/40 rounded-2xl p-5 shadow-2xl  flex flex-col gap-4 text-left">
+                <div className="bg-transparent  border border-purple-500/40 rounded-2xl p-5 shadow-2xl  flex flex-col gap-4 text-left">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <h3 className="text-lg font-black text-white flex items-center gap-2 uppercase tracking-wide">
                       <User size={20} className="text-purple-400" /> 👥 ALL
@@ -9853,7 +13773,7 @@ export default function App() {
                       placeholder="Search users by Email or Phone..."
                       value={staffSearchUser}
                       onChange={(e) => setStaffSearchUser(e.target.value)}
-                      className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-400"
+                      className="w-full bg-transparent  border border-white/20 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-400"
                     />
                   </div>
 
@@ -9877,7 +13797,7 @@ export default function App() {
                         return (
                           <div
                             key={`manage-user-${u.email || u.phone || idx}-${idx}`}
-                            className="bg-black/20 backdrop-blur-md border border-white/10 p-4 rounded-xl flex flex-col gap-3 shadow-lg hover:border-purple-500/40 transition-all"
+                            className="bg-transparent  border border-white/10 p-4 rounded-xl flex flex-col gap-3 shadow-lg hover:border-purple-500/40 transition-all"
                           >
                             <div className="flex items-center justify-between gap-3">
                               <div className="flex items-center gap-3">
@@ -9921,7 +13841,7 @@ export default function App() {
                               </div>
                             </div>
 
-                            <div className="bg-black/20 backdrop-blur-md p-2.5 rounded-lg border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+                            <div className="bg-transparent  p-2.5 rounded-lg border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
                               <span className="text-yellow-400 font-mono">
                                 🔑 Password: {u.password}
                               </span>
@@ -9983,7 +13903,7 @@ export default function App() {
 
               {/* STAFF TAB 6: PAYMENTS & MONEY ("KISNE KISNE PAISA LAGAYA") */}
               {staffTab === "payments" && (
-                <div className="bg-black/20 backdrop-blur-md border border-emerald-500/40 rounded-2xl p-5 shadow-2xl  flex flex-col gap-4 text-left">
+                <div className="bg-transparent  border border-emerald-500/40 rounded-2xl p-5 shadow-2xl  flex flex-col gap-4 text-left">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                       <h3 className="text-lg font-black text-white flex items-center gap-2 uppercase tracking-wide">
@@ -10006,6 +13926,50 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Auto UPI Gateway Lock Status Control */}
+                  <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-400 shrink-0">
+                        <Lock size={16} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-black text-white uppercase flex items-center gap-2">
+                          Auto UPI Gateway:{" "}
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono border ${isAutoUpiLocked ? "bg-red-500/30 text-red-300 border-red-500/40" : "bg-emerald-500/30 text-emerald-300 border-emerald-500/40"}`}>
+                            {isAutoUpiLocked ? "🔒 LOCKED / BAND HAI" : "🟢 ACTIVE"}
+                          </span>
+                        </span>
+                        <span className="text-[11px] text-gray-400 block">
+                          {isAutoUpiLocked
+                            ? "Auto UPI abhi band hai. Koi user click karega to payment open nahi hoga."
+                            : "Auto UPI abhi active hai."}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !isAutoUpiLocked;
+                        setIsAutoUpiLocked(next);
+                        if (next && paymentMode === "auto") {
+                          setPaymentMode("manual");
+                        }
+                        alert(
+                          next
+                            ? "🔒 Auto UPI Payment ko Lock (Band) kar diya gaya hai!"
+                            : "🔓 Auto UPI Payment ko Unlock kar diya gaya hai!"
+                        );
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase transition-all shadow-md active:scale-95 cursor-pointer self-start sm:self-auto ${
+                        isAutoUpiLocked
+                          ? "bg-red-600 hover:bg-red-500 text-white"
+                          : "bg-emerald-600 hover:bg-emerald-500 text-white"
+                      }`}
+                    >
+                      {isAutoUpiLocked ? "LOCKED (Click to Unlock)" : "ACTIVE (Click to Lock)"}
+                    </button>
+                  </div>
+
                   <div className="relative">
                     <Search
                       size={16}
@@ -10016,7 +13980,7 @@ export default function App() {
                       placeholder="Search payments by User Email, Phone, or UTR Number..."
                       value={staffSearchPayment}
                       onChange={(e) => setStaffSearchPayment(e.target.value)}
-                      className="w-full bg-black/20 backdrop-blur-md border border-white/20 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-400"
+                      className="w-full bg-transparent  border border-white/20 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-400"
                     />
                   </div>
 
@@ -10042,7 +14006,7 @@ export default function App() {
                         return (
                           <div
                             key={`house-pay-${p.id}-${idx}`}
-                            className="bg-black/20 backdrop-blur-md border border-white/10 p-4 rounded-xl flex flex-col gap-3 shadow-lg"
+                            className="bg-transparent  border border-white/10 p-4 rounded-xl flex flex-col gap-3 shadow-lg"
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex flex-col">
@@ -10125,7 +14089,7 @@ export default function App() {
                                       `✅ Staff Approved ₹${p.amount} for ${p.userEmail || p.userPhone}! Added to wallet.`,
                                     );
                                   }}
-                                  className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-black text-xs py-2 rounded-xl uppercase shadow-md flex items-center justify-center gap-1 active:scale-95"
+                                  className="flex-1 bg-rainbow-animated border-2 border-white hover:from-emerald-400 hover:to-teal-400 text-black font-black text-xs py-2 rounded-xl uppercase shadow-md flex items-center justify-center gap-1 active:scale-95"
                                 >
                                   <CheckCircle size={14} /> Approve & Add ₹
                                   {p.amount}
@@ -10156,7 +14120,7 @@ export default function App() {
 
               {/* STAFF TAB 7: PENDING KEYS ("USER JAB KEY BUY KARTA HAI TO KISKA PENDING MEIN HAI") */}
               {staffTab === "pendingKeys" && (
-                <div className="bg-black/20 backdrop-blur-md border border-amber-500/40 rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-left">
+                <div className="bg-transparent  border border-amber-500/40 rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-left">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                       <h3 className="text-lg font-black text-white flex items-center gap-2 uppercase tracking-wide">
@@ -10190,7 +14154,7 @@ export default function App() {
                       .map((req, idx) => (
                         <div
                           key={`m-pendingkey-${req.id}-${idx}`}
-                          className="bg-black/20 backdrop-blur-md border border-amber-500/30 p-4 rounded-xl flex flex-col gap-3 shadow-lg"
+                          className="bg-transparent  border border-amber-500/30 p-4 rounded-xl flex flex-col gap-3 shadow-lg"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex flex-col">
@@ -10228,7 +14192,7 @@ export default function App() {
                           <div className="flex flex-col gap-2 pt-2 border-t border-white/10">
                             <textarea
                               placeholder="Type key message / code here (e.g. 5546272611 or ABCD-1234-EFGH-5678)..."
-                              className="w-full bg-black/50 border border-white/20 rounded-xl py-2 px-3 text-sm font-bold text-emerald-400 font-mono focus:outline-none focus:border-amber-400 transition-all resize-none h-20"
+                              className="w-full bg-transparent border border-white/20 rounded-xl py-2 px-3 text-sm font-bold text-emerald-400 font-mono focus:outline-none focus:border-amber-400 transition-all resize-none h-20"
                               id={`staff-key-input-${req.id}`}
                             />
 
@@ -10259,7 +14223,7 @@ export default function App() {
                                     );
                                   }
                                 }}
-                                className="w-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-xs py-2.5 rounded-xl uppercase shadow-[0_0_15px_rgba(234,179,8,0.4)] flex items-center justify-center gap-1.5 active:scale-95"
+                                className="w-full bg-rainbow-animated border-2 border-white hover:from-amber-400 hover:to-yellow-400 text-black font-black text-xs py-2.5 rounded-xl uppercase shadow-[0_0_15px_rgba(234,179,8,0.4)] flex items-center justify-center gap-1.5 active:scale-95"
                               >
                                 <CheckCircle size={14} /> APPROVE (IN-APP)
                               </button>
@@ -10334,7 +14298,7 @@ export default function App() {
 
                     {keyRequests.filter((r) => r.status === "PENDING")
                       .length === 0 && (
-                      <div className="bg-black/20 backdrop-blur-md border border-white/10 p-8 rounded-xl text-center flex flex-col items-center justify-center gap-2">
+                      <div className="bg-transparent  border border-white/10 p-8 rounded-xl text-center flex flex-col items-center justify-center gap-2">
                         <Key size={32} className="text-gray-500" />
                         <span className="text-gray-400 text-sm font-bold">
                           No Pending Key Purchases!
@@ -10351,10 +14315,10 @@ export default function App() {
               {/* STAFF TAB: REJECT & REFUND PANEL */}
               {staffTab === "refundPanel" && (
                 <div className="flex flex-col gap-4 text-left animate-in fade-in duration-200">
-                  <div className="bg-black/40 backdrop-blur-xl border-2 border-red-500/50 rounded-3xl p-5 sm:p-7 shadow-[0_0_50px_rgba(239,68,68,0.25)] flex flex-col gap-5 relative overflow-hidden">
+                  <div className="bg-transparent  border-2 border-red-500/50 rounded-3xl p-5 sm:p-7 shadow-[0_0_50px_rgba(239,68,68,0.25)] flex flex-col gap-5 relative overflow-hidden">
                     <div className="flex items-center gap-3 border-b border-red-500/30 pb-4">
                       <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-red-600 to-pink-500 p-0.5 flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.6)] shrink-0">
-                        <div className="w-full h-full bg-black/70 rounded-[14px] flex items-center justify-center">
+                        <div className="w-full h-full bg-transparent rounded-[14px] flex items-center justify-center">
                           <X className="text-red-400" size={24} />
                         </div>
                       </div>
@@ -10460,7 +14424,7 @@ export default function App() {
                           type="email"
                           id="refundUserEmail"
                           placeholder="user@gmail.com"
-                          className="w-full bg-black/50 border border-white/20 focus:border-red-400 rounded-xl p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none font-mono transition-all"
+                          className="w-full bg-transparent border border-white/20 focus:border-red-400 rounded-xl p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none font-mono transition-all"
                           required
                         />
                       </div>
@@ -10473,7 +14437,7 @@ export default function App() {
                           type="number"
                           id="refundAmount"
                           placeholder="e.g. 100"
-                          className="w-full bg-black/50 border border-white/20 focus:border-red-400 rounded-xl p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none font-mono transition-all"
+                          className="w-full bg-transparent border border-white/20 focus:border-red-400 rounded-xl p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none font-mono transition-all"
                           required
                         />
                       </div>
@@ -10486,7 +14450,7 @@ export default function App() {
                           id="refundReason"
                           placeholder="कारण लिखें (उदा. Invalid Payment Screenshot)"
                           rows={3}
-                          className="w-full bg-black/50 border border-white/20 focus:border-red-400 rounded-xl p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none transition-all"
+                          className="w-full bg-transparent border border-white/20 focus:border-red-400 rounded-xl p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none transition-all"
                         ></textarea>
                       </div>
 
@@ -10506,12 +14470,12 @@ export default function App() {
               {/* STAFF TAB: EMAILJS SEND KEY PANEL ("Key भेजने का Admin Panel") */}
               {staffTab === "emailKey" && (
                 <div className="flex flex-col gap-4 text-left animate-in fade-in duration-200">
-                  <div className="bg-black/40 backdrop-blur-xl border-2 border-blue-500/50 rounded-3xl p-5 sm:p-7 shadow-[0_0_50px_rgba(59,130,246,0.25)] flex flex-col gap-5 relative overflow-hidden">
+                  <div className="bg-transparent  border-2 border-blue-500/50 rounded-3xl p-5 sm:p-7 shadow-[0_0_50px_rgba(59,130,246,0.25)] flex flex-col gap-5 relative overflow-hidden">
                     {/* Top Glow & Header */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-blue-500/30 pb-4">
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 p-0.5 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.6)] shrink-0">
-                          <div className="w-full h-full bg-black/70 rounded-[14px] flex items-center justify-center">
+                          <div className="w-full h-full bg-transparent rounded-[14px] flex items-center justify-center">
                             <Mail className="text-blue-400" size={24} />
                           </div>
                         </div>
@@ -10573,7 +14537,7 @@ export default function App() {
                         </div>
 
                         {showEmailJsConfigSettings && (
-                          <div className="bg-black/70 border border-yellow-400/40 rounded-xl p-3 flex flex-col gap-2 animate-in fade-in">
+                          <div className="bg-transparent border border-yellow-400/40 rounded-xl p-3 flex flex-col gap-2 animate-in fade-in">
                             <span className="text-xs text-yellow-300 font-bold">
                               EmailJS Live API Credentials
                             </span>
@@ -10595,7 +14559,7 @@ export default function App() {
                                     JSON.stringify(updated),
                                   );
                                 }}
-                                className="w-full bg-black/60 border border-white/20 rounded p-1.5 text-xs text-white font-mono"
+                                className="w-full bg-transparent border border-white/20 rounded p-1.5 text-xs text-white font-mono"
                               />
                             </div>
                             <div>
@@ -10616,7 +14580,7 @@ export default function App() {
                                     JSON.stringify(updated),
                                   );
                                 }}
-                                className="w-full bg-black/60 border border-white/20 rounded p-1.5 text-xs text-white font-mono"
+                                className="w-full bg-transparent border border-white/20 rounded p-1.5 text-xs text-white font-mono"
                               />
                             </div>
                             <div>
@@ -10637,7 +14601,7 @@ export default function App() {
                                     JSON.stringify(updated),
                                   );
                                 }}
-                                className="w-full bg-black/60 border border-white/20 rounded p-1.5 text-xs text-white font-mono"
+                                className="w-full bg-transparent border border-white/20 rounded p-1.5 text-xs text-white font-mono"
                               />
                             </div>
                           </div>
@@ -10676,7 +14640,7 @@ export default function App() {
                               userEmail: e.target.value,
                             }))
                           }
-                          className="w-full bg-black/50 border border-white/20 focus:border-blue-400 rounded-xl p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none font-mono transition-all"
+                          className="w-full bg-transparent border border-white/20 focus:border-blue-400 rounded-xl p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none font-mono transition-all"
                           required
                         />
 
@@ -10748,7 +14712,7 @@ export default function App() {
                               keyValue: e.target.value,
                             }))
                           }
-                          className="w-full bg-black/50 border border-white/20 focus:border-blue-400 rounded-xl p-3 text-sm text-emerald-400 font-mono font-bold placeholder:text-gray-500 focus:outline-none transition-all"
+                          className="w-full bg-transparent border border-white/20 focus:border-blue-400 rounded-xl p-3 text-sm text-emerald-400 font-mono font-bold placeholder:text-gray-500 focus:outline-none transition-all"
                           required
                         />
                       </div>
@@ -10769,7 +14733,7 @@ export default function App() {
                               adminMessage: e.target.value,
                             }))
                           }
-                          className="w-full bg-black/50 border border-white/20 focus:border-blue-400 rounded-xl p-3 text-xs text-white placeholder:text-gray-500 focus:outline-none transition-all resize-none"
+                          className="w-full bg-transparent border border-white/20 focus:border-blue-400 rounded-xl p-3 text-xs text-white placeholder:text-gray-500 focus:outline-none transition-all resize-none"
                         />
 
                         {/* Preset Message Templates */}
@@ -10788,7 +14752,7 @@ export default function App() {
                                   adminMessage: msg,
                                 }))
                               }
-                              className="text-[10px] bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 px-2 py-0.5 rounded-lg transition-colors truncate max-w-[280px]"
+                              className="text-[10px] bg-transparent hover:bg-transparent border border-white/10 text-gray-300 px-2 py-0.5 rounded-lg transition-colors truncate max-w-[280px]"
                             >
                               "{msg.substring(0, 32)}..."
                             </button>
@@ -10835,7 +14799,7 @@ export default function App() {
                               "Test key delivery from EmailJS admin panel.",
                             );
                           }}
-                          className="bg-white/10 hover:bg-white/20 border border-white/20 text-blue-200 text-xs font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-1.5 shrink-0"
+                          className="bg-transparent hover:bg-transparent border border-white/20 text-blue-200 text-xs font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-1.5 shrink-0"
                         >
                           <Sparkles size={14} className="text-yellow-400" />
                           <span>Test Self (`pramk9992@gmail.com`)</span>
@@ -10865,5 +14829,577 @@ export default function App() {
                             size={14}
                             className="text-blue-400 shrink-0"
                           />
-                          <span>EmailJS Setup & 422 Error Fix Guide:</spanx�ĔMO1�����LH\��$F�h4&x3�̶����H�E6��n!��H=5};�晙vЀ�\��r!�I�������B3ȥ��##���`hn�Xa�_�Z 	�Hc_��9���n��W��˺I��	
-y7�[ԓ(C��,6���3.�Fei<X��3%�DC:�Ηi`D��98�va���a��Y�,��ccq�����%Յ"�q�*��$	6� �2N�XQ�G�4� ��>��H����,�귳��*4�1U�w���;���(8I1#E|<��x���y"�qBZcLG���p�L�M�-S��t`�T�z��S��*")�S	B;��L)�ʫ��5c�xƆ 2c��w�0(d���c��r%���������qgK�ӵ�us�m���'   �� LPT�
+                          <span>EmailJS Setup & 422 Error Fix Guide:</span>
+                        </div>
+                        <ul className="list-disc pl-4 space-y-1 text-gray-300 leading-relaxed text-[11px]">
+                          <li>
+                            EmailJS Dashboard &gt;{" "}
+                            <strong>Email Templates</strong> &gt; Select{" "}
+                            <strong className="text-white">your template</strong>.
+                          </li>
+                          <li>
+                            Ensure your template variables match:{" "}
+                            <code className="bg-transparent px-1 rounded text-blue-300">
+                              user_email
+                            </code>
+                            ,{" "}
+                            <code className="bg-transparent px-1 rounded text-blue-300">
+                              delivered_key
+                            </code>
+                            , and{" "}
+                            <code className="bg-transparent px-1 rounded text-blue-300">
+                              admin_message
+                            </code>
+                            .
+                          </li>
+                          <li>
+                            Check for 422 Error: Make sure your Public Key is
+                            correct and Account is active.
+                          </li>
+                        </ul>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* RAZORPAY STANDARD CHECKOUT & ORDER VERIFICATION MODAL */}
+      <RazorpayCheckoutModal
+        isOpen={isRazorpayModalOpen && !isAutoUpiLocked}
+        onClose={() => setIsRazorpayModalOpen(false)}
+        defaultAmount={autoAmount || 100}
+        userEmail={userProfile.email || ""}
+        userPhone={autoWhatsapp || userProfile.phone || ""}
+        userName={userProfile.name || "VIP Member"}
+        onPaymentSuccess={(paymentData) => {
+          const amt = Number(paymentData.amount);
+          const curEmail = userProfile.email || "";
+          const curPhone = userProfile.phone || autoWhatsapp || "";
+          const accKey = getAccountKey(curEmail, curPhone);
+
+          // 1. Credit wallet balance
+          setUserBalance((prev) => (prev || 0) + amt);
+          setUserWallets((prev) => ({
+            ...prev,
+            [accKey]: (prev[accKey] ?? userBalance ?? 0) + amt,
+          }));
+
+          // 2. Add authenticated transaction record
+          const newTx = {
+            id: Date.now(),
+            amount: amt,
+            whatsapp: autoWhatsapp || curPhone || "N/A",
+            utr: `RZP-${paymentData.paymentId.slice(-8)}`,
+            status: "SUCCESS",
+            date: new Date().toLocaleString(),
+            method: "RAZORPAY_GATEWAY",
+            userEmail: curEmail || "VIP Member",
+            userPhone: curPhone || "N/A",
+            userName: userProfile.name || "VIP User",
+            userBalance: (userBalance || 0) + amt,
+            paymentId: paymentData.paymentId,
+            orderId: paymentData.orderId,
+            signature: paymentData.signature || "VERIFIED_HMAC_SHA256",
+          };
+
+          setAutoPaymentHistory((prev) => [newTx, ...ensureArray(prev)]);
+          setPaymentHistory((prev) => [newTx, ...ensureArray(prev)]);
+          setCurrentTxId(newTx.id);
+
+          // Sync to Firebase if available
+          try {
+            const dbRef = ref(database, `payments/${newTx.id}`);
+            set(dbRef, newTx).catch(() => {});
+          } catch (e) {}
+        }}
+      />
+
+      {/* 🚀 FIRST TIME WEBSITE LOADING / CONNECTING SCREEN */}
+      {isAppLoading && (
+        <div
+          id="website-initial-loading-screen"
+          className="fixed inset-0 z-[999999] bg-[#040711]/95 backdrop-blur-2xl flex flex-col items-center justify-center p-4 text-center select-none overflow-hidden"
+        >
+          {/* Ambient Cyber Neon Background Glows */}
+          <div className="absolute w-72 h-72 rounded-full bg-cyan-500/15 blur-[100px] pointer-events-none animate-pulse"></div>
+          <div className="absolute w-72 h-72 rounded-full bg-fuchsia-600/15 blur-[100px] pointer-events-none animate-pulse delay-700"></div>
+
+          <div className="relative z-10 flex flex-col items-center max-w-sm w-full">
+            {/* Rotating Cyber Ring & Logo */}
+            <div className="relative w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center mb-6">
+              {/* Outer Dashed Glowing Spinner */}
+              <div
+                className="absolute inset-0 rounded-full border-2 border-dashed border-cyan-400/40 animate-spin"
+                style={{ animationDuration: "8s" }}
+              ></div>
+              {/* Vibrant Fast Neon Ring */}
+              <div
+                className="absolute inset-1 rounded-full border-2 border-t-cyan-400 border-r-fuchsia-500 border-b-transparent border-l-transparent animate-spin"
+                style={{ animationDuration: "1.4s" }}
+              ></div>
+              {/* Center Core Display */}
+              <div className="absolute inset-3 rounded-full bg-gradient-to-tr from-cyan-950/80 via-[#0a0f1d] to-fuchsia-950/80 border border-white/15 shadow-[0_0_30px_rgba(6,182,212,0.35)] flex flex-col items-center justify-center">
+                <span className="text-2xl sm:text-3xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-white to-fuchsia-400 drop-shadow-[0_0_10px_rgba(6,182,212,0.8)]">
+                  {loadingPercent}%
+                </span>
+                <span className="text-[9px] uppercase tracking-widest text-cyan-400 font-bold">
+                  LOADING
+                </span>
+              </div>
+            </div>
+
+            {/* Brand Title */}
+            <h2 className="text-2xl sm:text-3xl font-black italic tracking-wider text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.9)] mb-1">
+              FFH4CK<span className="text-yellow-400">JOD</span><span className="text-white">VIP</span>
+            </h2>
+
+            {/* Connecting Title */}
+            <div className="flex items-center gap-2 text-cyan-300 font-black text-xs sm:text-sm tracking-widest uppercase mb-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+              <span>CONNECTING TO PREM STORE SERVER</span>
+            </div>
+
+            {/* User Requested: "connect making website... wait karo" */}
+            <p className="text-gray-300 text-xs sm:text-sm max-w-xs mb-5 font-medium leading-relaxed">
+              Please wait... Making secure connection to website...
+            </p>
+
+            {/* Progress Bar */}
+            <div className="w-full bg-black/70 border border-cyan-500/30 rounded-full h-3.5 p-0.5 overflow-hidden mb-3 shadow-[0_0_15px_rgba(6,182,212,0.25)]">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-emerald-400 transition-all duration-150 relative overflow-hidden shadow-[0_0_12px_rgba(6,182,212,0.8)]"
+                style={{ width: `${loadingPercent}%` }}
+              >
+                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+              </div>
+            </div>
+
+            {/* Dynamic Status Text */}
+            <div className="text-[11px] font-mono text-cyan-400/90 h-5 mb-5 flex items-center justify-center gap-1.5">
+              <Loader2 size={12} className="animate-spin text-fuchsia-400" />
+              <span>
+                {loadingPercent < 25 && "⚡ Establishing Secure Server Handshake..."}
+                {loadingPercent >= 25 && loadingPercent < 55 && "🌐 Making Connection to Website & Services..."}
+                {loadingPercent >= 55 && loadingPercent < 85 && "🛡️ Syncing 100% Anti-Ban VIP Mod Panels..."}
+                {loadingPercent >= 85 && loadingPercent < 100 && "🚀 Initializing Instant 24/7 Delivery Engine..."}
+                {loadingPercent >= 100 && "✅ Connection Verified! Welcome to Store!"}
+              </span>
+            </div>
+
+            {/* System Status Chips */}
+            <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
+              <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-[10px] font-bold text-gray-300 flex items-center gap-1 shadow-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                Status: Online
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-[10px] font-bold text-gray-300 flex items-center gap-1 shadow-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                Ping: 18ms
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-[10px] font-bold text-gray-300 flex items-center gap-1 shadow-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-400"></span>
+                Anti-Ban: 100% Active
+              </span>
+            </div>
+
+            {/* Quick Skip Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsAppLoading(false);
+                setLoadingPhase("done");
+                setShowImportantNoticeModal(true);
+              }}
+              className="text-xs text-gray-400 hover:text-cyan-300 underline underline-offset-4 tracking-wider uppercase transition-colors cursor-pointer py-1"
+            >
+              Skip Loading & Enter Store ⏩
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 📢 IMPORTANT NOTICE MODAL (महत्वपूर्ण सूचना) */}
+      {showImportantNoticeModal && (
+        <div
+          id="important-notice-modal"
+          className="fixed inset-0 z-[999990] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200 select-none"
+        >
+          <div className="relative bg-[#0b0f19] border border-fuchsia-500/50 rounded-[28px] max-w-md w-full p-5 sm:p-6 shadow-[0_0_50px_rgba(217,70,239,0.3)] text-left flex flex-col gap-4 my-auto overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Background Glow */}
+            <div className="absolute top-0 right-0 w-44 h-44 bg-fuchsia-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 w-44 h-44 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-white/10 pb-3.5 relative z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-fuchsia-600 to-purple-600 flex items-center justify-center text-white shadow-[0_0_20px_rgba(217,70,239,0.6)] shrink-0 border border-white/20">
+                  <Megaphone size={22} className="animate-bounce" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/40 inline-block mb-1">
+                    ⚠️ CRITICAL ANNOUNCEMENT
+                  </span>
+                  <h3 className="text-lg sm:text-xl font-black text-white tracking-wide uppercase">
+                    IMPORTANT NOTICE
+                  </h3>
+                  <span className="text-xs text-gray-400 font-semibold">
+                    महत्वपूर्ण सूचना - FFH4CK VIP PREM STORE
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowImportantNoticeModal(false)}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white transition-all cursor-pointer border border-white/15 active:scale-95"
+                title="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Admin Custom Notice Alert (if configured) */}
+            {bannerSettings.popupEnabled && bannerSettings.popupMessage && (
+              <div className="bg-gradient-to-r from-cyan-950/70 to-blue-950/70 border border-cyan-400/50 rounded-2xl p-3.5 text-xs text-cyan-200 shadow-[0_0_20px_rgba(6,182,212,0.2)]">
+                <div className="font-black text-white uppercase text-xs flex items-center gap-1.5 mb-1">
+                  <Sparkles size={14} className="text-yellow-300" />
+                  <span>{bannerSettings.popupTitle || "STORE UPDATE"}</span>
+                </div>
+                <p className="leading-relaxed text-[11px] text-cyan-100/90 whitespace-pre-line">
+                  {bannerSettings.popupMessage}
+                </p>
+              </div>
+            )}
+
+            {/* Core Important Notice Bullet Points */}
+            <div className="flex flex-col gap-2.5 max-h-[50vh] overflow-y-auto pr-1 custom-scrollbar relative z-10 text-xs text-gray-200">
+              {/* Point 1 */}
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-3 flex items-start gap-2.5 hover:border-fuchsia-500/40 transition-colors">
+                <div className="w-7 h-7 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                  <Zap size={15} />
+                </div>
+                <div>
+                  <h4 className="font-black text-white text-xs uppercase">
+                    ⚡ 24/7 Fast Auto Delivery
+                  </h4>
+                  <p className="text-[11px] text-gray-300 mt-0.5 leading-relaxed">
+                    Sabhi VIP Panels aur Mod Keys payment hote hi turant deliver hoti hain. Aap "My Key" me jakar direct copy kar sakte hain.
+                  </p>
+                </div>
+              </div>
+
+              {/* Point 2 */}
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-3 flex items-start gap-2.5 hover:border-fuchsia-500/40 transition-colors">
+                <div className="w-7 h-7 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                  <ShieldCheck size={15} />
+                </div>
+                <div>
+                  <h4 className="font-black text-white text-xs uppercase">
+                    🛡️ 100% Anti-Ban Guaranteed
+                  </h4>
+                  <p className="text-[11px] text-gray-300 mt-0.5 leading-relaxed">
+                    Hamare sabhi panel updates fully safe aur OB49/OB50 latest version ke liye 100% tested hain. Zero ban assurance.
+                  </p>
+                </div>
+              </div>
+
+              {/* Point 3 */}
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-3 flex items-start gap-2.5 hover:border-fuchsia-500/40 transition-colors">
+                <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                  <AlertTriangle size={15} />
+                </div>
+                <div>
+                  <h4 className="font-black text-white text-xs uppercase">
+                    💳 Add Fund: Use Manual UPI
+                  </h4>
+                  <p className="text-[11px] text-gray-300 mt-0.5 leading-relaxed">
+                    Auto UPI temporary band (locked) hai. Kripya QR Code scan karein aur payment ke baad 12-digit UTR number enter karke submit karein.
+                  </p>
+                </div>
+              </div>
+
+              {/* Point 4 */}
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-3 flex items-start gap-2.5 hover:border-fuchsia-500/40 transition-colors">
+                <div className="w-7 h-7 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                  <MessageCircle size={15} />
+                </div>
+                <div>
+                  <h4 className="font-black text-white text-xs uppercase">
+                    📞 Official Help & Support
+                  </h4>
+                  <p className="text-[11px] text-gray-300 mt-0.5 leading-relaxed">
+                    Kisi bhi problem ke liye sirf hamare official Telegram <strong>@Premjodvip</strong> par message karein. Kisi fake account par bharosa na karein.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Action / Dismiss Button */}
+            <div className="pt-2 relative z-10 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setShowImportantNoticeModal(false)}
+                className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-fuchsia-600 via-purple-600 to-cyan-500 hover:from-fuchsia-500 hover:to-cyan-400 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-[0_0_25px_rgba(217,70,239,0.5)] transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <CheckCircle2 size={16} />
+                <span>I Understand & Continue / आगे बढ़ें</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🎬 DEDICATED LIVE VIDEO & MEDIA PREVIEW MODAL */}
+      {previewMedia && (
+        <div
+          id="video-media-preview-modal"
+          className="fixed inset-0 z-[999995] bg-black/90 backdrop-blur-xl flex items-center justify-center p-3 sm:p-5 select-none animate-in fade-in duration-200"
+          onClick={() => setPreviewMedia(null)}
+        >
+          <div
+            className="relative bg-[#080c16] border border-cyan-500/50 rounded-2xl sm:rounded-3xl max-w-4xl w-full p-4 sm:p-5 shadow-[0_0_60px_rgba(6,182,212,0.3)] flex flex-col gap-3.5 overflow-hidden my-auto animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Ambient Background Glows */}
+            <div className="absolute top-0 right-0 w-56 h-56 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 w-56 h-56 bg-red-600/15 rounded-full blur-3xl pointer-events-none"></div>
+
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 relative z-10">
+              <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-red-600 to-rose-600 flex items-center justify-center text-white shrink-0 shadow-[0_0_20px_rgba(239,68,68,0.5)] border border-white/20">
+                  <Play size={18} className="fill-white ml-0.5" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/40 inline-block mb-0.5">
+                    ▶️ VIP VIDEO PLAYER
+                  </span>
+                  <h3 className="text-sm sm:text-base font-black text-white uppercase tracking-wide truncate">
+                    {previewMedia.title || "VIP Panel Video Demo"}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {previewMedia.youtubeLink && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      window.open(previewMedia.youtubeLink, "_blank")
+                    }
+                    className="px-2.5 py-1.5 rounded-xl bg-red-600/30 hover:bg-red-600 border border-red-500/50 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-sm"
+                    title="Open on YouTube"
+                  >
+                    <Youtube size={14} className="fill-white" />
+                    <span className="hidden sm:inline">YouTube</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPreviewMedia(null)}
+                  className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white transition-all cursor-pointer border border-white/15 active:scale-95"
+                  title="Close"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Video Content Render Engine */}
+            <div className="relative z-10 w-full flex flex-col items-center justify-center">
+              {(() => {
+                const targetUrl = previewMedia.youtubeLink || previewMedia.url;
+                const ytInfo = getYouTubeInfo(targetUrl);
+
+                // 1. If YouTube Video
+                if (ytInfo) {
+                  return (
+                    <div className="w-full aspect-video rounded-xl sm:rounded-2xl overflow-hidden bg-black border border-cyan-500/40 shadow-[0_0_30px_rgba(0,0,0,0.8)] relative">
+                      <iframe
+                        src={ytInfo.embedUrl}
+                        title={previewMedia.title || "YouTube Live Video"}
+                        className="w-full h-full border-0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                      ></iframe>
+                    </div>
+                  );
+                }
+
+                // 2. If Telegram Link or Social Channel Link
+                if (
+                  targetUrl &&
+                  (targetUrl.includes("t.me") ||
+                    targetUrl.includes("telegram") ||
+                    targetUrl.startsWith("tg://"))
+                ) {
+                  return (
+                    <div className="w-full bg-gradient-to-b from-[#0f172a] via-[#090d16] to-[#040711] border border-cyan-500/40 rounded-2xl p-5 sm:p-8 flex flex-col items-center text-center gap-4 shadow-2xl">
+                      <div className="w-16 h-16 rounded-2xl bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400 shadow-[0_0_25px_rgba(56,189,248,0.5)]">
+                        <Send size={30} className="ml-0.5" />
+                      </div>
+                      <div className="max-w-md">
+                        <h4 className="text-base sm:text-lg font-black text-white uppercase tracking-wider mb-1.5">
+                          {previewMedia.title || "VIP Telegram Video Proof"}
+                        </h4>
+                        <p className="text-xs text-gray-300 leading-relaxed">
+                          Yeh gameplay proof aur live headshot video hamare official Telegram channel <strong>@Premjodvip</strong> par full HD quality me upload hai. Direct video dekhne ke liye niche diye gaye button par tap karein:
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-center gap-3 w-full sm:w-auto">
+                        <button
+                          type="button"
+                          onClick={() => window.open(targetUrl, "_blank")}
+                          className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-black text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(56,189,248,0.5)] transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <Play size={15} className="fill-white" />
+                          <span>Watch Video on Telegram (@Premjodvip)</span>
+                          <ExternalLink size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // 3. If Direct Video File (MP4, WebM, Blob, Data URL)
+                const isVideoFile =
+                  previewMedia.isVideo ||
+                  (typeof targetUrl === "string" &&
+                    (targetUrl.endsWith(".mp4") ||
+                      targetUrl.endsWith(".webm") ||
+                      targetUrl.startsWith("data:video")));
+
+                if (isVideoFile && targetUrl) {
+                  return (
+                    <div className="w-full rounded-xl sm:rounded-2xl overflow-hidden bg-black border border-cyan-500/40 flex items-center justify-center shadow-2xl max-h-[70vh]">
+                      <video
+                        src={targetUrl}
+                        controls
+                        autoPlay
+                        playsInline
+                        className="w-full max-h-[68vh] object-contain"
+                      />
+                    </div>
+                  );
+                }
+
+                // 4. Fallback: Image Preview with Demo launcher
+                if (targetUrl) {
+                  return (
+                    <div className="w-full flex flex-col items-center gap-3">
+                      <div className="w-full rounded-xl sm:rounded-2xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center p-2 shadow-2xl max-h-[60vh]">
+                        <img
+                          src={targetUrl}
+                          alt={previewMedia.title || "Preview"}
+                          className="max-h-[55vh] w-auto max-w-full rounded-lg object-contain"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            window.open(
+                              "https://t.me/Premjodvip",
+                              "_blank",
+                            )
+                          }
+                          className="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer"
+                        >
+                          <Send size={13} />
+                          <span>Watch More Videos on Telegram</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return null;
+              })()}
+            </div>
+
+            {/* Modal Footer Controls */}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3 relative z-10 text-xs text-gray-300">
+              <span className="flex items-center gap-1.5 text-[11px] text-cyan-300 font-mono">
+                <Sparkles size={13} className="text-yellow-400" />
+                OB49/OB50 Ultra Safe Gameplay
+              </span>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  type="button"
+                  onClick={() => setPreviewMedia(null)}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95"
+                >
+                  Close Video
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Won Spin Coupon Celebratory Modal */}
+      {wonCouponModal && (
+        <div className="fixed inset-0 z-[999999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#0b101c] border-2 border-emerald-400 rounded-3xl p-6 sm:p-7 max-w-sm w-full shadow-[0_0_50px_rgba(16,185,129,0.5)] flex flex-col items-center text-center gap-4 animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.5)] animate-bounce">
+              <Gift size={32} className="text-emerald-400" />
+            </div>
+
+            <div>
+              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 text-[11px] px-3 py-1 rounded-full font-black uppercase tracking-wider">
+                🎉 SPIN & WIN REWARD
+              </span>
+              <h3 className="text-xl sm:text-2xl font-black text-white mt-2 uppercase tracking-wide">
+                AAPNE JEETA ₹{wonCouponModal.discount} COUPON!
+              </h3>
+              <p className="text-xs text-gray-300 mt-1 font-medium">
+                Yeh coupon code sidhe aapke <span className="text-cyan-400 font-bold">BUY KEY</span> checkout page par automatically add ho chuka hai!
+              </p>
+            </div>
+
+            <div className="w-full bg-[#111827] border-2 border-dashed border-amber-400/60 rounded-2xl p-3.5 flex flex-col items-center gap-1">
+              <span className="text-[10px] text-gray-400 uppercase font-black tracking-widest">
+                YOUR COUPON CODE
+              </span>
+              <span className="text-yellow-400 font-mono font-black text-2xl tracking-widest select-all">
+                {wonCouponModal.code}
+              </span>
+              <span className="text-[11px] text-emerald-400 font-bold">
+                Flat ₹{wonCouponModal.discount} OFF on Any Key Purchase
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-2 w-full mt-1">
+              <button
+                onClick={() => {
+                  setAppliedCoupon({
+                    code: wonCouponModal.code,
+                    discount: wonCouponModal.discount,
+                  });
+                  setCouponInputCode(wonCouponModal.code);
+                  setWonCouponModal(null);
+                  setCurrentView("home");
+                }}
+                className="w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white font-black text-sm py-3.5 rounded-xl shadow-[0_0_25px_rgba(16,185,129,0.5)] transition-all flex items-center justify-center gap-2 uppercase tracking-wider cursor-pointer active:scale-95"
+              >
+                <ShoppingBag size={18} />
+                <span>BUY KEY ABHI KHAREEDEIN (CODE ADDED)</span>
+              </button>
+
+              <button
+                onClick={() => setWonCouponModal(null)}
+                className="w-full text-center text-xs font-bold text-gray-400 hover:text-white py-1.5 cursor-pointer"
+              >
+                BAND KAREIN (CLOSE)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+

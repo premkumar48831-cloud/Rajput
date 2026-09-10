@@ -4,9 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FFH4X VIP Store & Panel Manager</title>
+    <script>
+      // Suppress harmless Vite dev HMR websocket warning in iframe container
+      window.addEventListener('unhandledrejection', function (event) {
+        var reason = event.reason ? (event.reason.message || String(event.reason)) : '';
+        if (reason.indexOf('WebSocket') !== -1 || reason.indexOf('websocket') !== -1) {
+          event.preventDefault();
+        }
+      });
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
   </head>
-  <body>
+  <body class="bg-[#080b11] text-gray-100 antialiased selection:bg-cyan-500/30">
     <div id="root"></div>
+    <!-- Official Razorpay Standard Checkout Script -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
