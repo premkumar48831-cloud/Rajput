@@ -2231,9 +2231,11 @@ export default function App() {
     const isResellerActive = resellerUser.isLoggedIn && resellerUser.isApproved;
     const panelObj = panels.find((p) => p.title === panelTitle);
 
+    const activePricingArray = panelObj?.pricing || panelObj?.pricingPlans || [];
+
     // Find the plan object carefully
-    const planObj = panelObj?.pricing?.find(
-      (pr) =>
+    const planObj = activePricingArray.find(
+      (pr: any) =>
         String(pr.price) === String(price) ||
         (explicitResellerPrice &&
           (pr as any).resellerPrice === explicitResellerPrice)
@@ -3963,12 +3965,13 @@ export default function App() {
 
                   const isResellerActive =
                     resellerUser.isLoggedIn && resellerUser.isApproved;
+                  const activePricingArray = panel.pricing || panel.pricingPlans || [];
                   const activeSelectedPrice =
-                    selectedPlans[panel.id] || panel.pricing?.[0]?.price || 0;
+                    selectedPlans[panel.id] || activePricingArray[0]?.price || 0;
                   const activePlan =
-                    panel.pricing?.find(
-                      (pr) => pr.price === activeSelectedPrice,
-                    ) || panel.pricing?.[0];
+                    activePricingArray.find(
+                      (pr: any) => pr.price === activeSelectedPrice,
+                    ) || activePricingArray[0];
                   const activeResellerPrice = activePlan
                     ? ((activePlan as any).resellerPrice ??
                       Math.round(activePlan.price * 0.65))
@@ -4231,7 +4234,7 @@ export default function App() {
                           <select
                             value={
                               selectedPlans[panel.id] ||
-                              panel.pricing?.[0]?.price ||
+                              (panel.pricing || panel.pricingPlans)?.[0]?.price ||
                               ""
                             }
                             className={`w-full appearance-none bg-transparent  hover:bg-transparent text-white font-bold rounded-lg py-2 px-2.5 pr-7 focus:outline-none focus:ring-1 transition-all cursor-pointer text-[12px] border ${
@@ -4247,7 +4250,7 @@ export default function App() {
                               }));
                             }}
                           >
-                            {panel.pricing?.map((plan, idx) => {
+                            {(panel.pricing || panel.pricingPlans)?.map((plan: any, idx: number) => {
                               const isOutOfStock =
                                 isNaN(Number(plan.price)) ||
                                 Number(plan.price) < 0 ||
@@ -4299,8 +4302,8 @@ export default function App() {
                             const price =
                               selectedPlans[panel.id] !== undefined
                                 ? selectedPlans[panel.id]
-                                : panel.pricing && panel.pricing.length > 0
-                                ? panel.pricing?.[0]?.price
+                                : (panel.pricing || panel.pricingPlans) && (panel.pricing || panel.pricingPlans).length > 0
+                                ? (panel.pricing || panel.pricingPlans)?.[0]?.price
                                 : "";
 
                             if (
@@ -9936,13 +9939,15 @@ export default function App() {
                         features.length > 0
                           ? features
                           : ["Main Id safe", "Anti-Ban Guaranteed"],
-                      pricingPlans: [
-                        { label: "1 Day", price: Number(newPanelForm.price1) || 90 },
-                        { label: "3 Day", price: Number(newPanelForm.price3) || 58 },
-                        { label: "7 Day", price: Number(newPanelForm.price7) || 67 },
-                        { label: "15 Day", price: Number(newPanelForm.price15) || 590 },
-                        { label: "30 Day", price: Number(newPanelForm.price30) || 5000 },
-                      ],
+                      pricing: newPanelForm.pricingPlans && newPanelForm.pricingPlans.length > 0
+                        ? newPanelForm.pricingPlans.map((p: any) => ({ ...p, price: Number(p.price) || 0 }))
+                        : [
+                            { label: "1 Day", price: 90 },
+                            { label: "3 Day", price: 58 },
+                            { label: "7 Day", price: 67 },
+                            { label: "15 Day", price: 590 },
+                            { label: "30 Day", price: 5000 },
+                          ],
                     };
 
                     const updatedPanels = [newPanel, ...ensureArray(panels)];
@@ -10401,13 +10406,15 @@ export default function App() {
                         features.length > 0
                           ? features
                           : ["Main Id safe", "Anti-Ban Guaranteed"],
-                      pricingPlans: [
-                        { label: "1 Day", price: Number(editPanelForm.price1) || 90 },
-                        { label: "3 Day", price: Number(editPanelForm.price3) || 58 },
-                        { label: "7 Day", price: Number(editPanelForm.price7) || 67 },
-                        { label: "15 Day", price: Number(editPanelForm.price15) || 590 },
-                        { label: "30 Day", price: Number(editPanelForm.price30) || 5000 },
-                      ],
+                      pricing: editPanelForm.pricingPlans && editPanelForm.pricingPlans.length > 0
+                        ? editPanelForm.pricingPlans.map((p: any) => ({ ...p, price: Number(p.price) || 0 }))
+                        : [
+                            { label: "1 Day", price: 90 },
+                            { label: "3 Day", price: 58 },
+                            { label: "7 Day", price: 67 },
+                            { label: "15 Day", price: 590 },
+                            { label: "30 Day", price: 5000 },
+                          ],
                     };
 
                     const updatedPanels = ensureArray(panels).map((p) => p.id === editPanelForm.id ? updatedPanel : p);
@@ -15399,6 +15406,20 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Floating Telegram Button (Sabse Niche) */}
+      {!isAppLoading && (
+        <a
+          href={supportLinks.ownerTelegram || supportLinks.telegram || "https://t.me/Premjodvip"}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="fixed bottom-6 right-5 z-[999] bg-gradient-to-tr from-sky-500 to-blue-500 hover:from-sky-400 hover:to-blue-400 text-white rounded-full p-3.5 sm:p-4 shadow-[0_0_25px_rgba(14,165,233,0.6)] transition-all hover:scale-110 active:scale-95 flex items-center justify-center group border border-sky-300/50 animate-in slide-in-from-bottom-5 fade-in duration-500"
+          title="Join Telegram"
+        >
+          <Send size={26} className="group-hover:animate-pulse drop-shadow-md -ml-0.5 mt-0.5" />
+        </a>
+      )}
+
     </div>
   );
 }
