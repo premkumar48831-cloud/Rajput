@@ -85,6 +85,7 @@ import {
   Megaphone,
   Upload,
   Lock,
+  FileText,
 } from "lucide-react";
 
 export function formatExternalUrl(url?: string | null): string {
@@ -356,6 +357,7 @@ export default function App() {
     | "adminOwner"
     | "staff"
     | "adminBanner"
+    | "policies"
   >("home");
   const [staffTab, setStaffTab] = useState<
     | "overview"
@@ -3608,6 +3610,16 @@ export default function App() {
               borderGlow: "border-[#F50057]/40 hover:border-[#F50057]",
               shadowGlow: "0 0 15px rgba(245,0,87,0.35)",
               tag: "AUTH",
+            },
+            {
+              icon: FileText,
+              label: "Terms & Policies",
+              view: "policies",
+              color: "#9CA3AF", // Silver
+              bgGrad: "from-[#9CA3AF]/20 via-[#9CA3AF]/5 to-transparent",
+              borderGlow: "border-[#9CA3AF]/40 hover:border-[#9CA3AF]",
+              shadowGlow: "0 0 15px rgba(156,163,175,0.35)",
+              tag: "INFO",
             },
           ].map((item, idx) => {
             const isActive = currentView === item.view;
@@ -9388,6 +9400,146 @@ export default function App() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* VIEW: POLICIES */}
+          {currentView === "policies" && (
+            <div className="flex flex-col gap-5 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden">
+              <div className="flex items-center gap-3">
+                <FileText className="text-cyan-400" size={24} />
+                <h2 className="text-xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
+                  TERMS & <span className="text-cyan-400 drop-shadow-[0_0_15px_rgba(6,182,212,1)]">POLICIES</span>
+                </h2>
+              </div>
+              
+              <div className="bg-[#0b101a]/80 border border-white/10 rounded-[20px] p-5 shadow-inner overflow-y-auto max-h-[70vh] custom-scrollbar flex flex-col gap-8 text-gray-300 text-sm leading-relaxed">
+                
+                {/* Terms & Conditions */}
+                <section className="flex flex-col gap-3">
+                  <h3 className="text-lg font-black text-white uppercase tracking-widest border-b border-white/10 pb-2">Terms & Conditions</h3>
+                  <p className="text-xs text-gray-400 font-bold">Last Updated: 11 September 2026</p>
+                  <p>Hamari website par aapka swagat hai. Website ko use karne, kisi panel/service ko purchase karne ya website ki kisi bhi service ka istemal karne se pehle kripya in Terms & Conditions ko dhyan se padhein. Website use karne ya purchase karne ka matlab hai ki aap in terms ko samajhte hain aur inka palan karne ke liye sahmat hain.</p>
+                  
+                  <h4 className="text-cyan-400 font-bold mt-2">1. Website Services</h4>
+                  <p>Hamari website par alag-alag digital panels aur related services available ho sakti hain. Har panel/service ki availability, features aur delivery situation alag ho sakti hai. Hum koshish karte hain ki website par di gayi information accurate aur updated rahe. Kisi panel/service ki availability kabhi bhi change ho sakti hai.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">2. Order & Payment</h4>
+                  <p>Customer kisi available panel/service ko select karke website par diye gaye payment method ke madhyam se payment kar sakta hai. Payment karne se pehle customer ko apne selected panel/service aur order details ko check kar lena chahiye. Payment successful hone ke baad order ko verify kiya ja sakta hai. Technical issue, stock/availability problem ya kisi anya genuine reason ki wajah se order complete na hone ki situation mein customer ko applicable refund diya ja sakta hai.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">3. Panel Availability</h4>
+                  <p>Kabhi-kabhi kisi panel/service ki availability temporarily khatam ho sakti hai. Agar customer ne payment kar diya hai aur purchased panel/service available nahi hai, to customer ko alternative availability ya applicable refund ke baare mein support ke madhyam se information di jayegi.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">4. Customer Responsibility</h4>
+                  <p>Customer ko purchase karte waqt sahi information provide karni hogi. Galat details, fake information ya kisi anya vyakti ki unauthorized information ka use karne ki responsibility customer ki hogi. Customer ko apne account/order ki security details ko confidential rakhna chahiye.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">5. Prohibited Use</h4>
+                  <p>Website ya purchased service ka use illegal activity, fraud, cheating, unauthorized access, harassment, abuse, malware distribution ya kisi anya unlawful purpose ke liye nahi kiya jana chahiye. Agar kisi customer dwara website/service ka misuse kiya jata hai, to hum applicable rules ke according order/service ko suspend ya terminate kar sakte hain.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">6. Policy Changes</h4>
+                  <p>Hum zarurat ke according Terms & Conditions, Privacy Policy, Refund Policy ya Disclaimer ko update karne ka adhikar rakhte hain. Updated policy website par publish ki ja sakti hai.</p>
+                </section>
+
+                {/* Privacy Policy */}
+                <section className="flex flex-col gap-3">
+                  <h3 className="text-lg font-black text-white uppercase tracking-widest border-b border-white/10 pb-2">Privacy Policy</h3>
+                  <p>Hum apne customers ki privacy ka respect karte hain aur customer information ko responsibly handle karne ka prayas karte hain.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">1. Information We May Collect</h4>
+                  <p>Order aur customer support provide karne ke liye hum naam, mobile number, order details, transaction/reference information aur customer dwara voluntarily di gayi necessary information collect kar sakte hain.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">2. Information Ka Use</h4>
+                  <p>Customer ki information ka use order process karne, payment verify karne, service provide karne, customer support dene, refund process karne aur website ko improve karne ke liye kiya ja sakta hai.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">3. Payment Information</h4>
+                  <p>Hum customer se OTP, UPI PIN, CVV, ATM PIN, banking password ya kisi bhi confidential banking credential ki demand nahi karte. Customer ko bhi apna OTP, UPI PIN, CVV, password ya banking credentials kisi bhi person ke saath share nahi karna chahiye, chahe woh person khud ko customer support bataye.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">4. Information Security</h4>
+                  <p>Hum customer information ko unauthorized access, misuse, alteration ya disclosure se protect karne ke liye reasonable security measures use karte hain. Phir bhi internet-based services mein kisi bhi information ki 100% absolute security guarantee dena possible nahi hota.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">5. Third-Party Services</h4>
+                  <p>Website par payment gateway, hosting, analytics ya other third-party services ka use ho sakta hai. Aise third-party providers apni terms aur privacy policies ke according information process kar sakte hain.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">6. Information Sharing</h4>
+                  <p>Hum customer ki personal information ko bina valid reason ke sell ya publicly disclose karne ka uddeshya nahi rakhte. Information ko service provide karne, legal requirements ko comply karne, fraud prevention ya necessary business operations ke liye use/share kiya ja sakta hai.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">7. Privacy Questions</h4>
+                  <p>Privacy ya personal information se related kisi bhi question ke liye customer hamare support channels par contact kar sakta hai.</p>
+                </section>
+
+                {/* Refund Policy */}
+                <section className="flex flex-col gap-3">
+                  <h3 className="text-lg font-black text-white uppercase tracking-widest border-b border-white/10 pb-2">Refund Policy</h3>
+                  <p>Hum customers ko transparent aur fair refund process provide karne ka prayas karte hain.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">1. Panel/Service Available Na Hone Par Refund</h4>
+                  <p>Agar customer ne kisi panel/service ke liye successfully payment kiya hai lekin woh panel/service available nahi hai, stock/system mein nahi hai, ya kisi genuine technical reason ki wajah se provide nahi ki ja sakti, to applicable amount ka refund process kiya ja sakta hai.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">2. Payment Successful Lekin Order Receive Na Hone Par</h4>
+                  <p>Agar customer ke account se payment deduct ho gayi hai lekin order receive ya confirm nahi hua, to customer ko dobara payment karne se pehle customer support se contact karna chahiye. Transaction verify karne ke baad applicable action liya jayega.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">3. Refund Processing Time</h4>
+                  <p>Approved refund ko 24 ghante ke andar initiate karne ka prayas kiya jayega. Refund initiate hone ke baad amount customer ke bank account, UPI, card ya original payment method mein reflect hone mein additional time lag sakta hai. Yeh time payment gateway, bank ya financial institution par depend karta hai.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">4. Duplicate Payment</h4>
+                  <p>Agar technical problem ki wajah se ek hi order ke liye payment multiple times ho gayi hai, to transaction verify karke applicable duplicate amount ke refund par consider kiya ja sakta hai.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">5. Activated/Delivered Digital Service</h4>
+                  <p>Agar purchased digital panel/service successfully deliver aur activate ho chuki hai, to refund automatically guaranteed nahi hoga. Aise cases mein customer ki problem aur order ki situation ko review karke decision liya jayega.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">6. Refund Request Kaise Karein</h4>
+                  <p>Refund request ke liye customer ko customer support se contact karke:<br/>
+                  • Order ID<br/>
+                  • Payment Transaction ID/Reference Number<br/>
+                  • Payment ki date<br/>
+                  • Purchased panel/service<br/>
+                  • Problem ki short details<br/>
+                  provide karni chahiye. Incomplete ya incorrect information ki wajah se refund verification mein delay ho sakta hai.</p>
+
+                  <h4 className="text-cyan-400 font-bold mt-2">7. Fraudulent Transactions</h4>
+                  <p>Fraud, unauthorized transaction, fake payment screenshot, manipulated transaction details ya intentionally misleading information ke cases mein refund request ko verification ke baad hi process kiya jayega.</p>
+                </section>
+
+                {/* Disclaimer */}
+                <section className="flex flex-col gap-3">
+                  <h3 className="text-lg font-black text-white uppercase tracking-widest border-b border-white/10 pb-2">Disclaimer</h3>
+                  <p>Website par di gayi information customers ko general information aur available services ke baare mein batane ke purpose se provide ki jaati hai.</p>
+                  <p>Hum koshish karte hain ki website par available information accurate aur updated rahe, lekin kisi bhi information, feature, availability ya service ki continuous availability ki absolute guarantee nahi dete.</p>
+                  <p>Panel/service ke features, availability, pricing, delivery time ya functionality circumstances ke according change ho sakti hai.</p>
+                  <p>Third-party platforms, payment gateways, hosting providers, internet service providers ya other external services ki wajah se hone wali problems hamare direct control mein nahi hoti.</p>
+                  <p>Payment gateway, bank, UPI service ya other financial service mein delay hone par refund/payment reflect hone ka time unke system par depend kar sakta hai.</p>
+                  <p>Customer ko purchase karne se pehle product/service ki details carefully check karni chahiye. Kisi bhi doubt ki situation mein payment karne se pehle customer support se clarification li ja sakti hai.</p>
+                  <p>Website ya service ka misuse, illegal activity, fraud, unauthorized access ya kisi third party ke rights ko violate karna strictly prohibited hai.</p>
+                  <p>Hum kisi bhi illegal activity ko support, promote ya encourage nahi karte. Website ka use customer ki apni responsibility par hota hai. Applicable law ke according customer apne actions ke liye khud responsible hoga.</p>
+                </section>
+
+                {/* Customer Support & Security Notice */}
+                <section className="flex flex-col gap-3">
+                  <h3 className="text-lg font-black text-white uppercase tracking-widest border-b border-white/10 pb-2">Customer Support</h3>
+                  <p>Order, payment, refund, panel availability ya kisi bhi website-related problem ke liye hamari support team se contact karein.</p>
+                  <ul className="flex flex-col gap-1 text-sky-300 font-bold text-sm">
+                    <li>• WhatsApp Support: +91 74960 55058</li>
+                    <li>• Telegram Support: @FFH4XJOD</li>
+                    <li>• Telegram Channel: @loluofficialhackmods</li>
+                  </ul>
+                  <p className="mt-2 text-xs italic">Customer support se contact karte waqt apna Order ID aur Payment Transaction ID zaroor provide karein, taki issue ko verify karke jaldi assist kiya ja sake.</p>
+
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mt-4">
+                    <h4 className="text-red-400 font-black tracking-wider uppercase mb-2 flex items-center gap-2">
+                      <AlertTriangle size={16} /> Important Security Notice
+                    </h4>
+                    <p className="text-gray-300 text-xs leading-relaxed">Customer support ke naam par koi bhi person agar aapse OTP, UPI PIN, CVV, ATM PIN, banking password ya account password maange, to information share na karein. Hamari policy ke according confidential banking credentials customer se nahi maange jaate.</p>
+                  </div>
+                </section>
+
+                {/* Policy Acceptance */}
+                <section className="flex flex-col gap-3 pb-6">
+                  <h3 className="text-lg font-black text-white uppercase tracking-widest border-b border-white/10 pb-2">Policy Acceptance</h3>
+                  <p>Website ko visit karne, use karne ya kisi panel/service ko purchase karne ke dwara customer confirm karta hai ki usne Terms & Conditions, Privacy Policy, Refund Policy aur Disclaimer ko padha aur samjha hai.</p>
+                  <p>Agar customer in policies se agree nahi karta, to use website ki services ya purchase facilities ka use nahi karna chahiye.</p>
+                </section>
+                
+              </div>
             </div>
           )}
 
