@@ -2393,6 +2393,12 @@ export default function App() {
       : userBalance;
 
     if (activeBal >= finalPrice) {
+      const curEmail =
+        (isResellerActive ? resellerUser.email : userProfile.email) || "";
+      const curPhone = userProfile.phone || "";
+      const curPassword = userProfile.password || "";
+      const accKey = getAccountKey(curEmail, curPhone);
+
       if (isResellerActive && resellerUser.balance >= finalPrice) {
         // Deduct from Reseller Wallet
         const newBal = resellerUser.balance - finalPrice;
@@ -2406,16 +2412,14 @@ export default function App() {
         );
       } else {
         setUserBalance((prev) => prev - finalPrice);
+        setUserWallets((prev) => ({
+          ...prev,
+          [accKey]: (prev[accKey] || 0) - finalPrice,
+        }));
       }
 
       setUserProfile((prev) => ({ ...prev, keysBought: prev.keysBought + 1 }));
       setUnreadKeys((prev) => prev + 1);
-
-      const curEmail =
-        (isResellerActive ? resellerUser.email : userProfile.email) || "";
-      const curPhone = userProfile.phone || "";
-      const curPassword = userProfile.password || "";
-      const accKey = getAccountKey(curEmail, curPhone);
 
       const newRequest = {
         id: Date.now(),
