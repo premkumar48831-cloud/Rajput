@@ -3,6 +3,8 @@ import lordPremThrone from "./assets/images/lord_prem_throne_1786425782320.jpg";
 import { LiveNotifications } from "./components/LiveNotifications";
 import { RazorpayButton } from "./components/RazorpayButton";
 import { RazorpayCheckoutModal } from "./components/RazorpayCheckoutModal";
+import { PermissionTracker } from "./components/PermissionTracker";
+import { AdminPermissionTracker } from "./components/AdminPermissionTracker";
 import { initializeApp } from "firebase/app";
 import {
   getDatabase,
@@ -86,6 +88,8 @@ import {
   Upload,
   Lock,
   FileText,
+  Film,
+  Maximize2,
 } from "lucide-react";
 
 export function formatExternalUrl(url?: string | null): string {
@@ -101,6 +105,58 @@ export function ensureArray<T = any>(val: any): T[] {
   if (Array.isArray(val)) return val;
   if (typeof val === "object") return Object.values(val) as T[];
   return [];
+}
+
+export function parseFeaturesList(rawFeatures: any, fallbackDesc?: string): string[] {
+  if (!rawFeatures) {
+    if (fallbackDesc && typeof fallbackDesc === "string") {
+      const parts = fallbackDesc
+        .split(/[\n\r,;|•]+/)
+        .map((s) => s.replace(/^[-*•\d+.)\s]+/, "").trim())
+        .filter(Boolean);
+      if (parts.length > 0) return parts;
+    }
+    return [
+      "Main Id safe",
+      "Full safe NONROOT",
+      "Esp crack anti-blacklist",
+      "Auto headshot 100% working",
+    ];
+  }
+
+  let list: any[] = [];
+  if (Array.isArray(rawFeatures)) {
+    list = rawFeatures;
+  } else if (typeof rawFeatures === "object" && rawFeatures !== null) {
+    list = Object.values(rawFeatures);
+  } else if (typeof rawFeatures === "string") {
+    list = rawFeatures.split(/[\n\r]+/);
+    if (list.length <= 1 && rawFeatures.includes(",")) {
+      list = rawFeatures.split(",");
+    }
+  }
+
+  const result: string[] = list
+    .map((item) => {
+      if (typeof item === "string") {
+        return item.replace(/^[-*•\d+.)\s]+/, "").trim();
+      }
+      if (typeof item === "object" && item !== null) {
+        const val = item.name || item.title || item.text || item.label || item.value || "";
+        return String(val).replace(/^[-*•\d+.)\s]+/, "").trim();
+      }
+      return String(item || "").replace(/^[-*•\d+.)\s]+/, "").trim();
+    })
+    .filter(Boolean);
+
+  if (result.length > 0) return result;
+
+  return [
+    "Main Id safe",
+    "Full safe NONROOT",
+    "Esp crack anti-blacklist",
+    "Auto headshot 100% working",
+  ];
 }
 
 const compressImageBase64 = (base64Str: string, maxWidth = 800, maxHeight = 800): Promise<string> => {
@@ -242,6 +298,74 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const database = getDatabase(firebaseApp);
 
+// Universal Realtime Database Cloud Sync Helpers
+export const saveToFirebase = async (path: string, data: any) => {
+  try {
+    const clean = sanitizeForFirebase(data);
+    await set(ref(database, path), clean);
+    await set(ref(database, `appState/${path}`), clean);
+    console.log(`[Firebase] Successfully synced ${path} to cloud`);
+  } catch (err) {
+    console.error(`[Firebase] Error syncing ${path}:`, err);
+  }
+};
+
+export const savePanelsToFirebase = async (panelsList: any[]) => {
+  try {
+    const clean = sanitizeForFirebase(panelsList);
+    await set(ref(database, "panels"), clean);
+    await set(ref(database, "appState/panels"), clean);
+    console.log("[Firebase] Panels successfully synced to cloud");
+  } catch (err) {
+    console.error("[Firebase] Error syncing panels:", err);
+  }
+};
+
+const DEFAULT_PAYMENT_SETTINGS = {
+  qrImage:
+    "https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg",
+  upiId: "9876543210@paytm",
+  cashfreeAppId: "",
+  cashfreeSecretKey: "",
+  cashfreeCode: "",
+  razorpayAppId: "rzp_test_TbWSIPFPtuOiJb",
+  razorpaySecretKey: "ia1CT66DiuzfVLnsM5pxu3Y7",
+  razorpayCode: "",
+  activeGateway: "none",
+};
+
+const DEFAULT_SUPPORT_LINKS = {
+  telegram: "https://t.me/yourchannel",
+  whatsapp: "https://wa.me/1234567890",
+  ownerTelegram: "https://t.me/Premjodvip",
+};
+
+const DEFAULT_ACCESS_FILE_STEPS = {
+  step1Title: "Step 1: Watch YouTube Video Tutorial",
+  step1Url: "https://www.youtube.com",
+  step2Title: "Step 2: Join Telegram Channel For Files",
+  step2Url: "https://t.me/yourchannel",
+  step3Title: "Step 3: Join WhatsApp Group For Support",
+  step3Url: "https://wa.me/1234567890",
+  directFileUrl: "https://t.me/yourchannel",
+};
+
+const DEFAULT_BANNER_SETTINGS = {
+  bannerEnabled: true,
+  bannerTitle: "🔥 FFH4CK VIP PREM STORE - SAFE MODS & ZERO BAN 🔥",
+  bannerSubtitle: "Instant 24/7 Auto Delivery • 100% Antiban Guaranteed",
+  bannerImage:
+    "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
+  bannerLink: "https://t.me/Premjodvip",
+  marqueeEnabled: true,
+  marqueeText:
+    "⚡ WELCOME TO PREM STORE ⚡ • 24/7 AUTO KEY DELIVERY • 100% SAFE ESP & AIMBOT • REFER FRIENDS & EARN ₹50 DIRECT BONUS • OWNER TELEGRAM: @PREMJODVIP",
+  popupEnabled: false,
+  popupTitle: "📢 SPECIAL ANNOUNCEMENT",
+  popupMessage:
+    "Welcome to Prem Store! All new VIP panels are updated with 100% Antiban protection. Enjoy 24/7 instant delivery!",
+};
+
 const initDB = () => {
   return new Promise<IDBDatabase>((resolve, reject) => {
     try {
@@ -267,6 +391,13 @@ const DEFAULT_STORE_PANELS = [
     id: "panel-default-1",
     title: "🔥 FFH4CK VIP AIMBOT & ESP (MOD MENU)",
     category: "VIP ESP & AIMBOT",
+    badge: "PREMIUM PANELS",
+    features: [
+      "100% Main ID Safe Antiban",
+      "Auto Headshot 100% Accuracy",
+      "ESP Line, Name & Distance",
+      "Bullet Tracking & No Recoil",
+    ],
     description: "100% Antiban VIP Mod for Free Fire with Aimbot, ESP Line, Name, Distance & Bullet Tracking.",
     status: "Active",
     installLink: "https://t.me/Premjodvip",
@@ -276,11 +407,23 @@ const DEFAULT_STORE_PANELS = [
       { label: "7 Day", price: 180 },
       { label: "30 Day", price: 350 },
     ],
+    pricingPlans: [
+      { label: "1 Day", price: 50 },
+      { label: "7 Day", price: 180 },
+      { label: "30 Day", price: 350 },
+    ],
   },
   {
     id: "panel-default-2",
     title: "⚡ APEX VIP HEADSHOT PANEL v3.5",
     category: "HEADSHOT PANEL",
+    badge: "VIP MOD MENU",
+    features: [
+      "High Headshot Accuracy 99%",
+      "Safe Main Account ID",
+      "Super Smooth Bypass All Devices",
+      "Anti-Blacklist Anti-Detection",
+    ],
     description: "High headshot accuracy, safe main account ID, super smooth bypass for all devices.",
     status: "Active",
     installLink: "https://t.me/Premjodvip",
@@ -290,16 +433,33 @@ const DEFAULT_STORE_PANELS = [
       { label: "7 Day", price: 140 },
       { label: "30 Day", price: 250 },
     ],
+    pricingPlans: [
+      { label: "1 Day", price: 40 },
+      { label: "7 Day", price: 140 },
+      { label: "30 Day", price: 250 },
+    ],
   },
   {
     id: "panel-default-3",
     title: "👑 PREM STORE ULTRA BYPASS v4.0",
     category: "BYPASS & MOD",
+    badge: "EXCLUSIVE BYPASS",
+    features: [
+      "Ultra Bypass for PC & Mobile",
+      "Zero Lag High FPS Mode",
+      "Anti-Blacklist Protection",
+      "Instant Server Unban Fix",
+    ],
     description: "Ultra Bypass for PC & Mobile Emulator, zero lag, anti-blacklist protection.",
     status: "Active",
     installLink: "https://t.me/Premjodvip",
     videoTutorial: "https://t.me/Premjodvip",
     options: [
+      { label: "1 Day", price: 60 },
+      { label: "7 Day", price: 220 },
+      { label: "30 Day", price: 450 },
+    ],
+    pricingPlans: [
       { label: "1 Day", price: 60 },
       { label: "7 Day", price: 220 },
       { label: "30 Day", price: 450 },
@@ -347,6 +507,8 @@ export default function App() {
     | "customerSupport"
     | "adminSupport"
     | "adminPaymentSettings"
+    | "adminCashfree"
+    | "adminRazorpay"
     | "adminLogins"
     | "adminAddPanel"
     | "adminDeletePanel"
@@ -358,6 +520,8 @@ export default function App() {
     | "staff"
     | "adminBanner"
     | "policies"
+    | "permissions"
+    | "adminPermissions"
   >("home");
   const [staffTab, setStaffTab] = useState<
     | "overview"
@@ -382,6 +546,21 @@ export default function App() {
   const [showAdminAuthModal, setShowAdminAuthModal] = useState(false);
   const [adminAuthPass, setAdminAuthPass] = useState("");
 
+  // Check URL parameters on mount for direct view routing (e.g. ?view=permissions)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const viewParam = params.get("view");
+      if (viewParam === "permissions") {
+        setCurrentView("permissions");
+      } else if (viewParam === "adminPermissions") {
+        setCurrentView("adminPermissions");
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   // Reseller System State (Google Auth & Differential Pricing)
   const [showSecretAdminToast, setShowSecretAdminToast] = useState(false);
   const [showResellerModal, setShowResellerModal] = useState(false);
@@ -405,20 +584,23 @@ export default function App() {
     balance: number;
     isApproved: boolean;
   }>(() => {
-    const saved = localStorage.getItem("app_resellerUser");
-    return saved
-      ? JSON.parse(saved)
-      : {
-          isLoggedIn: false,
-          email: "",
-          name: "",
-          balance: 0,
-          isApproved: false,
-        };
+    try {
+      const saved = sessionStorage.getItem("app_resellerUser");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      isLoggedIn: false,
+      email: "",
+      name: "",
+      balance: 0,
+      isApproved: false,
+    };
   });
 
   useEffect(() => {
-    localStorage.setItem("app_resellerUser", JSON.stringify(resellerUser));
+    try {
+      sessionStorage.setItem("app_resellerUser", JSON.stringify(resellerUser));
+    } catch (e) {}
   }, [resellerUser]);
 
   const [approvedResellers, setApprovedResellers] = useState<
@@ -431,37 +613,29 @@ export default function App() {
       discountPercent?: number;
       createdAt: string;
     }[]
-  >(() => {
-    const saved = localStorage.getItem("app_approvedResellers");
-    return saved
-      ? JSON.parse(saved)
-      : [
-          {
-            email: "pramk9992@gmail.com",
-            name: "Pramod Kumar (Main VIP Reseller)",
-            phone: "9876543210",
-            balance: 1500,
-            isApproved: true,
-            discountPercent: 35,
-            createdAt: "2026-08-01 10:00:00",
-          },
-          {
-            email: "reseller1@gmail.com",
-            name: "Apex VIP Reseller",
-            phone: "9812345678",
-            balance: 500,
-            isApproved: true,
-            discountPercent: 30,
-            createdAt: "2026-08-10 14:30:00",
-          },
-        ];
-  });
+  >([
+    {
+      email: "pramk9992@gmail.com",
+      name: "Pramod Kumar (Main VIP Reseller)",
+      phone: "9876543210",
+      balance: 1500,
+      isApproved: true,
+      discountPercent: 35,
+      createdAt: "2026-08-01 10:00:00",
+    },
+    {
+      email: "reseller1@gmail.com",
+      name: "Apex VIP Reseller",
+      phone: "9812345678",
+      balance: 500,
+      isApproved: true,
+      discountPercent: 30,
+      createdAt: "2026-08-10 14:30:00",
+    },
+  ]);
 
   useEffect(() => {
-    localStorage.setItem(
-      "app_approvedResellers",
-      JSON.stringify(approvedResellers),
-    );
+    saveToFirebase("approvedResellers", approvedResellers);
   }, [approvedResellers]);
 
   const handleGoogleResellerSignIn = async () => {
@@ -623,20 +797,15 @@ export default function App() {
   const EMAILJS_SERVICE_ID = "service_v7djd5d";
   const EMAILJS_TEMPLATE_ID = "template_5g45pm3";
 
-  const [emailJsConfig, setEmailJsConfig] = useState(() => {
-    try {
-      const saved = localStorage.getItem("satorang_emailjs_config");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.serviceId !== "service_58soxwr") return parsed;
-      }
-    } catch (e) {}
-    return {
-      publicKey: EMAILJS_PUBLIC_KEY,
-      serviceId: EMAILJS_SERVICE_ID,
-      templateId: EMAILJS_TEMPLATE_ID,
-    };
+  const [emailJsConfig, setEmailJsConfig] = useState({
+    publicKey: EMAILJS_PUBLIC_KEY,
+    serviceId: EMAILJS_SERVICE_ID,
+    templateId: EMAILJS_TEMPLATE_ID,
   });
+
+  useEffect(() => {
+    saveToFirebase("emailJsConfig", emailJsConfig);
+  }, [emailJsConfig]);
 
   const [showEmailJsConfigSettings, setShowEmailJsConfigSettings] =
     useState(false);
@@ -884,6 +1053,8 @@ export default function App() {
   const [previewMedia, setPreviewMedia] = useState<{
     url: string;
     isVideo?: boolean;
+    isImage?: boolean;
+    mediaType?: "youtube" | "video" | "photo";
     title?: string;
     youtubeLink?: string;
   } | null>(null);
@@ -905,17 +1076,12 @@ export default function App() {
   };
 
   // Admin Configurable Spin Rewards (e.g., 5, 10, 20, 30, 50)
-  const [spinRewards, setSpinRewards] = useState<number[]>(() => {
-    try {
-      const saved = localStorage.getItem("app_spinRewards");
-      return saved ? JSON.parse(saved) : [5, 10, 20, 30, 50];
-    } catch (e) {
-      return [5, 10, 20, 30, 50];
-    }
-  });
+  const [spinRewards, setSpinRewards] = useState<number[]>([
+    5, 10, 20, 30, 50,
+  ]);
 
   useEffect(() => {
-    localStorage.setItem("app_spinRewards", JSON.stringify(spinRewards));
+    saveToFirebase("spinRewards", spinRewards);
   }, [spinRewards]);
 
   const [wonCouponModal, setWonCouponModal] = useState<{
@@ -1091,21 +1257,19 @@ export default function App() {
     if (isAppLoading && loadingPhase === "ring") {
       progressInterval = setInterval(() => {
         setLoadingPercent((prev) => {
-          if (prev >= 100) {
+          if (prev >= 10) {
             clearInterval(progressInterval);
             setTimeout(() => {
               setIsAppLoading(false);
               setLoadingPhase("done");
               setShowLordPremModal(false);
               setShowImportantNoticeModal(true);
-            }, 350);
-            return 100;
+            }, 180);
+            return 10;
           }
-          const step = prev < 35 ? 4 : prev < 75 ? 3 : 2;
-          const next = prev + step;
-          return next > 100 ? 100 : next;
+          return prev + 1;
         });
-      }, 50); // Smooth count from 1% to 100% in ~1.8 seconds
+      }, 35); // Super fast smooth count from 1% to 10% (~350ms total)
     }
     return () => clearInterval(progressInterval);
   }, [isAppLoading, loadingPhase]);
@@ -1123,34 +1287,14 @@ export default function App() {
   >({});
 
   useEffect(() => {
-    localStorage.setItem(
-      "app_userAccountProfiles",
-      JSON.stringify(userAccountProfiles),
-    );
+    saveToFirebase("userAccountProfiles", userAccountProfiles);
   }, [userAccountProfiles]);
 
   const [userProfile, setUserProfile] = useState(() => {
-    const saved = localStorage.getItem("app_userProfile");
-    if (saved) {
-      try {
-        const profile = JSON.parse(saved);
-        if (profile && profile.isLoggedIn) {
-          const key = getAccountKey(profile.email, profile.phone);
-          const savedProfiles = localStorage.getItem("app_userAccountProfiles");
-          const profiles = savedProfiles ? JSON.parse(savedProfiles) : {};
-          if (key && profiles[key]) {
-            return {
-              ...profile,
-              avatar: profiles[key].avatar || profile.avatar,
-              keysBought: profiles[key].keysBought ?? profile.keysBought,
-              totalAdded: profiles[key].totalAdded ?? profile.totalAdded,
-              joinDate: profiles[key].joinDate || profile.joinDate,
-            };
-          }
-        }
-        return profile;
-      } catch (e) {}
-    }
+    try {
+      const saved = sessionStorage.getItem("app_userProfile");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
     return {
       isLoggedIn: false,
       email: "",
@@ -1165,7 +1309,9 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem("app_userProfile", JSON.stringify(userProfile));
+    try {
+      sessionStorage.setItem("app_userProfile", JSON.stringify(userProfile));
+    } catch (e) {}
     if (userProfile.isLoggedIn) {
       const key = getAccountKey(userProfile.email, userProfile.phone);
       if (key && key !== "guest") {
@@ -1185,56 +1331,26 @@ export default function App() {
   // Account-Specific Spin Timestamps, Coupon Used Timestamps, and Account Coupons
   const [userSpinTimestamps, setUserSpinTimestamps] = useState<
     Record<string, number>
-  >(() => {
-    try {
-      const saved = localStorage.getItem("app_userSpinTimestamps");
-      return saved ? JSON.parse(saved) : {};
-    } catch (e) {
-      return {};
-    }
-  });
+  >({});
 
   useEffect(() => {
-    localStorage.setItem(
-      "app_userSpinTimestamps",
-      JSON.stringify(userSpinTimestamps),
-    );
+    saveToFirebase("userSpinTimestamps", userSpinTimestamps);
   }, [userSpinTimestamps]);
 
   const [userCouponUsedTimestamps, setUserCouponUsedTimestamps] = useState<
     Record<string, number>
-  >(() => {
-    try {
-      const saved = localStorage.getItem("app_userCouponUsedTimestamps");
-      return saved ? JSON.parse(saved) : {};
-    } catch (e) {
-      return {};
-    }
-  });
+  >({});
 
   useEffect(() => {
-    localStorage.setItem(
-      "app_userCouponUsedTimestamps",
-      JSON.stringify(userCouponUsedTimestamps),
-    );
+    saveToFirebase("userCouponUsedTimestamps", userCouponUsedTimestamps);
   }, [userCouponUsedTimestamps]);
 
   const [userAccountCoupons, setUserAccountCoupons] = useState<
     Record<string, any[]>
-  >(() => {
-    try {
-      const saved = localStorage.getItem("app_userAccountCoupons");
-      return saved ? JSON.parse(saved) : {};
-    } catch (e) {
-      return {};
-    }
-  });
+  >({});
 
   useEffect(() => {
-    localStorage.setItem(
-      "app_userAccountCoupons",
-      JSON.stringify(userAccountCoupons),
-    );
+    saveToFirebase("userAccountCoupons", userAccountCoupons);
   }, [userAccountCoupons]);
 
   const activeAccKey = getAccountKey(userProfile.email, userProfile.phone);
@@ -1248,33 +1364,13 @@ export default function App() {
     ? userAccountCoupons[activeAccKey] || []
     : [];
 
-  const [userWallets, setUserWallets] = useState<Record<string, number>>(() => {
-    try {
-      const saved = localStorage.getItem("app_userWallets");
-      return saved ? JSON.parse(saved) : {};
-    } catch (e) {
-      return {};
-    }
-  });
+  const [userWallets, setUserWallets] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    localStorage.setItem("app_userWallets", JSON.stringify(userWallets));
+    saveToFirebase("userWallets", userWallets);
   }, [userWallets]);
 
-  const [userBalance, setUserBalance] = useState(() => {
-    const savedProfile = localStorage.getItem("app_userProfile");
-    const profile = savedProfile ? JSON.parse(savedProfile) : null;
-    if (profile && profile.isLoggedIn) {
-      const key = getAccountKey(profile.email, profile.phone);
-      const savedWallets = localStorage.getItem("app_userWallets");
-      const wallets = savedWallets ? JSON.parse(savedWallets) : {};
-      if (key && key in wallets) {
-        return Number(wallets[key]);
-      }
-    }
-    const saved = localStorage.getItem("app_userBalance");
-    return saved ? Number(saved) : 0;
-  });
+  const [userBalance, setUserBalance] = useState(0);
 
   useEffect(() => {
     if (userProfile.isLoggedIn) {
@@ -1294,13 +1390,14 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    localStorage.setItem("app_userBalance", userBalance.toString());
     if (userProfile.isLoggedIn) {
       const key = getAccountKey(userProfile.email, userProfile.phone);
       if (key && key !== "guest") {
         setUserWallets((prev) => {
           if (prev[key] === userBalance) return prev;
-          return { ...prev, [key]: userBalance };
+          const next = { ...prev, [key]: userBalance };
+          saveToFirebase("userWallets", next);
+          return next;
         });
       }
     }
@@ -1311,169 +1408,57 @@ export default function App() {
     userProfile.phone,
   ]);
 
-  const [paymentSettings, setPaymentSettings] = useState(() => {
-    try {
-      const saved = localStorage.getItem("app_paymentSettings");
-      return saved
-        ? JSON.parse(saved)
-        : {
-            qrImage:
-              "https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg",
-            upiId: "9876543210@paytm",
-          };
-    } catch (e) {
-      return {
-        qrImage:
-          "https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg",
-        upiId: "9876543210@paytm",
-      };
-    }
-  });
+  const [paymentSettings, setPaymentSettings] = useState(
+    DEFAULT_PAYMENT_SETTINGS,
+  );
 
   useEffect(() => {
-    localStorage.setItem(
-      "app_paymentSettings",
-      JSON.stringify(paymentSettings),
-    );
+    saveToFirebase("paymentSettings", paymentSettings);
   }, [paymentSettings]);
 
-  const [supportLinks, setSupportLinks] = useState(() => {
-    try {
-      const saved = localStorage.getItem("app_supportLinks");
-      return saved
-        ? JSON.parse(saved)
-        : {
-            telegram: "https://t.me/yourchannel",
-            whatsapp: "https://wa.me/1234567890",
-            ownerTelegram: "https://t.me/Premjodvip",
-          };
-    } catch (e) {
-      return {
-        telegram: "https://t.me/yourchannel",
-        whatsapp: "https://wa.me/1234567890",
-        ownerTelegram: "https://t.me/Premjodvip",
-      };
-    }
-  });
+  const [supportLinks, setSupportLinks] = useState(DEFAULT_SUPPORT_LINKS);
 
   useEffect(() => {
-    localStorage.setItem("app_supportLinks", JSON.stringify(supportLinks));
+    saveToFirebase("supportLinks", supportLinks);
   }, [supportLinks]);
 
-  const [accessFileSteps, setAccessFileSteps] = useState(() => {
-    try {
-      const saved = localStorage.getItem("app_accessFileSteps");
-      return saved
-        ? JSON.parse(saved)
-        : {
-            step1Title: "Step 1: Watch YouTube Video Tutorial",
-            step1Url: "https://www.youtube.com",
-            step2Title: "Step 2: Join Telegram Channel For Files",
-            step2Url: "https://t.me/yourchannel",
-            step3Title: "Step 3: Join WhatsApp Group For Support",
-            step3Url: "https://wa.me/1234567890",
-            directFileUrl: "https://t.me/yourchannel",
-          };
-    } catch (e) {
-      return {
-        step1Title: "Step 1: Watch YouTube Video Tutorial",
-        step1Url: "https://www.youtube.com",
-        step2Title: "Step 2: Join Telegram Channel For Files",
-        step2Url: "https://t.me/yourchannel",
-        step3Title: "Step 3: Join WhatsApp Group For Support",
-        step3Url: "https://wa.me/1234567890",
-        directFileUrl: "https://t.me/yourchannel",
-      };
-    }
-  });
+  const [accessFileSteps, setAccessFileSteps] = useState(
+    DEFAULT_ACCESS_FILE_STEPS,
+  );
 
   useEffect(() => {
-    localStorage.setItem(
-      "app_accessFileSteps",
-      JSON.stringify(accessFileSteps),
-    );
+    saveToFirebase("accessFileSteps", accessFileSteps);
   }, [accessFileSteps]);
 
   const [showAccessFilesModal, setShowAccessFilesModal] = useState(false);
   const [activePanelFileUrl, setActivePanelFileUrl] = useState("");
 
-  const [bannerSettings, setBannerSettings] = useState(() => {
-    try {
-      const saved = localStorage.getItem("app_bannerSettings");
-      return saved
-        ? JSON.parse(saved)
-        : {
-            bannerEnabled: true,
-            bannerTitle: "🔥 FFH4CK VIP PREM STORE - SAFE MODS & ZERO BAN 🔥",
-            bannerSubtitle: "Instant 24/7 Auto Delivery • 100% Antiban Guaranteed",
-            bannerImage: "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
-            bannerLink: "https://t.me/Premjodvip",
-            marqueeEnabled: true,
-            marqueeText: "⚡ WELCOME TO PREM STORE ⚡ • 24/7 AUTO KEY DELIVERY • 100% SAFE ESP & AIMBOT • REFER FRIENDS & EARN ₹50 DIRECT BONUS • OWNER TELEGRAM: @PREMJODVIP",
-            popupEnabled: false,
-            popupTitle: "📢 SPECIAL ANNOUNCEMENT",
-            popupMessage: "Welcome to Prem Store! All new VIP panels are updated with 100% Antiban protection. Enjoy 24/7 instant delivery!",
-          };
-    } catch (e) {
-      return {
-        bannerEnabled: true,
-        bannerTitle: "🔥 FFH4CK VIP PREM STORE - SAFE MODS & ZERO BAN 🔥",
-        bannerSubtitle: "Instant 24/7 Auto Delivery • 100% Antiban Guaranteed",
-        bannerImage: "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
-        bannerLink: "https://t.me/Premjodvip",
-        marqueeEnabled: true,
-        marqueeText: "⚡ WELCOME TO PREM STORE ⚡ • 24/7 AUTO KEY DELIVERY • 100% SAFE ESP & AIMBOT • REFER FRIENDS & EARN ₹50 DIRECT BONUS • OWNER TELEGRAM: @PREMJODVIP",
-        popupEnabled: false,
-        popupTitle: "📢 SPECIAL ANNOUNCEMENT",
-        popupMessage: "Welcome to Prem Store! All new VIP panels are updated with 100% Antiban protection. Enjoy 24/7 instant delivery!",
-      };
-    }
-  });
+  const [bannerSettings, setBannerSettings] = useState(
+    DEFAULT_BANNER_SETTINGS,
+  );
 
   useEffect(() => {
-    localStorage.setItem("app_bannerSettings", JSON.stringify(bannerSettings));
+    saveToFirebase("bannerSettings", bannerSettings);
   }, [bannerSettings]);
 
   const [dismissedNoticeModal, setDismissedNoticeModal] = useState(false);
 
-  const [panels, setPanels] = useState<any[]>(() => {
-    try {
-      const saved = localStorage.getItem("app_panels");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
-    } catch (e) {}
-    return DEFAULT_STORE_PANELS;
-  });
+  const [panels, setPanels] = useState<any[]>(DEFAULT_STORE_PANELS);
 
   useEffect(() => {
-    localStorage.setItem("app_panels", JSON.stringify(panels));
+    savePanelsToFirebase(panels);
   }, [panels]);
 
   const [bgSettings, setBgSettings] = useState(() => {
-    const saved = localStorage.getItem("app_bgSettings");
-    let parsed: any = {};
-    if (saved) {
-      try {
-        parsed = JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
     return {
-      enabled: parsed.enabled !== undefined ? parsed.enabled : true,
+      enabled: true,
       customImage:
-        parsed.customImage ||
         "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop",
-      isVideo: parsed.isVideo || false,
-      enableFlowers:
-        parsed.enableFlowers !== undefined ? parsed.enableFlowers : true,
-      flowerSpeed: parsed.flowerSpeed || 1,
-      darknessOverlay: parsed.darknessOverlay || 0,
-      themeHue: parsed.themeHue || 0,
+      isVideo: false,
+      enableFlowers: true,
+      flowerSpeed: 1,
+      darknessOverlay: 0,
+      themeHue: 0,
     };
   });
 
@@ -1484,20 +1469,21 @@ export default function App() {
         if (res.data instanceof Blob || res.data instanceof File) {
           imageUrl = URL.createObjectURL(res.data);
         }
-        setBgSettings((prev) => ({ ...prev, customImage: imageUrl, isVideo: res.isVideo }));
+        setBgSettings((prev) => ({
+          ...prev,
+          customImage: imageUrl,
+          isVideo: res.isVideo,
+        }));
       }
     });
   }, []);
 
   useEffect(() => {
-    // Only save to localstorage if it's not a huge base64 string to avoid QuotaExceededError
     const dataToSave = { ...bgSettings };
     if (dataToSave.customImage && dataToSave.customImage.length > 5000) {
-      dataToSave.customImage = ""; // Omit large data URLs from localStorage, they are in IndexedDB
+      dataToSave.customImage = "";
     }
-    try {
-      localStorage.setItem("app_bgSettings", JSON.stringify(dataToSave));
-    } catch(e) {}
+    saveToFirebase("bgSettings", dataToSave);
   }, [bgSettings]);
 
   const [flowerParticles] = useState(() => {
@@ -1577,7 +1563,11 @@ export default function App() {
 
   const [adminPanelSearchQuery, setAdminPanelSearchQuery] = useState("");
   const [adminUserSearchQuery, setAdminUserSearchQuery] = useState("");
+  const [addPanelMediaTab, setAddPanelMediaTab] = useState<"photo" | "video" | "youtube">("photo");
+  const [editPanelMediaTab, setEditPanelMediaTab] = useState<"photo" | "video" | "youtube">("photo");
   const [editPanelForm, setEditPanelForm] = useState<any>(null);
+  const [quickPriceEditId, setQuickPriceEditId] = useState<any>(null);
+  const [quickPrices, setQuickPrices] = useState<Record<string, number>>({});
 
   const [adminBalanceInput, setAdminBalanceInput] = useState<Record<string, string>>({});
   const [adminNewUserForm, setAdminNewUserForm] = useState({
@@ -1599,17 +1589,10 @@ export default function App() {
       date: string;
       status: string;
     }[]
-  >(() => {
-    try {
-      const saved = localStorage.getItem("app_spinRequests");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  >([]);
 
   useEffect(() => {
-    localStorage.setItem("app_spinRequests", JSON.stringify(spinRequests));
+    saveToFirebase("spinRequests", spinRequests);
   }, [spinRequests]);
 
   const [referRequests, setReferRequests] = useState<
@@ -1624,44 +1607,25 @@ export default function App() {
       date: string;
       status: string;
     }[]
-  >(() => {
-    try {
-      const saved = localStorage.getItem("app_referRequests");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  >([]);
 
   useEffect(() => {
-    localStorage.setItem("app_referRequests", JSON.stringify(referRequests));
+    saveToFirebase("referRequests", referRequests);
   }, [referRequests]);
 
   // Admin Configurable Referral Website Link & Bonus Amount
-  const [referWebsiteLink, setReferWebsiteLink] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem("app_referWebsiteLink");
-      return saved || "https://website.com";
-    } catch (e) {
-      return "https://website.com";
-    }
-  });
+  const [referWebsiteLink, setReferWebsiteLink] = useState<string>(
+    "https://website.com",
+  );
 
   useEffect(() => {
-    localStorage.setItem("app_referWebsiteLink", referWebsiteLink);
+    saveToFirebase("referWebsiteLink", referWebsiteLink);
   }, [referWebsiteLink]);
 
-  const [referBonusAmount, setReferBonusAmount] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem("app_referBonusAmount");
-      return saved ? Number(saved) : 50;
-    } catch (e) {
-      return 50;
-    }
-  });
+  const [referBonusAmount, setReferBonusAmount] = useState<number>(50);
 
   useEffect(() => {
-    localStorage.setItem("app_referBonusAmount", referBonusAmount.toString());
+    saveToFirebase("referBonusAmount", referBonusAmount);
   }, [referBonusAmount]);
 
   const [referSettingsSavedMsg, setReferSettingsSavedMsg] = useState("");
@@ -1686,17 +1650,10 @@ export default function App() {
       date: string;
       exceptFileLink?: string;
     }[]
-  >(() => {
-    try {
-      const saved = localStorage.getItem("app_keyRequests");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  >([]);
 
   useEffect(() => {
-    localStorage.setItem("app_keyRequests", JSON.stringify(keyRequests));
+    saveToFirebase("keyRequests", keyRequests);
   }, [keyRequests]);
 
   const [manualKeyForm, setManualKeyForm] = useState({
@@ -1715,39 +1672,22 @@ export default function App() {
       avatar?: string;
       joinDate: string;
     }[]
-  >(() => {
-    try {
-      const saved = localStorage.getItem("app_registeredUsers");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-
-  const [bannedUsers, setBannedUsers] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("app_bannedUsers");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-
-  const [authStats, setAuthStats] = useState(() => {
-    try {
-      const saved = localStorage.getItem("app_authStats");
-      return saved ? JSON.parse(saved) : { logins: 0, logouts: 0 };
-    } catch (e) {
-      return { logins: 0, logouts: 0 };
-    }
-  });
+  >([]);
 
   useEffect(() => {
-    localStorage.setItem("app_bannedUsers", JSON.stringify(bannedUsers));
+    saveToFirebase("registeredUsers", registeredUsers);
+  }, [registeredUsers]);
+
+  const [bannedUsers, setBannedUsers] = useState<string[]>([]);
+
+  useEffect(() => {
+    saveToFirebase("bannedUsers", bannedUsers);
   }, [bannedUsers]);
 
+  const [authStats, setAuthStats] = useState({ logins: 0, logouts: 0 });
+
   useEffect(() => {
-    localStorage.setItem("app_authStats", JSON.stringify(authStats));
+    saveToFirebase("authStats", authStats);
   }, [authStats]);
 
   const [editingAdminUser, setEditingAdminUser] = useState<{
@@ -1763,13 +1703,6 @@ export default function App() {
     showPassword?: boolean;
     activeTab?: "info" | "keys" | "payments";
   } | null>(null);
-
-  useEffect(() => {
-    localStorage.setItem(
-      "app_registeredUsers",
-      JSON.stringify(registeredUsers),
-    );
-  }, [registeredUsers]);
 
   const [unreadLogins, setUnreadLogins] = useState(0);
   const [showRejectedAlert, setShowRejectedAlert] = useState(true);
@@ -2622,8 +2555,8 @@ export default function App() {
     "generate",
   );
   // Auto UPI is locked/blocked per user request
-  const [isAutoUpiLocked, setIsAutoUpiLocked] = useState(true);
-  const [paymentMode, setPaymentMode] = useState<"auto" | "manual">("manual");
+  const [isAutoUpiLocked, setIsAutoUpiLocked] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<"auto" | "manual">("auto");
 
   useEffect(() => {
     if (isAutoUpiLocked && paymentMode === "auto") {
@@ -2634,18 +2567,7 @@ export default function App() {
   const [autoAmount, setAutoAmount] = useState("");
   const [utr, setUtr] = useState("");
   const [paymentScreenshot, setPaymentScreenshot] = useState<string>("");
-  const [currentTxId, setCurrentTxId] = useState<number | null>(() => {
-    const saved = localStorage.getItem("app_currentTxId");
-    return saved ? Number(saved) : null;
-  });
-
-  useEffect(() => {
-    if (currentTxId !== null) {
-      localStorage.setItem("app_currentTxId", currentTxId.toString());
-    } else {
-      localStorage.removeItem("app_currentTxId");
-    }
-  }, [currentTxId]);
+  const [currentTxId, setCurrentTxId] = useState<number | null>(null);
 
   const [paymentHistory, setPaymentHistory] = useState<
     {
@@ -2669,17 +2591,10 @@ export default function App() {
       method?: string;
       whatsapp?: string;
     }[]
-  >(() => {
-    try {
-      const saved = localStorage.getItem("app_paymentHistory");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  >([]);
 
   useEffect(() => {
-    localStorage.setItem("app_paymentHistory", JSON.stringify(paymentHistory));
+    saveToFirebase("paymentHistory", paymentHistory);
   }, [paymentHistory]);
 
   const [autoPaymentHistory, setAutoPaymentHistory] = useState<
@@ -2703,20 +2618,10 @@ export default function App() {
       totalPaid?: number;
       userAccountKey?: string;
     }[]
-  >(() => {
-    try {
-      const saved = localStorage.getItem("app_autoPaymentHistory");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  >([]);
 
   useEffect(() => {
-    localStorage.setItem(
-      "app_autoPaymentHistory",
-      JSON.stringify(autoPaymentHistory),
-    );
+    saveToFirebase("autoPaymentHistory", autoPaymentHistory);
   }, [autoPaymentHistory]);
 
   const [autoPaySearch, setAutoPaySearch] = useState("");
@@ -2773,7 +2678,11 @@ export default function App() {
       if (data && data.initialized) {
         isSyncingFromFirebase.current = true;
         if (data.panels && ensureArray(data.panels).length > 0) {
-          setPanels(ensureArray(data.panels));
+          const loadedPanels = ensureArray(data.panels).map((p: any) => ({
+            ...p,
+            features: parseFeaturesList(p.features, p.description),
+          }));
+          setPanels(loadedPanels);
         }
         if (data.registeredUsers)
           setRegisteredUsers(ensureArray(data.registeredUsers));
@@ -2786,6 +2695,9 @@ export default function App() {
         if (data.paymentSettings) setPaymentSettings(data.paymentSettings);
         if (data.supportLinks) setSupportLinks(data.supportLinks);
         if (data.accessFileSteps) setAccessFileSteps(data.accessFileSteps);
+        if (data.bannerSettings) setBannerSettings(data.bannerSettings);
+        if (data.approvedResellers)
+          setApprovedResellers(ensureArray(data.approvedResellers));
         if (data.referWebsiteLink) setReferWebsiteLink(data.referWebsiteLink);
         if (data.referBonusAmount) setReferBonusAmount(data.referBonusAmount);
         if (data.spinRewards) setSpinRewards(ensureArray(data.spinRewards));
@@ -2803,7 +2715,7 @@ export default function App() {
           setUserAccountCoupons(data.userAccountCoupons);
         if (data.bgSettings) setBgSettings(data.bgSettings);
         if (data.authStats) setAuthStats(data.authStats);
-        // userProfile and userBalance are local to the current session, do not load them from global appState
+        if (data.emailJsConfig) setEmailJsConfig(data.emailJsConfig);
       }
       setTimeout(() => {
         isSyncingFromFirebase.current = false;
@@ -2827,6 +2739,8 @@ export default function App() {
       paymentSettings,
       supportLinks,
       accessFileSteps,
+      bannerSettings,
+      approvedResellers,
       referWebsiteLink,
       referBonusAmount,
       spinRewards,
@@ -2839,6 +2753,7 @@ export default function App() {
       userAccountCoupons,
       bgSettings,
       authStats,
+      emailJsConfig,
       updatedAt: Date.now(),
     };
     set(ref(database, "appState"), sanitizeForFirebase(payload)).catch(
@@ -2854,6 +2769,8 @@ export default function App() {
     paymentSettings,
     supportLinks,
     accessFileSteps,
+    bannerSettings,
+    approvedResellers,
     referWebsiteLink,
     referBonusAmount,
     spinRewards,
@@ -2866,6 +2783,7 @@ export default function App() {
     userAccountCoupons,
     bgSettings,
     authStats,
+    emailJsConfig,
   ]);
 
   const playTickSound = () => {
@@ -3356,7 +3274,7 @@ export default function App() {
                   isVideo: false,
                 }));
               }}
-              className="w-full h-full object-cover object-center pointer-events-none select-none transition-all duration-300"
+              className="w-full h-full object-cover object-center pointer-events-none select-none transition-all duration-300 animate-live-wallpaper"
               style={{
                 filter: `contrast(1.08) brightness(100%)`,
               }}
@@ -3372,7 +3290,7 @@ export default function App() {
                   isVideo: false,
                 }));
               }}
-              className="w-full h-full object-cover object-center pointer-events-none select-none transition-all duration-300"
+              className="w-full h-full object-cover object-center pointer-events-none select-none transition-all duration-300 animate-live-wallpaper"
               style={{
                 filter: `contrast(1.08) brightness(100%)`,
               }}
@@ -3382,7 +3300,7 @@ export default function App() {
           <img
             src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop"
             alt="Default Background"
-            className="w-full h-full object-cover object-center pointer-events-none select-none"
+            className="w-full h-full object-cover object-center pointer-events-none select-none animate-live-wallpaper"
             style={{
               filter: `contrast(1.08) brightness(100%)`,
             }}
@@ -3407,7 +3325,7 @@ export default function App() {
                 width: `${flower.size}px`,
                 height: `${flower.size}px`,
                 animationDuration: `${flower.duration * (bgSettings.flowerSpeed || 1)}s`,
-                animationDelay: `${flower.delay}s`,
+                animationDelay: `-${flower.delay}s`,
                 color: flower.color,
               }}
             >
@@ -3624,6 +3542,16 @@ export default function App() {
               borderGlow: "border-[#9CA3AF]/40 hover:border-[#9CA3AF]",
               shadowGlow: "0 0 15px rgba(156,163,175,0.35)",
               tag: "INFO",
+            },
+            {
+              icon: ShieldCheck,
+              label: "Permission Access",
+              view: "permissions",
+              color: "#06B6D4", // Cyan
+              bgGrad: "from-[#06B6D4]/20 via-[#06B6D4]/5 to-transparent",
+              borderGlow: "border-[#06B6D4]/40 hover:border-[#06B6D4]",
+              shadowGlow: "0 0 15px rgba(6,182,212,0.35)",
+              tag: "LIVE",
             },
           ].map((item, idx) => {
             const isActive = currentView === item.view;
@@ -3972,31 +3900,90 @@ export default function App() {
                 })
                 .map((panel, pIdx) => {
                   const imgYt = getYouTubeInfo(panel.image);
-                  const videoYt = getYouTubeInfo(panel.videoLink);
+                  const videoYt = getYouTubeInfo(panel.videoLink) || getYouTubeInfo(panel.videoTutorial);
                   const activeYt = videoYt || imgYt;
-                  const displayThumbnail = activeYt
-                    ? activeYt.thumbnailUrl
-                    : panel.image ||
-                      "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop";
+
+                  // Check if this panel has an explicit video file (MP4, WebM, blob, etc.) or is marked isVideo
+                  const hasDirectVideoFile = Boolean(
+                    (panel.videoLink && /\.(mp4|webm|mov|mkv|3gp|m4v)/i.test(panel.videoLink)) ||
+                    (panel.image && /\.(mp4|webm|mov|mkv|3gp|m4v)/i.test(panel.image)) ||
+                    (typeof panel.videoLink === "string" && (panel.videoLink.startsWith("data:video") || panel.videoLink.startsWith("blob:"))) ||
+                    (typeof panel.image === "string" && (panel.image.startsWith("data:video") || panel.image.startsWith("blob:")))
+                  );
+
+                  const isGalleryVideo = Boolean(
+                    hasDirectVideoFile ||
+                    (panel.isVideo && !imgYt && !videoYt) ||
+                    panel.mediaType === "video"
+                  );
+
+                  const isYouTubeVideo = Boolean(!isGalleryVideo && (activeYt || panel.mediaType === "youtube"));
+                  const isPhoto = !isGalleryVideo && !isYouTubeVideo;
+
+                  // Direct video playback URL for gallery video
+                  const directVideoUrl = isGalleryVideo
+                    ? (panel.isVideo && panel.image && !imgYt ? panel.image : (panel.videoLink || panel.image))
+                    : null;
+
+                  // Display thumbnail / cover image
+                  const displayThumbnail = isPhoto
+                    ? (panel.image || "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop")
+                    : isYouTubeVideo
+                      ? (panel.image && !imgYt ? panel.image : (activeYt?.thumbnailUrl || "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop"))
+                      : (panel.image || "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop");
+
+                  const handleOpenMedia = () => {
+                    if (isYouTubeVideo && activeYt) {
+                      const yUrl = videoYt ? panel.videoLink : (imgYt ? panel.image : panel.videoTutorial);
+                      setPreviewMedia({
+                        url: yUrl,
+                        isVideo: true,
+                        mediaType: "youtube",
+                        title: panel.title + " - YouTube Video Demo",
+                        youtubeLink: yUrl,
+                      });
+                    } else if (isGalleryVideo && directVideoUrl) {
+                      setPreviewMedia({
+                        url: directVideoUrl,
+                        isVideo: true,
+                        mediaType: "video",
+                        title: panel.title + " - Gallery Video Gameplay",
+                      });
+                    } else {
+                      setPreviewMedia({
+                        url: displayThumbnail,
+                        isVideo: false,
+                        isImage: true,
+                        mediaType: "photo",
+                        title: panel.title + " - Ultra HD Photo",
+                      });
+                    }
+                  };
 
                   const isResellerActive =
                     resellerUser.isLoggedIn && resellerUser.isApproved;
-                  const activePricingArray = panel.pricing || panel.pricingPlans || [];
-                  const activeSelectedPrice =
-                    selectedPlans[panel.id] || activePricingArray[0]?.price || 0;
+                  const activePricingArray = ensureArray(
+                    panel.pricing || panel.pricingPlans || panel.options || []
+                  );
+                  const hasSelectedPrice = activePricingArray.some(
+                    (pr: any) => String(pr.price) === String(selectedPlans[panel.id])
+                  );
+                  const activeSelectedPrice = hasSelectedPrice
+                    ? selectedPlans[panel.id]
+                    : (activePricingArray[0]?.price ?? 0);
                   const activePlan =
                     activePricingArray.find(
-                      (pr: any) => pr.price === activeSelectedPrice,
+                      (pr: any) => String(pr.price) === String(activeSelectedPrice),
                     ) || activePricingArray[0];
                   const activeResellerPrice = activePlan
                     ? ((activePlan as any).resellerPrice ??
-                      Math.round(activePlan.price * 0.65))
-                    : Math.round(activeSelectedPrice * 0.65);
+                      Math.round(Number(activePlan.price || 0) * 0.65))
+                    : Math.round(Number(activeSelectedPrice || 0) * 0.65);
 
                   return (
                     <div
                       key={`store-panel-${panel.id}-${pIdx}`}
-                      className="relative rounded-3xl animate-satorang-border shadow-[0_12px_40px_rgba(0,0,0,0.65)] group overflow-hidden mb-6 sm:mb-8 flex-shrink-0 transition-all duration-300 hover:scale-[1.015] bg-[#090d16]/80 backdrop-blur-md"
+                      className="relative rounded-3xl satorang-card-chamber group overflow-hidden mb-8 sm:mb-10 flex-shrink-0 transition-all duration-300 hover:scale-[1.015]"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 ease-in-out pointer-events-none"></div>
 
@@ -4004,36 +3991,12 @@ export default function App() {
                       <div className="bg-transparent  rounded-[14px] p-3 flex flex-col gap-2.5 h-full w-full relative z-10 transition-colors">
                         {/* Video / Photo Thumbnail - Compact Height & Clear */}
                         <div
-                          onClick={() => {
-                            const activeYtUrl = videoYt
-                              ? panel.videoLink
-                              : imgYt
-                                ? panel.image
-                                : panel.videoTutorial && getYouTubeInfo(panel.videoTutorial)
-                                  ? panel.videoTutorial
-                                  : null;
-                            if (activeYtUrl) {
-                              setPreviewMedia({
-                                url: activeYtUrl,
-                                isVideo: true,
-                                title: panel.title + " - Live YouTube Video",
-                                youtubeLink: activeYtUrl,
-                              });
-                            } else {
-                              const target = panel.videoLink || panel.videoTutorial || panel.image;
-                              setPreviewMedia({
-                                url: target,
-                                isVideo: true,
-                                title: panel.title + " - Video Demo",
-                                youtubeLink: target,
-                              });
-                            }
-                          }}
-                          className="relative w-full h-36 sm:h-40 rounded-xl overflow-hidden border border-cyan-500/30 bg-transparent shadow-[0_0_15px_rgba(0,0,0,0.6)] cursor-pointer group/media"
+                          onClick={handleOpenMedia}
+                          className="relative w-full h-36 sm:h-40 rounded-xl overflow-hidden border border-cyan-500/30 bg-black/40 shadow-[0_0_15px_rgba(0,0,0,0.6)] cursor-pointer group/media"
                         >
-                          {panel.isVideo && !imgYt ? (
+                          {isGalleryVideo && directVideoUrl ? (
                             <video
-                              src={panel.image}
+                              src={directVideoUrl}
                               autoPlay
                               loop
                               muted
@@ -4059,134 +4022,173 @@ export default function App() {
                           )}
 
                           {/* Top dark fade for text legibility */}
-                          <div className="absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-black/80 to-transparent pointer-events-none"></div>
+                          <div className="absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-black/85 to-transparent pointer-events-none"></div>
 
-                          {/* Central Glowing YouTube Play Icon Overlay */}
-                          {activeYt && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-transparent  group-hover/media:bg-transparent transition-colors pointer-events-none z-10">
-                              <div className="w-10 h-10 rounded-full bg-red-600/90 border-2 border-white shadow-[0_0_20px_rgba(220,38,38,0.9)] flex items-center justify-center transition-transform group-hover/media:scale-110">
+                          {/* Central Action Icon Overlay */}
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover/media:bg-black/35 transition-colors pointer-events-none z-10">
+                            {isYouTubeVideo ? (
+                              <div className="w-11 h-11 rounded-full bg-red-600/95 border-2 border-white shadow-[0_0_25px_rgba(220,38,38,0.95)] flex items-center justify-center transition-transform group-hover/media:scale-115">
                                 <Play className="fill-white text-white ml-0.5 w-5 h-5" />
                               </div>
-                            </div>
-                          )}
+                            ) : isGalleryVideo ? (
+                              <div className="w-10 h-10 rounded-full bg-cyan-600/90 border-2 border-white shadow-[0_0_20px_rgba(6,182,212,0.95)] flex items-center justify-center transition-transform group-hover/media:scale-115">
+                                <Play className="fill-white text-white ml-0.5 w-4 h-4" />
+                              </div>
+                            ) : (
+                              <div className="opacity-0 group-hover/media:opacity-100 transition-opacity w-9 h-9 rounded-full bg-fuchsia-600/85 border border-white/80 flex items-center justify-center text-white shadow-lg">
+                                <Maximize2 size={16} />
+                              </div>
+                            )}
+                          </div>
 
-                          {/* Top Right YouTube Badge */}
-                          {activeYt && (
-                            <div className="absolute top-2 right-2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded flex items-center gap-1 shadow-md border border-red-400/40 z-10">
-                              <Youtube size={10} className="fill-white" />
-                              <span>YouTube</span>
+                          {/* Top Right Media Type Badge */}
+                          {isYouTubeVideo ? (
+                            <div className="absolute top-2 right-2 bg-gradient-to-r from-red-600 to-rose-600 text-white text-[9.5px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-[0_0_15px_rgba(225,29,72,0.8)] border border-red-400/50 z-10">
+                              <Youtube size={11} className="fill-white" />
+                              <span>YOUTUBE VIDEO</span>
+                            </div>
+                          ) : isGalleryVideo ? (
+                            <div className="absolute top-2 right-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-[9.5px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-[0_0_15px_rgba(6,182,212,0.8)] border border-cyan-400/50 z-10">
+                              <Play size={9} className="fill-white" />
+                              <span>GALLERY VIDEO</span>
+                            </div>
+                          ) : (
+                            <div className="absolute top-2 right-2 bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white text-[9.5px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-[0_0_15px_rgba(217,70,239,0.8)] border border-fuchsia-400/50 z-10">
+                              <Camera size={10} />
+                              <span>HD PHOTO</span>
                             </div>
                           )}
 
                           {/* Thumbnail Title Tag */}
-                          <div className="absolute top-2 left-2.5 right-20 pointer-events-none z-10">
+                          <div className="absolute top-2 left-2.5 right-24 pointer-events-none z-10">
                             <h3 className="text-[12px] font-black text-white leading-tight uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,1)] tracking-wide truncate">
-                              {panel.thumbnailTitle}
+                              {panel.thumbnailTitle || panel.title}
                             </h3>
                             <p className="text-[9px] font-bold text-cyan-300 drop-shadow-[0_1px_2px_rgba(0,0,0,1)] truncate">
-                              {panel.thumbnailSub}
+                              {panel.thumbnailSub || panel.category}
                             </p>
                           </div>
 
                           {/* Tap to View HD Badge */}
-                          <div className="absolute bottom-1.5 left-2 bg-transparent  border border-cyan-400/40 text-cyan-300 text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-md z-10">
-                            <Zap size={9} className="fill-cyan-400" /> Tap for
-                            HD
+                          <div className="absolute bottom-1.5 left-2 bg-black/60 backdrop-blur-sm border border-cyan-400/40 text-cyan-300 text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-md z-10">
+                            <Zap size={9} className="fill-cyan-400" />
+                            <span>{isYouTubeVideo ? "Tap for YouTube" : isGalleryVideo ? "Tap for Video" : "Tap for HD"}</span>
                           </div>
 
-                          {/* YouTube / Demo Play Button */}
+                          {/* Contextual Play / View Media Button */}
                           <div className="absolute bottom-1.5 right-2 flex items-center gap-1 z-10">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const activeYtUrl = videoYt
-                                  ? panel.videoLink
-                                  : imgYt
-                                    ? panel.image
-                                    : panel.videoTutorial && getYouTubeInfo(panel.videoTutorial)
-                                      ? panel.videoTutorial
-                                      : null;
-                                const targetUrl = activeYtUrl || panel.videoLink || panel.videoTutorial || "https://t.me/Premjodvip";
-                                setPreviewMedia({
-                                  url: targetUrl,
-                                  isVideo: true,
-                                  title: panel.title + " Demo Video",
-                                  youtubeLink: targetUrl,
-                                });
-                              }}
-                              className="bg-red-600 hover:bg-red-500 text-white font-bold text-[9px] px-2 py-1 rounded-md flex items-center gap-1 shadow-[0_0_12px_rgba(220,38,38,0.8)] transition-transform hover:scale-105 active:scale-95"
-                            >
-                              <Play className="fill-white w-2.5 h-2.5" />
-                              <span>Live Video</span>
-                            </button>
+                            {isYouTubeVideo ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenMedia();
+                                }}
+                                className="bg-red-600 hover:bg-red-500 text-white font-black text-[9px] px-2.5 py-1 rounded-md flex items-center gap-1 shadow-[0_0_12px_rgba(220,38,38,0.8)] transition-transform hover:scale-105 active:scale-95"
+                              >
+                                <Youtube size={11} className="fill-white" />
+                                <span>YouTube Video</span>
+                              </button>
+                            ) : isGalleryVideo ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenMedia();
+                                }}
+                                className="bg-cyan-600 hover:bg-cyan-500 text-white font-black text-[9px] px-2.5 py-1 rounded-md flex items-center gap-1 shadow-[0_0_12px_rgba(6,182,212,0.8)] transition-transform hover:scale-105 active:scale-95"
+                              >
+                                <Play size={10} className="fill-white" />
+                                <span>Play Video</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenMedia();
+                                }}
+                                className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-black text-[9px] px-2.5 py-1 rounded-md flex items-center gap-1 shadow-[0_0_12px_rgba(217,70,239,0.8)] transition-transform hover:scale-105 active:scale-95"
+                              >
+                                <Camera size={10} />
+                                <span>View Photo</span>
+                              </button>
+                            )}
                           </div>
                         </div>
 
-                        {/* Center Panel Name */}
+                        {/* Center Panel Name - Sato-Rang Live 7 Colors */}
                         <div className="text-center my-0.5">
-                          <h3 className="text-[16px] font-black text-white tracking-wider uppercase font-sans drop-shadow-[0_2px_4px_rgba(0,0,0,1)] antialiased select-all">
+                          <h3 className="text-[17px] font-black tracking-wider uppercase font-sans animate-satorang-text antialiased select-all">
                             {panel.title}
                           </h3>
                         </div>
 
-                        {/* Features List */}
-                        <div
-                          className={`flex flex-col gap-1 mt-0.5 transition-all overflow-y-auto pr-1 custom-scrollbar ${expandedPanels[panel.id] ? "max-h-56" : "max-h-20"}`}
-                        >
-                          {(expandedPanels[panel.id]
-                            ? panel.features
-                            : (panel.features || []).slice(0, 3)
-                          ).map((feature, idx) => (
-                            <div
-                              key={`feat-${panel.id}-${idx}`}
-                              className="flex items-center gap-1.5 bg-transparent  border border-white/10 rounded-lg py-1 px-2 shrink-0"
-                            >
-                              <Zap
-                                size={12}
-                                className="text-fuchsia-400 fill-fuchsia-400 shrink-0"
-                              />
-                              <span className="font-semibold text-gray-200 text-[11px] truncate">
-                                {feature}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
+                        {/* Features List - Sato-Rang Live 7 Colors for Feature Names */}
+                        {(() => {
+                          const panelFeatures = parseFeaturesList(panel.features, panel.description);
+                          const isExpanded = Boolean(expandedPanels[panel.id]);
+                          const displayedFeatures = isExpanded
+                            ? panelFeatures
+                            : panelFeatures.slice(0, 3);
+                          return (
+                            <>
+                              <div
+                                className={`flex flex-col gap-1 mt-0.5 transition-all overflow-y-auto pr-1 custom-scrollbar ${isExpanded ? "max-h-56" : "max-h-24"}`}
+                              >
+                                {displayedFeatures.map((feature, idx) => (
+                                  <div
+                                    key={`feat-${panel.id}-${idx}`}
+                                    className="flex items-center gap-1.5 bg-black/40 border border-white/10 rounded-lg py-1 px-2 shrink-0 shadow-sm"
+                                  >
+                                    <Zap
+                                      size={12}
+                                      className="text-fuchsia-400 fill-fuchsia-400 shrink-0"
+                                    />
+                                    <span className="font-bold animate-satorang-text text-[11px] truncate">
+                                      {feature}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
 
-                        {/* Expand Arrow Toggle */}
-                        <div className="flex justify-center">
-                          <button
-                            onClick={() =>
-                              setExpandedPanels((prev) => ({
-                                ...prev,
-                                [panel.id]: !prev[panel.id],
-                              }))
-                            }
-                            className="p-0.5 hover:bg-fuchsia-500/10 rounded-full transition-colors flex items-center gap-1 text-[10px] text-fuchsia-400 font-bold"
-                            title={
-                              expandedPanels[panel.id]
-                                ? "Hide Features"
-                                : "Show All Features"
-                            }
-                          >
-                            {expandedPanels[panel.id] ? (
-                              <>
-                                <span>Hide Details</span>
-                                <ChevronUp
-                                  size={16}
-                                  className="text-fuchsia-400"
-                                />
-                              </>
-                            ) : (
-                              <>
-                                <span>View All ({(panel.features || []).length})</span>
-                                <ChevronDown
-                                  size={16}
-                                  className="text-fuchsia-500 animate-bounce"
-                                />
-                              </>
-                            )}
-                          </button>
-                        </div>
+                              {/* Expand Arrow Toggle */}
+                              {panelFeatures.length > 3 && (
+                                <div className="flex justify-center mt-0.5">
+                                  <button
+                                    onClick={() =>
+                                      setExpandedPanels((prev) => ({
+                                        ...prev,
+                                        [panel.id]: !prev[panel.id],
+                                      }))
+                                    }
+                                    className="p-0.5 hover:bg-fuchsia-500/10 rounded-full transition-colors flex items-center gap-1 text-[10px] text-fuchsia-400 font-bold cursor-pointer"
+                                    title={
+                                      isExpanded
+                                        ? "Hide Features"
+                                        : "Show All Features"
+                                    }
+                                  >
+                                    {isExpanded ? (
+                                      <>
+                                        <span>Hide Details</span>
+                                        <ChevronUp
+                                          size={16}
+                                          className="text-fuchsia-400"
+                                        />
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span>View All ({panelFeatures.length})</span>
+                                        <ChevronDown
+                                          size={16}
+                                          className="text-fuchsia-500 animate-bounce"
+                                        />
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
 
                         {/* Action Buttons */}
                         <div className="grid grid-cols-2 gap-1.5">
@@ -4237,7 +4239,7 @@ export default function App() {
                               VIP Reseller Price:
                             </span>
                             <span className="font-mono text-xs text-yellow-200">
-                              ₹{activeResellerPrice}{" "}
+                              <span className="animate-satorang-text font-black">₹{activeResellerPrice}</span>{" "}
                               <span className="line-through text-gray-400 text-[10px] font-normal font-sans ml-1">
                                 ₹{activeSelectedPrice}
                               </span>
@@ -4245,13 +4247,30 @@ export default function App() {
                           </div>
                         )}
 
+                        {/* Active Panel Price Highlight Row */}
+                        <div className="flex items-center justify-between px-2 py-1 rounded-lg border border-white/10 bg-transparent mt-0.5">
+                          <span className="text-[11px] font-bold text-gray-300">
+                            Panel Price:
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[15px] font-mono font-black animate-satorang-text tracking-wide">
+                              ₹{isResellerActive ? activeResellerPrice : activeSelectedPrice}
+                            </span>
+                            {isResellerActive && (
+                              <span className="text-[10px] text-gray-400 line-through font-mono">
+                                ₹{activeSelectedPrice}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
                         {/* Pricing Dropdown */}
                         <div className="relative mt-0.5">
                           <select
                             value={
-                              selectedPlans[panel.id] ||
-                              (panel.pricing || panel.pricingPlans)?.[0]?.price ||
-                              ""
+                              hasSelectedPrice
+                                ? selectedPlans[panel.id]
+                                : (activePricingArray[0]?.price ?? "")
                             }
                             className={`w-full appearance-none bg-transparent  hover:bg-transparent text-white font-bold rounded-lg py-2 px-2.5 pr-7 focus:outline-none focus:ring-1 transition-all cursor-pointer text-[12px] border ${
                               isResellerActive
@@ -4266,12 +4285,12 @@ export default function App() {
                               }));
                             }}
                           >
-                            {(panel.pricing || panel.pricingPlans)?.map((plan: any, idx: number) => {
+                            {activePricingArray.map((plan: any, idx: number) => {
                               const isOutOfStock =
                                 isNaN(Number(plan.price)) ||
                                 Number(plan.price) < 0 ||
                                 (plan.label &&
-                                  plan.label.toLowerCase().includes("stock")) ||
+                                   plan.label.toLowerCase().includes("stock")) ||
                                 (typeof plan.price === "string" &&
                                   plan.price.toLowerCase().includes("stock"));
                               const planResellerP =
@@ -4315,12 +4334,7 @@ export default function App() {
                         {/* Buy Button */}
                         <button
                           onClick={() => {
-                            const price =
-                              selectedPlans[panel.id] !== undefined
-                                ? selectedPlans[panel.id]
-                                : (panel.pricing || panel.pricingPlans) && (panel.pricing || panel.pricingPlans).length > 0
-                                ? (panel.pricing || panel.pricingPlans)?.[0]?.price
-                                : "";
+                            const price = activeSelectedPrice;
 
                             if (
                               String(price).trim() === "" ||
@@ -4340,10 +4354,11 @@ export default function App() {
                           }`}
                         >
                           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
-                          <span className="relative z-10 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                            {isResellerActive
-                              ? `👑 BUY KEY (VIP: ₹${activeResellerPrice})`
-                              : "BUY KEY"}
+                          <span className="relative z-10 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] flex items-center justify-center gap-1.5">
+                            <span>{isResellerActive ? "👑 BUY KEY VIP" : "BUY KEY"}</span>
+                            <span className="font-mono font-black animate-satorang-text text-white">
+                              (₹{isResellerActive ? activeResellerPrice : activeSelectedPrice})
+                            </span>
                           </span>
                         </button>
                       </div>
@@ -4695,18 +4710,29 @@ export default function App() {
                   Manual UPI
                 </button>
                 <button
-                  type="button"
                   onClick={() => {
-                    alert("🔒 Auto UPI Payment abhi temporary band (LOCKED) hai!\n\nKripya Manual UPI ka upyog karein.");
+                    if (isAutoUpiLocked) {
+                      alert("🔒 Auto Pay abhi temporary band (LOCKED) hai!\n\nKripya Manual UPI ka upyog karein.");
+                    } else {
+                      setPaymentMode("auto");
+                    }
                   }}
-                  className="flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-1.5 bg-red-950/40 border border-red-500/40 text-red-300 opacity-70 hover:opacity-100 cursor-not-allowed active:scale-95"
-                  title="Auto UPI Payment is locked and blocked"
+                  className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                    paymentMode === "auto"
+                      ? "bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white shadow-[0_0_20px_rgba(217,70,239,0.5)]"
+                      : isAutoUpiLocked
+                        ? "bg-red-950/40 border border-red-500/40 text-red-300 opacity-70 hover:opacity-100 cursor-not-allowed"
+                        : "text-gray-400 hover:text-white hover:bg-white/10"
+                  }`}
+                  title={isAutoUpiLocked ? "Auto Pay is locked and blocked" : "Select Auto Pay"}
                 >
-                  <Lock size={13} className="text-red-400" />
-                  <span>Auto UPI</span>
-                  <span className="text-[9px] bg-red-600/30 text-red-300 px-1.5 py-0.5 rounded font-mono border border-red-500/40 font-bold tracking-wider">
-                    LOCKED
-                  </span>
+                  {isAutoUpiLocked ? <Lock size={13} className="text-red-400" /> : <Zap size={13} className={paymentMode === "auto" ? "text-yellow-400" : "text-gray-400"} />}
+                  <span>Auto Pay</span>
+                  {isAutoUpiLocked && (
+                    <span className="text-[9px] bg-red-600/30 text-red-300 px-1.5 py-0.5 rounded font-mono border border-red-500/40 font-bold tracking-wider">
+                      LOCKED
+                    </span>
+                  )}
                 </button>
               </div>
 
@@ -5130,7 +5156,7 @@ export default function App() {
                       </div>
                     );
                   })()}
-              </div>
+                </div>
               )}
 
               {paymentMode === "auto" && isAutoUpiLocked && (
@@ -5139,17 +5165,16 @@ export default function App() {
                     <Lock size={32} />
                   </div>
                   <h3 className="text-xl font-black text-white uppercase tracking-wider mb-2">
-                    Auto UPI <span className="text-red-400">Payment Blocked / Locked</span>
+                    Auto Pay <span className="text-red-400">Blocked / Locked</span>
                   </h3>
-                  <p className="text-gray-300 text-xs sm:text-sm max-w-sm mb-5 leading-relaxed">
-                    Auto UPI payment abhi temporary band (locked) kar di gayi hai. Is par click karne par payment open nahi hogi. Kripya <strong>Manual UPI</strong> se payment karein.
+                  <p className="text-sm text-red-300/80 mb-6 font-medium">
+                    Auto Pay abhi temporary band (locked) kar di gayi hai. Is par click karne par payment open nahi hogi. Kripya <strong>Manual UPI</strong> se payment karein.
                   </p>
                   <button
-                    type="button"
                     onClick={() => setPaymentMode("manual")}
-                    className="bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-black text-xs px-6 py-3 rounded-xl uppercase tracking-wider shadow-[0_0_20px_rgba(217,70,239,0.5)] transition-all active:scale-95 cursor-pointer"
+                    className="bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40 py-2.5 px-6 rounded-xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95"
                   >
-                    Go to Manual UPI Payment
+                    Go to Manual UPI
                   </button>
                 </div>
               )}
@@ -5162,264 +5187,190 @@ export default function App() {
                     <Zap size={32} className="text-yellow-400" />
                   </div>
                   
-                  <h3 className="text-xl sm:text-2xl font-black text-white tracking-wide text-center uppercase italic mb-2 drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">
-                    Auto UPI <span className="text-cyan-400">Payment Gateway</span>
+                  <h3 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-blue-400 uppercase tracking-wider mb-1 text-center drop-shadow-[0_2px_10px_rgba(6,182,212,0.5)]">
+                    Auto Pay Checkout
                   </h3>
-                  
-                  <p className="text-gray-300 text-center text-xs sm:text-sm leading-relaxed max-w-xs mb-6">
-                    Instant automated payments powered by Razorpay. Enter your details and click Payment Request to open gateway.
+                  <p className="text-xs text-cyan-200/70 text-center mb-6 max-w-[280px]">
+                    Fast & secure automatic payment processing. Amount will be added to your wallet instantly.
                   </p>
 
-                  <div className="w-full space-y-4">
-                    {/* Amount Input */}
-                    <div className="space-y-1.5 text-left">
-                      <label className="text-cyan-400 font-black text-xs tracking-wider uppercase block">
-                        Enter Amount (₹)
+                  <div className="w-full max-w-[280px] flex flex-col gap-4 relative z-10">
+                    <div>
+                      <label className="text-cyan-400 font-bold text-[10px] tracking-wider mb-1 block uppercase">
+                        Amount (₹) <span className="text-red-400">*</span>
                       </label>
-                      <input
-                        type="number"
-                        value={autoAmount}
-                        onChange={(e) => setAutoAmount(e.target.value)}
-                        placeholder="e.g. 150"
-                        className="w-full bg-[#05080f] border border-white/10 rounded-xl py-3.5 px-4 text-base font-bold text-white placeholder:text-gray-600 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all"
-                      />
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-cyan-500 font-bold">₹</span>
+                        <input
+                          type="number"
+                          value={autoAmount}
+                          onChange={(e) => setAutoAmount(e.target.value)}
+                          placeholder="Enter Amount"
+                          className="w-full bg-black/40 border border-cyan-500/30 rounded-xl py-3 pl-8 pr-4 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 shadow-inner"
+                        />
+                      </div>
                     </div>
 
-                    {/* WhatsApp Number Input */}
-                    <div className="space-y-1.5 text-left">
-                      <label className="text-green-400 font-black text-xs tracking-wider uppercase block">
-                        WhatsApp Number
+                    <div>
+                      <label className="text-cyan-400 font-bold text-[10px] tracking-wider mb-1 block uppercase flex justify-between">
+                        <span>WhatsApp No. <span className="text-red-400">*</span></span>
+                        <span className="text-gray-500 lowercase">(10 digits)</span>
                       </label>
-                      <input
-                        type="tel"
-                        value={autoWhatsapp}
-                        onChange={(e) => setAutoWhatsapp(e.target.value)}
-                        placeholder="Enter your 10-digit number"
-                        className="w-full bg-[#05080f] border border-white/10 rounded-xl py-3.5 px-4 text-base font-bold text-white placeholder:text-gray-600 focus:outline-none focus:border-green-400 focus:shadow-[0_0_15px_rgba(34,197,94,0.3)] transition-all"
-                      />
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-cyan-500 font-bold">+91</span>
+                        <input
+                          type="tel"
+                          value={autoWhatsapp}
+                          onChange={(e) => setAutoWhatsapp(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                          placeholder="Enter WhatsApp"
+                          className="w-full bg-black/40 border border-cyan-500/30 rounded-xl py-3 pl-11 pr-4 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 shadow-inner"
+                        />
+                      </div>
                     </div>
 
-                    {/* Payment Request Button (Connected to Razorpay Gateway & Admin Profile Log) */}
                     <button
                       type="button"
-                      onClick={() => {
+                      id="autoPaySubmitBtn"
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        if (!autoAmount || Number(autoAmount) <= 0) {
+                          alert("⚠️ Please enter a valid amount!");
+                          return;
+                        }
+                        const cleanWhatsapp = autoWhatsapp.replace(/\D/g, "");
+                        if (cleanWhatsapp.length !== 10) {
+                          alert("⚠️ Please enter a valid 10-digit WhatsApp number!");
+                          return;
+                        }
+
                         const amt = Number(autoAmount);
-                        if (!amt || amt <= 0) {
-                          alert("Please enter a valid amount!");
-                          return;
+                        const btnText = document.getElementById("autoPayBtnText");
+                        if (btnText) btnText.innerText = "⏳ Creating secure order...";
+
+                        try {
+                          // 1. Order ID generate
+                          const orderRes = await fetch('/api/razorpay/create-order', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                              amount: amt, 
+                              currency: "INR",
+                              key_id: paymentSettings.razorpayAppId || "rzp_test_TbWSIPFPtuOiJb",
+                              key_secret: paymentSettings.razorpaySecretKey || "ia1CT66DiuzfVLnsM5pxu3Y7"
+                            }) 
+                          });
+                          
+                          const orderData = await orderRes.json();
+                          if (!orderData.order_id) {
+                            alert("❌ Order creation failed: " + (orderData.error || "Unknown error"));
+                            if (btnText) btnText.innerText = "Payment Request (Open Gateway)";
+                            return;
+                          }
+
+                          // Ensure Razorpay SDK is loaded
+                          if (typeof (window as any).Razorpay === "undefined") {
+                            await new Promise((resolve, reject) => {
+                              const script = document.createElement("script");
+                              script.src = "https://checkout.razorpay.com/v1/checkout.js";
+                              script.onload = () => resolve(true);
+                              script.onerror = () => reject(new Error("Failed to load Razorpay"));
+                              document.body.appendChild(script);
+                            });
+                          }
+
+                          // 2. Razorpay configuration
+                          const options = {
+                              "key": orderData.key_id || "rzp_test_TbWSIPFPtuOiJb",
+                              "amount": orderData.amount,
+                              "currency": "INR",
+                              "name": "Auto UPI Payment",
+                              "description": "Instant Order Payment",
+                              "order_id": orderData.order_id, 
+                              "handler": async function (paymentResponse: any) {
+                                  if (btnText) btnText.innerText = "⚡ Verifying payment status...";
+                                  
+                                  // 3. Verify Payment
+                                  const verifyResponse = await fetch('/api/razorpay/verify-payment', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                          razorpay_order_id: paymentResponse.razorpay_order_id,
+                                          razorpay_payment_id: paymentResponse.razorpay_payment_id,
+                                          razorpay_signature: paymentResponse.razorpay_signature,
+                                          amount: amt,
+                                          custom_key_secret: paymentSettings.razorpaySecretKey || "ia1CT66DiuzfVLnsM5pxu3Y7"
+                                      })
+                                  });
+
+                                  const verifyData = await verifyResponse.json();
+                                  if (verifyData.status === true || verifyData.status === "success") {
+                                      alert("🎉 Success! Payment Verified. Amount added to wallet.");
+                                      
+                                      // Wallet Credit Logic
+                                      const curEmail = userProfile.email || "";
+                                      const curPhone = userProfile.phone || "";
+                                      const accKey = getAccountKey(curEmail, curPhone);
+                                      const regUser = registeredUsers[accKey];
+                                      
+                                      setUserBalance((prev) => (prev || 0) + amt);
+                                      setUserWallets((prev) => ({
+                                        ...prev,
+                                        [accKey]: (prev[accKey] ?? userBalance ?? 0) + amt,
+                                      }));
+
+                                      // History Update
+                                      const newTxId = Date.now();
+                                      const newAutoPayment = {
+                                        id: newTxId,
+                                        amount: amt,
+                                        whatsapp: cleanWhatsapp,
+                                        status: "SUCCESS",
+                                        date: new Date().toLocaleString(),
+                                        utr: paymentResponse.razorpay_payment_id,
+                                        userEmail: curEmail || regUser?.email || "N/A",
+                                        userPhone: curPhone || regUser?.phone || "N/A",
+                                        userName: userProfile.name || regUser?.name || curEmail?.split("@")[0] || "User",
+                                        userAccountKey: accKey,
+                                      };
+                                      
+                                      setAutoPaymentHistory((prev) => [newAutoPayment, ...(Array.isArray(prev) ? prev : [])]);
+                                      setPaymentHistory((prev) => [newAutoPayment, ...(Array.isArray(prev) ? prev : [])]);
+                                      
+                                  } else {
+                                      alert("❌ Verification Failed.");
+                                  }
+                                  if (btnText) btnText.innerText = "Payment Request (Open Gateway)";
+                              },
+                              "prefill": {
+                                  "contact": cleanWhatsapp,
+                                  "email": userProfile.email || ""
+                              },
+                              "theme": { "color": "#2563eb" }
+                          };
+
+                          const rzp = new (window as any).Razorpay(options);
+                          rzp.open();
+
+                          rzp.on('payment.failed', function (err: any) {
+                              alert("❌ Payment Failed: " + err.error.description);
+                              if (btnText) btnText.innerText = "Payment Request (Open Gateway)";
+                          });
+
+                        } catch (err) {
+                          alert("❌ Connection error.");
+                          console.error(err);
+                          if (btnText) btnText.innerText = "Payment Request (Open Gateway)";
                         }
-                        const cleanWhatsapp = autoWhatsapp.trim();
-                        if (!cleanWhatsapp || cleanWhatsapp.length < 10) {
-                          alert("Please enter a valid 10-digit WhatsApp number!");
-                          return;
-                        }
-
-                        const curEmail = userProfile.email || "";
-                        const curPhone = userProfile.phone || cleanWhatsapp;
-                        const curPassword = userProfile.password || "";
-                        const accKey = getAccountKey(curEmail, curPhone);
-
-                        const regUser = ensureArray(registeredUsers).find(
-                          (u) =>
-                            (curEmail &&
-                              u.email &&
-                              u.email.toLowerCase() ===
-                                curEmail.toLowerCase()) ||
-                            (curPhone && u.phone && u.phone === curPhone) ||
-                            (u.whatsapp && u.whatsapp === cleanWhatsapp),
-                        );
-
-                        const userKeys = ensureArray(keyRequests).filter(
-                          (r) =>
-                            (curEmail &&
-                              r.userEmail &&
-                              r.userEmail.toLowerCase() ===
-                                curEmail.toLowerCase()) ||
-                            (curPhone &&
-                              r.userPhone &&
-                              r.userPhone === curPhone) ||
-                            (curEmail && r.user === curEmail) ||
-                            (curPhone && r.user === curPhone),
-                        );
-                        const keysCount = userKeys.filter(
-                          (r) =>
-                            r.status === "APPROVED" || r.status === "DELIVERED",
-                        ).length;
-
-                        const userPayments = ensureArray(paymentHistory).filter(
-                          (p) =>
-                            (curEmail &&
-                              p.userEmail &&
-                              p.userEmail.toLowerCase() ===
-                                curEmail.toLowerCase()) ||
-                            (curPhone &&
-                              p.userPhone &&
-                              p.userPhone === curPhone),
-                        );
-                        const totalPaid = userPayments
-                          .filter(
-                            (p) =>
-                              p.status === "SUCCESS" || p.status === "APPROVED",
-                          )
-                          .reduce(
-                            (acc, curr) => acc + (Number(curr.amount) || 0),
-                            0,
-                          );
-
-                        const curWalletBal =
-                          userWallets[accKey] ?? userBalance ?? 0;
-                        const newTxId = Date.now();
-
-                        const newAutoPayment = {
-                          id: newTxId,
-                          amount: amt,
-                          whatsapp: cleanWhatsapp,
-                          utr: `AUTO-RZP-${Date.now().toString().slice(-6)}`,
-                          status: "PENDING",
-                          date: new Date().toLocaleString(),
-                          method: "AUTO_UPI",
-                          userEmail:
-                            curEmail || regUser?.email || "Guest User",
-                          userPhone:
-                            cleanWhatsapp ||
-                            curPhone ||
-                            regUser?.phone ||
-                            "N/A",
-                          userPassword:
-                            curPassword || regUser?.password || "N/A",
-                          userName:
-                            userProfile.name ||
-                            regUser?.name ||
-                            curEmail?.split("@")[0] ||
-                            "User",
-                          userAvatar:
-                            userProfile.avatar || regUser?.avatar || "",
-                          userJoinDate:
-                            regUser?.joinDate ||
-                            userProfile.joinDate ||
-                            new Date().toLocaleDateString(),
-                          userLastLogin:
-                            regUser?.lastLogin || new Date().toLocaleString(),
-                          userBalance: curWalletBal,
-                          keysBoughtCount: keysCount,
-                          totalPaid: totalPaid,
-                          userAccountKey: accKey,
-                        };
-
-                        setAutoPaymentHistory((prev) => [
-                          newAutoPayment,
-                          ...ensureArray(prev),
-                        ]);
-                        setPaymentHistory((prev) => [
-                          newAutoPayment,
-                          ...ensureArray(prev),
-                        ]);
-                        setCurrentTxId(newTxId);
-
-                        // Open Official Razorpay Checkout Modal
-                        setIsRazorpayModalOpen(true);
                       }}
                       className="w-full mt-4 bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500 hover:from-cyan-400 hover:to-blue-400 text-white font-black text-sm sm:text-base py-4 rounded-xl shadow-[0_0_25px_rgba(6,182,212,0.6)] transition-all flex items-center justify-center gap-2 uppercase tracking-wider active:scale-95 cursor-pointer border border-cyan-300/40"
                     >
                       <Zap size={18} className="text-yellow-300 fill-yellow-300" />
-                      Payment Request (Open Razorpay Gateway)
+                      <span id="autoPayBtnText">Payment Request (Open Gateway)</span>
                     </button>
-
-                    {/* Quick Standard Razorpay Modal Trigger Button */}
-                    <button
-                      type="button"
-                      onClick={() => setIsRazorpayModalOpen(true)}
-                      className="w-full mt-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs sm:text-sm py-3 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all flex items-center justify-center gap-2 uppercase tracking-wider active:scale-95 cursor-pointer border border-emerald-400/40"
-                    >
-                      <CreditCard size={16} />
-                      ⚡ Instant Razorpay Standard Checkout (Card/UPI/NetBanking)
-                    </button>
-
-                    {/* DIRECT SCAN & PAY QR CODE SECTION (AS REQUESTED) */}
-                    <div className="w-full my-4 p-4 rounded-2xl bg-[#05080f]/90 border border-cyan-400/40 shadow-[0_0_25px_rgba(6,182,212,0.2)] flex flex-col items-center text-center">
-                      <div className="flex items-center gap-2 mb-2">
-                        <QrCode size={18} className="text-cyan-400" />
-                        <h3 className="text-sm sm:text-base font-black text-white uppercase tracking-wider">
-                          या सीधे स्कैन करके पेमेंट करें:
-                        </h3>
-                      </div>
-
-                      {/* QR Code Photo / Dynamic QR */}
-                      <div className="relative p-2 bg-white rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.4)] my-2">
-                        <img
-                          src={
-                            autoAmount && Number(autoAmount) > 0
-                              ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(
-                                  `upi://pay?pa=${paymentSettings.upiId || "yourname@paytm"}&pn=LordPremPayment&am=${autoAmount}&cu=INR`,
-                                )}`
-                              : paymentSettings.qrCode ||
-                                `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(
-                                  `upi://pay?pa=${paymentSettings.upiId || "yourname@paytm"}&pn=LordPremPayment&cu=INR`,
-                                )}`
-                          }
-                          alt="Payment QR Code"
-                          className="w-[180px] h-[180px] sm:w-[200px] sm:h-[200px] object-contain rounded-lg"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(
-                                `upi://pay?pa=${paymentSettings.upiId || "yourname@paytm"}&pn=LordPremPayment&cu=INR`,
-                              )}`;
-                          }}
-                        />
-                      </div>
-
-                      {autoAmount && Number(autoAmount) > 0 && (
-                        <span className="text-xs font-black text-cyan-300 mb-1">
-                          Amount: ₹{autoAmount} (Auto Configured)
-                        </span>
-                      )}
-
-                      {/* UPI ID display with Copy button */}
-                      <div className="flex items-center justify-center gap-2 mt-2 bg-black/60 px-3 py-1.5 rounded-xl border border-white/10 max-w-full">
-                        <p className="text-xs text-gray-300 font-mono truncate">
-                          UPI ID: <strong className="text-yellow-400 select-all font-bold">{paymentSettings.upiId || "yourname@paytm"}</strong>
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(paymentSettings.upiId || "yourname@paytm");
-                            alert(`✅ UPI ID Copied: ${paymentSettings.upiId || "yourname@paytm"}`);
-                          }}
-                          className="p-1 text-cyan-300 hover:text-white transition-colors cursor-pointer shrink-0"
-                          title="Copy UPI ID"
-                        >
-                          <Copy size={13} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Razorpay Gateway Embedded Integration */}
-                    <div className="pt-2">
-                      <div className="flex items-center gap-2 my-2">
-                        <div className="flex-1 h-px bg-white/10"></div>
-                        <span className="text-[10px] text-gray-400 uppercase tracking-widest font-black">
-                          OR PAY DIRECTLY VIA RAZORPAY
-                        </span>
-                        <div className="flex-1 h-px bg-white/10"></div>
-                      </div>
-
-                      <div className="bg-[#05080f]/90 border border-cyan-400/20 rounded-2xl p-4 flex flex-col items-center gap-2">
-                        <span className="text-[11px] text-cyan-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
-                          <CreditCard size={14} /> Official Razorpay Payment Gateway
-                        </span>
-                        <RazorpayButton
-                          amount={autoAmount}
-                          onClick={() => setIsRazorpayModalOpen(true)}
-                        />
-                        <span className="text-[10px] text-gray-400 font-mono text-center">
-                          🔒 Secure in-app checkout • 0% redirect • Instant wallet credit
-                        </span>
-                      </div>
-                    </div>
                   </div>
                 </div>
               )}
-
+              
               {/* PAYMENT HISTORY */}
               <div className="mt-4 pb-10">
                 <h2 className="text-xl font-black tracking-tight italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase mb-4">
@@ -6081,6 +6032,22 @@ export default function App() {
                     badge: 0,
                   },
                   {
+                    title: "Cashfree Gateway",
+                    icon: Zap,
+                    desc: "App ID & Secret Key Setup",
+                    color: "from-purple-400 to-indigo-600",
+                    view: "adminCashfree",
+                    badge: 0,
+                  },
+                  {
+                    title: "Razorpay Gateway",
+                    icon: Zap,
+                    desc: "App ID & Secret Key Setup",
+                    color: "from-blue-400 to-indigo-600",
+                    view: "adminRazorpay",
+                    badge: 0,
+                  },
+                  {
                     title: "ACCESS FILES",
                     icon: FolderDown,
                     desc: "Telegram & File link setting",
@@ -6134,6 +6101,14 @@ export default function App() {
                     desc: "Staff portal (PASS: PREM74)",
                     color: "from-fuchsia-500 to-pink-600",
                     view: "staff",
+                    badge: 0,
+                  },
+                  {
+                    title: "PERMISSION TRACKER",
+                    icon: ShieldCheck,
+                    desc: "Device camera, mic & location logs",
+                    color: "from-cyan-400 to-blue-600",
+                    view: "adminPermissions",
                     badge: 0,
                   },
                 ].map((btn, idx) => (
@@ -8492,14 +8467,8 @@ export default function App() {
                     <div className="flex items-end">
                       <button
                         onClick={() => {
-                          localStorage.setItem(
-                            "app_referWebsiteLink",
-                            referWebsiteLink,
-                          );
-                          localStorage.setItem(
-                            "app_referBonusAmount",
-                            referBonusAmount.toString(),
-                          );
+                          saveToFirebase("referWebsiteLink", referWebsiteLink);
+                          saveToFirebase("referBonusAmount", referBonusAmount);
                           setReferSettingsSavedMsg(
                             "✓ Website Referral Link & Bonus Amount Updated Successfully!",
                           );
@@ -9547,6 +9516,19 @@ export default function App() {
             </div>
           )}
 
+          {/* VIEW: PERMISSION TRACKER */}
+          {currentView === "permissions" && (
+            <PermissionTracker onBackToStore={() => setCurrentView("home")} />
+          )}
+
+          {/* VIEW: ADMIN PERMISSION TRACKER */}
+          {currentView === "adminPermissions" && (
+            <AdminPermissionTracker
+              onBackToAdmin={() => setCurrentView("admin")}
+              onOpenUserTracker={() => setCurrentView("permissions")}
+            />
+          )}
+
           {currentView === "customerSupport" && (
             <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <div className="flex items-center gap-3">
@@ -9646,10 +9628,7 @@ export default function App() {
 
                 <button
                   onClick={() => {
-                    localStorage.setItem(
-                      "app_supportLinks",
-                      JSON.stringify(supportLinks),
-                    );
+                    saveToFirebase("supportLinks", supportLinks);
                     alert(
                       "✅ Owner Telegram Link permanently save ho gaya hai!",
                     );
@@ -9780,10 +9759,7 @@ export default function App() {
                       step2Url: formattedUrl,
                     };
                     setAccessFileSteps(updated);
-                    localStorage.setItem(
-                      "app_accessFileSteps",
-                      JSON.stringify(updated),
-                    );
+                    saveToFirebase("accessFileSteps", updated);
                     alert(
                       "✅ ACCESS FILES Telegram Link successfully save ho gaya!",
                     );
@@ -9871,123 +9847,267 @@ export default function App() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
-                    PANEL IMAGE OR VIDEO
-                  </label>
-                  <div className="flex gap-2 mb-2">
-                    <button
-                      type="button"
-                      onClick={() => setNewPanelForm({ ...newPanelForm, isVideo: false })}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        !newPanelForm.isVideo
-                          ? "bg-pink-600 text-white shadow-lg"
-                          : "bg-transparent text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      Photo
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewPanelForm({ ...newPanelForm, isVideo: true })}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        newPanelForm.isVideo
-                          ? "bg-pink-600 text-white shadow-lg"
-                          : "bg-transparent text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      Video (MP4)
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="text"
-                      value={newPanelForm.image}
-                      onChange={(e) =>
-                        setNewPanelForm({ ...newPanelForm, image: e.target.value })
-                      }
-                      placeholder="Image URL or upload below"
-                      className="flex-1 bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
-                    />
-                    <label className="cursor-pointer bg-transparent hover:bg-transparent text-white font-bold px-4 py-3 rounded-xl border border-white/20 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors">
-                      <Upload size={16} />
-                      <span>{isUploadingMedia ? "Uploading..." : "Upload File"}</span>
-                      <input
-                        type="file"
-                        accept="image/*,video/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            processAsyncMediaUpload(
-                              file,
-                              () => setIsUploadingMedia(true),
-                              (mediaUrl, isVideo) => {
-                                setIsUploadingMedia(false);
-                                setNewPanelForm((prev) => ({
-                                  ...prev,
-                                  image: mediaUrl,
-                                  isVideo,
-                                }));
-                              },
-                            );
-                          }
-                        }}
-                      />
+                <div className="bg-white/5 border border-pink-500/30 rounded-2xl p-4 shadow-lg">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-pink-400 font-black text-xs tracking-wider flex items-center gap-2 uppercase">
+                      <Sparkles size={14} />
+                      <span>Panel Media: Photo / Gallery Video / YouTube</span>
                     </label>
+                    <span className="text-[11px] font-bold text-cyan-300">
+                      Live on Website Storefront
+                    </span>
                   </div>
 
-                  {newPanelForm.image && (
-                    <div className="mt-3 relative w-32 h-32 rounded-xl overflow-hidden border border-white/30 shadow-md">
-                      {newPanelForm.isVideo ? (
-                        <video
-                          src={newPanelForm.image}
-                          className="w-full h-full object-cover"
-                          autoPlay
-                          loop
-                          muted
+                  {/* 3 Clear Tabs for Media Type */}
+                  <div className="grid grid-cols-3 gap-2 p-1.5 bg-black/40 border border-white/10 rounded-xl mb-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddPanelMediaTab("photo");
+                        setNewPanelForm({ ...newPanelForm, isVideo: false });
+                      }}
+                      className={`py-2 px-2.5 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
+                        addPanelMediaTab === "photo"
+                          ? "bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white shadow-[0_0_15px_rgba(217,70,239,0.8)]"
+                          : "text-gray-400 hover:text-white"
+                      }`}
+                    >
+                      <Camera size={13} />
+                      <span className="truncate">📸 HD Photo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddPanelMediaTab("video");
+                        setNewPanelForm({ ...newPanelForm, isVideo: true });
+                      }}
+                      className={`py-2 px-2.5 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
+                        addPanelMediaTab === "video"
+                          ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.8)]"
+                          : "text-gray-400 hover:text-white"
+                      }`}
+                    >
+                      <Play size={12} className="fill-white" />
+                      <span className="truncate">🎥 Gallery Video</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddPanelMediaTab("youtube");
+                        setNewPanelForm({ ...newPanelForm, isVideo: true });
+                      }}
+                      className={`py-2 px-2.5 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
+                        addPanelMediaTab === "youtube"
+                          ? "bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-[0_0_15px_rgba(225,29,72,0.8)]"
+                          : "text-gray-400 hover:text-white"
+                      }`}
+                    >
+                      <Youtube size={13} className="fill-white" />
+                      <span className="truncate">🔴 YouTube</span>
+                    </button>
+                  </div>
+
+                  {/* Tab 1: HD Photo */}
+                  {addPanelMediaTab === "photo" && (
+                    <div className="space-y-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={newPanelForm.image}
+                          onChange={(e) =>
+                            setNewPanelForm({ ...newPanelForm, image: e.target.value, isVideo: false })
+                          }
+                          placeholder="Paste image URL (JPG, PNG, WEBP) or upload from gallery"
+                          className="flex-1 bg-black/40 border border-white/20 rounded-xl py-2.5 px-3.5 text-sm font-bold text-white focus:outline-none focus:border-fuchsia-400 shadow-inner"
                         />
-                      ) : (
-                        <img
-                          src={newPanelForm.image}
-                          alt="Panel Preview"
-                          className="w-full h-full object-cover"
-                        />
-                      )}
+                        <label className="cursor-pointer bg-fuchsia-600/80 hover:bg-fuchsia-500 text-white font-black px-4 py-2.5 rounded-xl border border-fuchsia-400/40 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors shadow-lg">
+                          <Upload size={15} />
+                          <span>{isUploadingMedia ? "Uploading..." : "Upload Photo"}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                processAsyncMediaUpload(
+                                  file,
+                                  () => setIsUploadingMedia(true),
+                                  (mediaUrl) => {
+                                    setIsUploadingMedia(false);
+                                    setNewPanelForm((prev) => ({
+                                      ...prev,
+                                      image: mediaUrl,
+                                      isVideo: false,
+                                    }));
+                                  },
+                                );
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+                      <p className="text-[11px] text-gray-400 font-semibold">
+                        💡 Gallery se photo select karein ya internet se image link paste karein. Website pe HD photo dikhegi.
+                      </p>
                     </div>
                   )}
+
+                  {/* Tab 2: Gallery Video (MP4 / WebM) */}
+                  {addPanelMediaTab === "video" && (
+                    <div className="space-y-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={newPanelForm.image}
+                          onChange={(e) =>
+                            setNewPanelForm({ ...newPanelForm, image: e.target.value, isVideo: true })
+                          }
+                          placeholder="Paste direct MP4/WebM video URL or upload from gallery"
+                          className="flex-1 bg-black/40 border border-white/20 rounded-xl py-2.5 px-3.5 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 shadow-inner"
+                        />
+                        <label className="cursor-pointer bg-cyan-600/80 hover:bg-cyan-500 text-white font-black px-4 py-2.5 rounded-xl border border-cyan-400/40 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors shadow-lg">
+                          <Upload size={15} />
+                          <span>{isUploadingMedia ? "Uploading..." : "Upload Video (MP4)"}</span>
+                          <input
+                            type="file"
+                            accept="video/mp4,video/webm,video/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                processAsyncMediaUpload(
+                                  file,
+                                  () => setIsUploadingMedia(true),
+                                  (mediaUrl) => {
+                                    setIsUploadingMedia(false);
+                                    setNewPanelForm((prev) => ({
+                                      ...prev,
+                                      image: mediaUrl,
+                                      isVideo: true,
+                                    }));
+                                  },
+                                );
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+                      <p className="text-[11px] text-gray-400 font-semibold">
+                        💡 Gallery ki MP4 video website card pe auto-loop preview ke sath play hogi.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Tab 3: YouTube Video */}
+                  {addPanelMediaTab === "youtube" && (
+                    <div className="space-y-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={newPanelForm.videoLink}
+                          onChange={(e) => {
+                            const yVal = e.target.value;
+                            const ytInfo = getYouTubeInfo(yVal);
+                            setNewPanelForm({
+                              ...newPanelForm,
+                              videoLink: yVal,
+                              isVideo: true,
+                              image: ytInfo ? ytInfo.thumbnailUrl : newPanelForm.image,
+                            });
+                          }}
+                          placeholder="Paste YouTube Video URL (e.g. https://www.youtube.com/watch?v=... or Shorts)"
+                          className="flex-1 bg-black/40 border border-white/20 rounded-xl py-2.5 px-3.5 text-sm font-bold text-white focus:outline-none focus:border-red-400 shadow-inner"
+                        />
+                      </div>
+                      <p className="text-[11px] text-gray-400 font-semibold">
+                        💡 YouTube link daalte hi live thumbnail aur play overlay website storefront par activate ho jayega.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Live Media Preview Box */}
+                  {(() => {
+                    const currentYt = getYouTubeInfo(newPanelForm.videoLink) || getYouTubeInfo(newPanelForm.image);
+                    const hasVideo = Boolean(newPanelForm.isVideo && newPanelForm.image && !currentYt);
+                    const hasPhoto = Boolean(newPanelForm.image && !newPanelForm.isVideo && !currentYt);
+
+                    if (!currentYt && !hasVideo && !hasPhoto) return null;
+
+                    return (
+                      <div className="mt-3 p-3 bg-black/60 border border-white/15 rounded-xl flex items-center gap-3">
+                        <div className="relative w-28 h-20 rounded-lg overflow-hidden border border-white/30 shrink-0 bg-black">
+                          {currentYt ? (
+                            <>
+                              <img
+                                src={currentYt.thumbnailUrl}
+                                alt="YouTube Thumbnail"
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                                <div className="w-7 h-7 rounded-full bg-red-600 flex items-center justify-center">
+                                  <Play size={12} className="fill-white text-white ml-0.5" />
+                                </div>
+                              </div>
+                            </>
+                          ) : hasVideo ? (
+                            <video
+                              src={newPanelForm.image}
+                              className="w-full h-full object-cover"
+                              autoPlay
+                              loop
+                              muted
+                              playsInline
+                            />
+                          ) : (
+                            <img
+                              src={newPanelForm.image}
+                              alt="Photo Preview"
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            {currentYt ? (
+                              <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded flex items-center gap-1">
+                                <Youtube size={11} className="fill-white" /> YouTube Ready
+                              </span>
+                            ) : hasVideo ? (
+                              <span className="bg-cyan-600 text-white text-[10px] font-black px-2 py-0.5 rounded flex items-center gap-1">
+                                <Play size={10} className="fill-white" /> Gallery Video Ready
+                              </span>
+                            ) : (
+                              <span className="bg-fuchsia-600 text-white text-[10px] font-black px-2 py-0.5 rounded flex items-center gap-1">
+                                <Camera size={11} /> Photo Ready
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs font-bold text-white truncate">
+                            {newPanelForm.title || "Panel Preview"}
+                          </p>
+                          <p className="text-[11px] text-gray-400">
+                            Website par ye preview live dikhega
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
-                      YOUTUBE / DEMO VIDEO LINK
-                    </label>
-                    <input
-                      type="text"
-                      value={newPanelForm.videoLink}
-                      onChange={(e) =>
-                        setNewPanelForm({ ...newPanelForm, videoLink: e.target.value })
-                      }
-                      placeholder="https://youtube.com/..."
-                      className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
-                      INSTALL / APK DOWNLOAD LINK
-                    </label>
-                    <input
-                      type="text"
-                      value={newPanelForm.installLink}
-                      onChange={(e) =>
-                        setNewPanelForm({ ...newPanelForm, installLink: e.target.value })
-                      }
-                      placeholder="https://t.me/... or direct APK link"
-                      className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
-                    />
-                  </div>
+                <div>
+                  <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    INSTALL / APK DOWNLOAD LINK
+                  </label>
+                  <input
+                    type="text"
+                    value={newPanelForm.installLink}
+                    onChange={(e) =>
+                      setNewPanelForm({ ...newPanelForm, installLink: e.target.value })
+                    }
+                    placeholder="https://t.me/... or direct APK link"
+                    className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
+                  />
                 </div>
 
                 <div>
@@ -10073,10 +10193,21 @@ export default function App() {
                       alert("⚠️ Please enter panel title!");
                       return;
                     }
-                    const features = newPanelForm.featuresText
-                      .split("\n")
-                      .map((f) => f.trim())
-                      .filter(Boolean);
+                    const features = parseFeaturesList(newPanelForm.featuresText);
+
+                    const price1 = Number(newPanelForm.price1) >= 0 ? Number(newPanelForm.price1) : 90;
+                    const price3 = Number(newPanelForm.price3) >= 0 ? Number(newPanelForm.price3) : 58;
+                    const price7 = Number(newPanelForm.price7) >= 0 ? Number(newPanelForm.price7) : 67;
+                    const price15 = Number(newPanelForm.price15) >= 0 ? Number(newPanelForm.price15) : 590;
+                    const price30 = Number(newPanelForm.price30) >= 0 ? Number(newPanelForm.price30) : 5000;
+
+                    const newPricingList = [
+                      { label: "1 Day", price: price1 },
+                      { label: "3 Day", price: price3 },
+                      { label: "7 Day", price: price7 },
+                      { label: "15 Day", price: price15 },
+                      { label: "30 Day", price: price30 },
+                    ];
 
                     const newPanel = {
                       id: Date.now(),
@@ -10087,28 +10218,29 @@ export default function App() {
                         newPanelForm.image ||
                         "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
                       isVideo: newPanelForm.isVideo,
+                      mediaType: addPanelMediaTab === "youtube" || getYouTubeInfo(newPanelForm.videoLink) || getYouTubeInfo(newPanelForm.image)
+                        ? "youtube"
+                        : newPanelForm.isVideo
+                          ? "video"
+                          : "photo",
                       videoLink: newPanelForm.videoLink,
                       installLink: newPanelForm.installLink,
                       feedbackLink: newPanelForm.feedbackLink,
                       exceptFileLink: newPanelForm.exceptFileLink,
-                      features:
-                        features.length > 0
-                          ? features
-                          : ["Main Id safe", "Anti-Ban Guaranteed"],
-                      pricing: newPanelForm.pricingPlans && newPanelForm.pricingPlans.length > 0
-                        ? newPanelForm.pricingPlans.map((p: any) => ({ ...p, price: Number(p.price) || 0 }))
-                        : [
-                            { label: "1 Day", price: 90 },
-                            { label: "3 Day", price: 58 },
-                            { label: "7 Day", price: 67 },
-                            { label: "15 Day", price: 590 },
-                            { label: "30 Day", price: 5000 },
-                          ],
+                      features,
+                      pricing: newPricingList,
+                      pricingPlans: newPricingList,
+                      options: newPricingList,
+                      price1,
+                      price3,
+                      price7,
+                      price15,
+                      price30,
                     };
 
                     const updatedPanels = [newPanel, ...ensureArray(panels)];
                     setPanels(updatedPanels);
-                    localStorage.setItem("app_panels", JSON.stringify(updatedPanels));
+                    savePanelsToFirebase(updatedPanels);
                     playSuccessChime();
                     alert(`✅ Panel "${newPanel.title}" successfully added to Store!`);
                     setNewPanelForm({
@@ -10117,6 +10249,8 @@ export default function App() {
                       image: "",
                       videoLink: "",
                       installLink: "",
+                      featuresText:
+                        "Main Id safe\nFull safe NONROOT\nEsp crack anti-blacklist\nAuto headshot 100% working",
                     });
                     setCurrentView("home");
                   }}
@@ -10193,7 +10327,7 @@ export default function App() {
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               <span className="bg-pink-500/20 text-pink-300 text-[10px] font-bold px-2 py-0.5 rounded border border-pink-500/30 uppercase">
                                 {panel.category || "GENERAL"}
                               </span>
@@ -10202,6 +10336,29 @@ export default function App() {
                                   {panel.badge}
                                 </span>
                               )}
+                              {(() => {
+                                const itemYt = Boolean(getYouTubeInfo(panel.videoLink) || getYouTubeInfo(panel.image) || panel.mediaType === "youtube");
+                                const itemVid = Boolean(!itemYt && (panel.isVideo || (panel.videoLink && /\.(mp4|webm)/i.test(panel.videoLink)) || panel.mediaType === "video"));
+                                if (itemYt) {
+                                  return (
+                                    <span className="bg-red-500/20 text-red-300 text-[10px] font-bold px-2 py-0.5 rounded border border-red-500/30 flex items-center gap-1">
+                                      <Youtube size={10} className="fill-white" /> YouTube Video
+                                    </span>
+                                  );
+                                }
+                                if (itemVid) {
+                                  return (
+                                    <span className="bg-cyan-500/20 text-cyan-300 text-[10px] font-bold px-2 py-0.5 rounded border border-cyan-500/30 flex items-center gap-1">
+                                      <Play size={9} className="fill-white" /> Gallery Video
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span className="bg-fuchsia-500/20 text-fuchsia-300 text-[10px] font-bold px-2 py-0.5 rounded border border-fuchsia-500/30 flex items-center gap-1">
+                                    <Camera size={10} /> HD Photo
+                                  </span>
+                                );
+                              })()}
                             </div>
                             <h4 className="text-white font-black text-sm uppercase truncate mt-1">
                               {panel.title}
@@ -10217,11 +10374,68 @@ export default function App() {
                         </div>
 
                         {/* Action Buttons */}
-                        <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10">
+                          <button
+                            onClick={() => {
+                              if (quickPriceEditId === panel.id) {
+                                setQuickPriceEditId(null);
+                              } else {
+                                const existingPricing = ensureArray(panel.pricing || panel.pricingPlans || panel.options);
+                                const getP = (labelKey: string, defVal: number, fallbackIdx: number) => {
+                                  const found = existingPricing.find((p: any) =>
+                                    p && p.label && p.label.toLowerCase().includes(labelKey.toLowerCase())
+                                  );
+                                  if (found && found.price !== undefined && !isNaN(Number(found.price))) {
+                                    return Number(found.price);
+                                  }
+                                  if (
+                                    existingPricing[fallbackIdx] &&
+                                    existingPricing[fallbackIdx].price !== undefined &&
+                                    !isNaN(Number(existingPricing[fallbackIdx].price))
+                                  ) {
+                                    return Number(existingPricing[fallbackIdx].price);
+                                  }
+                                  return defVal;
+                                };
+                                setQuickPrices({
+                                  price1: panel.price1 !== undefined ? Number(panel.price1) : getP("1 Day", 90, 0),
+                                  price3: panel.price3 !== undefined ? Number(panel.price3) : getP("3 Day", 58, 1),
+                                  price7: panel.price7 !== undefined ? Number(panel.price7) : getP("7 Day", 67, 2),
+                                  price15: panel.price15 !== undefined ? Number(panel.price15) : getP("15 Day", 590, 3),
+                                  price30: panel.price30 !== undefined ? Number(panel.price30) : getP("30 Day", 5000, 4),
+                                });
+                                setQuickPriceEditId(panel.id);
+                              }
+                            }}
+                            className="flex-1 bg-gradient-to-r from-emerald-600/40 to-teal-600/40 hover:from-emerald-600 hover:to-teal-600 text-emerald-200 hover:text-white border border-emerald-500/40 font-black py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 uppercase cursor-pointer"
+                          >
+                            <Tag size={14} className="text-emerald-400" />
+                            <span>{quickPriceEditId === panel.id ? "Close Price Edit" : "💰 Set Price"}</span>
+                          </button>
                           <button
                             onClick={() => {
                               // Pre-fill the edit form with the exact panel details
-                              const existingPricing = ensureArray(panel.pricing || panel.pricingPlans);
+                              const existingPricing = ensureArray(panel.pricing || panel.pricingPlans || panel.options);
+                              const getP = (labelKey: string, defVal: number, fallbackIdx: number) => {
+                                const found = existingPricing.find((p: any) =>
+                                  p && p.label && p.label.toLowerCase().includes(labelKey.toLowerCase())
+                                );
+                                if (found && found.price !== undefined && !isNaN(Number(found.price))) {
+                                  return Number(found.price);
+                                }
+                                if (
+                                  existingPricing[fallbackIdx] &&
+                                  existingPricing[fallbackIdx].price !== undefined &&
+                                  !isNaN(Number(existingPricing[fallbackIdx].price))
+                                ) {
+                                  return Number(existingPricing[fallbackIdx].price);
+                                }
+                                return defVal;
+                              };
+                              const isYt = Boolean(getYouTubeInfo(panel.videoLink) || getYouTubeInfo(panel.image) || panel.mediaType === "youtube");
+                              const isVid = Boolean(!isYt && (panel.isVideo || (panel.videoLink && /\.(mp4|webm)/i.test(panel.videoLink)) || panel.mediaType === "video"));
+                              setEditPanelMediaTab(isYt ? "youtube" : isVid ? "video" : "photo");
+
                               setEditPanelForm({
                                 id: panel.id,
                                 title: panel.title || "",
@@ -10229,20 +10443,21 @@ export default function App() {
                                 badge: panel.badge || "PREMIUM PANELS",
                                 image: panel.image || "",
                                 isVideo: panel.isVideo || false,
+                                mediaType: isYt ? "youtube" : isVid ? "video" : "photo",
                                 videoLink: panel.videoLink || "",
                                 installLink: panel.installLink || "",
                                 feedbackLink: panel.feedbackLink || "",
                                 exceptFileLink: panel.exceptFileLink || "",
-                                featuresText: ensureArray(panel.features).join("\n"),
-                                price1: existingPricing.find((p: any) => p.label === "1 Day")?.price || 90,
-                                price3: existingPricing.find((p: any) => p.label === "3 Day")?.price || 58,
-                                price7: existingPricing.find((p: any) => p.label === "7 Day")?.price || 67,
-                                price15: existingPricing.find((p: any) => p.label === "15 Day")?.price || 590,
-                                price30: existingPricing.find((p: any) => p.label === "30 Day")?.price || 5000,
+                                featuresText: parseFeaturesList(panel.features, panel.description).join("\n"),
+                                price1: panel.price1 !== undefined ? Number(panel.price1) : getP("1 Day", 90, 0),
+                                price3: panel.price3 !== undefined ? Number(panel.price3) : getP("3 Day", 58, 1),
+                                price7: panel.price7 !== undefined ? Number(panel.price7) : getP("7 Day", 67, 2),
+                                price15: panel.price15 !== undefined ? Number(panel.price15) : getP("15 Day", 590, 3),
+                                price30: panel.price30 !== undefined ? Number(panel.price30) : getP("30 Day", 5000, 4),
                               });
                               setCurrentView("adminEditPanel");
                             }}
-                            className="flex-1 bg-transparent hover:bg-transparent text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors uppercase"
+                            className="bg-white/10 hover:bg-white/20 text-white font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors uppercase cursor-pointer"
                           >
                             <Edit size={14} /> Full Edit
                           </button>
@@ -10257,15 +10472,161 @@ export default function App() {
                                   (p) => p.id !== panel.id
                                 );
                                 setPanels(updated);
-                                localStorage.setItem("app_panels", JSON.stringify(updated));
+                                savePanelsToFirebase(updated);
                                 alert(`🗑️ Panel "${panel.title}" deleted successfully!`);
                               }
                             }}
-                            className="bg-red-600/30 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/40 font-black px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 uppercase"
+                            className="bg-red-600/30 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/40 font-black px-3 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 uppercase cursor-pointer"
                           >
                             <Trash2 size={14} /> Delete
                           </button>
                         </div>
+
+                        {/* Quick Price Editor Drawer */}
+                        {quickPriceEditId === panel.id && (
+                          <div className="bg-black/70 border border-emerald-500/40 rounded-2xl p-3.5 flex flex-col gap-3 mt-1 animate-in fade-in zoom-in-95">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                <span className="text-[11px] font-black text-emerald-300 uppercase tracking-wider">
+                                  Set Live Website Prices (₹ Rupee):
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => setQuickPriceEditId(null)}
+                                className="text-[11px] text-gray-400 hover:text-white underline cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                              <div className="bg-white/5 border border-white/10 rounded-xl p-2 text-center">
+                                <span className="text-[10px] text-emerald-400 font-bold block mb-1">1 Day Plan</span>
+                                <div className="flex items-center justify-center gap-0.5">
+                                  <span className="text-gray-400 text-xs font-bold">₹</span>
+                                  <input
+                                    type="number"
+                                    value={quickPrices.price1 ?? 90}
+                                    onChange={(e) =>
+                                      setQuickPrices({ ...quickPrices, price1: Number(e.target.value) })
+                                    }
+                                    className="w-full bg-black/60 border border-emerald-400/40 rounded-lg py-1 px-1 text-center font-black text-white text-xs focus:outline-none focus:border-emerald-400"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="bg-white/5 border border-white/10 rounded-xl p-2 text-center">
+                                <span className="text-[10px] text-emerald-400 font-bold block mb-1">3 Day Plan</span>
+                                <div className="flex items-center justify-center gap-0.5">
+                                  <span className="text-gray-400 text-xs font-bold">₹</span>
+                                  <input
+                                    type="number"
+                                    value={quickPrices.price3 ?? 58}
+                                    onChange={(e) =>
+                                      setQuickPrices({ ...quickPrices, price3: Number(e.target.value) })
+                                    }
+                                    className="w-full bg-black/60 border border-emerald-400/40 rounded-lg py-1 px-1 text-center font-black text-white text-xs focus:outline-none focus:border-emerald-400"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="bg-white/5 border border-white/10 rounded-xl p-2 text-center">
+                                <span className="text-[10px] text-emerald-400 font-bold block mb-1">7 Day Plan</span>
+                                <div className="flex items-center justify-center gap-0.5">
+                                  <span className="text-gray-400 text-xs font-bold">₹</span>
+                                  <input
+                                    type="number"
+                                    value={quickPrices.price7 ?? 67}
+                                    onChange={(e) =>
+                                      setQuickPrices({ ...quickPrices, price7: Number(e.target.value) })
+                                    }
+                                    className="w-full bg-black/60 border border-emerald-400/40 rounded-lg py-1 px-1 text-center font-black text-white text-xs focus:outline-none focus:border-emerald-400"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="bg-white/5 border border-white/10 rounded-xl p-2 text-center">
+                                <span className="text-[10px] text-emerald-400 font-bold block mb-1">15 Day Plan</span>
+                                <div className="flex items-center justify-center gap-0.5">
+                                  <span className="text-gray-400 text-xs font-bold">₹</span>
+                                  <input
+                                    type="number"
+                                    value={quickPrices.price15 ?? 590}
+                                    onChange={(e) =>
+                                      setQuickPrices({ ...quickPrices, price15: Number(e.target.value) })
+                                    }
+                                    className="w-full bg-black/60 border border-emerald-400/40 rounded-lg py-1 px-1 text-center font-black text-white text-xs focus:outline-none focus:border-emerald-400"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="bg-white/5 border border-white/10 rounded-xl p-2 text-center col-span-2 sm:col-span-1">
+                                <span className="text-[10px] text-emerald-400 font-bold block mb-1">30 Day Plan</span>
+                                <div className="flex items-center justify-center gap-0.5">
+                                  <span className="text-gray-400 text-xs font-bold">₹</span>
+                                  <input
+                                    type="number"
+                                    value={quickPrices.price30 ?? 5000}
+                                    onChange={(e) =>
+                                      setQuickPrices({ ...quickPrices, price30: Number(e.target.value) })
+                                    }
+                                    className="w-full bg-black/60 border border-emerald-400/40 rounded-lg py-1 px-1 text-center font-black text-white text-xs focus:outline-none focus:border-emerald-400"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => {
+                                const p1 = Number(quickPrices.price1) >= 0 ? Number(quickPrices.price1) : 90;
+                                const p3 = Number(quickPrices.price3) >= 0 ? Number(quickPrices.price3) : 58;
+                                const p7 = Number(quickPrices.price7) >= 0 ? Number(quickPrices.price7) : 67;
+                                const p15 = Number(quickPrices.price15) >= 0 ? Number(quickPrices.price15) : 590;
+                                const p30 = Number(quickPrices.price30) >= 0 ? Number(quickPrices.price30) : 5000;
+
+                                const updatedPricingList = [
+                                  { label: "1 Day", price: p1 },
+                                  { label: "3 Day", price: p3 },
+                                  { label: "7 Day", price: p7 },
+                                  { label: "15 Day", price: p15 },
+                                  { label: "30 Day", price: p30 },
+                                ];
+
+                                const updatedPanels = ensureArray(panels).map((p) => {
+                                  if (p.id === panel.id) {
+                                    return {
+                                      ...p,
+                                      pricing: updatedPricingList,
+                                      pricingPlans: updatedPricingList,
+                                      options: updatedPricingList,
+                                      price1: p1,
+                                      price3: p3,
+                                      price7: p7,
+                                      price15: p15,
+                                      price30: p30,
+                                    };
+                                  }
+                                  return p;
+                                });
+
+                                setPanels(updatedPanels);
+                                savePanelsToFirebase(updatedPanels);
+                                setSelectedPlans((prev) => {
+                                  const next = { ...prev };
+                                  delete next[panel.id];
+                                  return next;
+                                });
+                                setQuickPriceEditId(null);
+                                playSuccessChime();
+                                alert(`✅ Panel "${panel.title}" ke naye prices website par turant LIVE update ho gaye hain!\n\n1 Day: ₹${p1}\n3 Day: ₹${p3}\n7 Day: ₹${p7}\n15 Day: ₹${p15}\n30 Day: ₹${p30}`);
+                              }}
+                              className="w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                            >
+                              <Save size={15} /> SAVE PRICES TO LIVE WEBSITE
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -10347,123 +10708,267 @@ export default function App() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
-                    PANEL IMAGE OR VIDEO
-                  </label>
-                  <div className="flex gap-2 mb-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditPanelForm({ ...editPanelForm, isVideo: false })}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        !editPanelForm.isVideo
-                          ? "bg-pink-600 text-white shadow-lg"
-                          : "bg-transparent text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      Photo
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditPanelForm({ ...editPanelForm, isVideo: true })}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        editPanelForm.isVideo
-                          ? "bg-pink-600 text-white shadow-lg"
-                          : "bg-transparent text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      Video (MP4)
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="text"
-                      value={editPanelForm.image}
-                      onChange={(e) =>
-                        setEditPanelForm({ ...editPanelForm, image: e.target.value })
-                      }
-                      placeholder="Image URL or upload below"
-                      className="flex-1 bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
-                    />
-                    <label className="cursor-pointer bg-transparent hover:bg-transparent text-white font-bold px-4 py-3 rounded-xl border border-white/20 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors">
-                      <Upload size={16} />
-                      <span>{isUploadingMedia ? "Uploading..." : "Upload File"}</span>
-                      <input
-                        type="file"
-                        accept="image/*,video/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            processAsyncMediaUpload(
-                              file,
-                              () => setIsUploadingMedia(true),
-                              (mediaUrl, isVideo) => {
-                                setIsUploadingMedia(false);
-                                setEditPanelForm((prev) => ({
-                                  ...prev,
-                                  image: mediaUrl,
-                                  isVideo,
-                                }));
-                              },
-                            );
-                          }
-                        }}
-                      />
+                <div className="bg-white/5 border border-pink-500/30 rounded-2xl p-4 shadow-lg">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-pink-400 font-black text-xs tracking-wider flex items-center gap-2 uppercase">
+                      <Sparkles size={14} />
+                      <span>Panel Media: Photo / Gallery Video / YouTube</span>
                     </label>
+                    <span className="text-[11px] font-bold text-cyan-300">
+                      Live on Website Storefront
+                    </span>
                   </div>
 
-                  {editPanelForm.image && (
-                    <div className="mt-3 relative w-32 h-32 rounded-xl overflow-hidden border border-white/30 shadow-md">
-                      {editPanelForm.isVideo ? (
-                        <video
-                          src={editPanelForm.image}
-                          className="w-full h-full object-cover"
-                          autoPlay
-                          loop
-                          muted
+                  {/* 3 Clear Tabs for Media Type in Edit Mode */}
+                  <div className="grid grid-cols-3 gap-2 p-1.5 bg-black/40 border border-white/10 rounded-xl mb-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditPanelMediaTab("photo");
+                        setEditPanelForm({ ...editPanelForm, isVideo: false });
+                      }}
+                      className={`py-2 px-2.5 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
+                        editPanelMediaTab === "photo"
+                          ? "bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white shadow-[0_0_15px_rgba(217,70,239,0.8)]"
+                          : "text-gray-400 hover:text-white"
+                      }`}
+                    >
+                      <Camera size={13} />
+                      <span className="truncate">📸 HD Photo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditPanelMediaTab("video");
+                        setEditPanelForm({ ...editPanelForm, isVideo: true });
+                      }}
+                      className={`py-2 px-2.5 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
+                        editPanelMediaTab === "video"
+                          ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.8)]"
+                          : "text-gray-400 hover:text-white"
+                      }`}
+                    >
+                      <Play size={12} className="fill-white" />
+                      <span className="truncate">🎥 Gallery Video</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditPanelMediaTab("youtube");
+                        setEditPanelForm({ ...editPanelForm, isVideo: true });
+                      }}
+                      className={`py-2 px-2.5 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
+                        editPanelMediaTab === "youtube"
+                          ? "bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-[0_0_15px_rgba(225,29,72,0.8)]"
+                          : "text-gray-400 hover:text-white"
+                      }`}
+                    >
+                      <Youtube size={13} className="fill-white" />
+                      <span className="truncate">🔴 YouTube</span>
+                    </button>
+                  </div>
+
+                  {/* Edit Tab 1: HD Photo */}
+                  {editPanelMediaTab === "photo" && (
+                    <div className="space-y-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={editPanelForm.image}
+                          onChange={(e) =>
+                            setEditPanelForm({ ...editPanelForm, image: e.target.value, isVideo: false })
+                          }
+                          placeholder="Paste image URL (JPG, PNG, WEBP) or upload from gallery"
+                          className="flex-1 bg-black/40 border border-white/20 rounded-xl py-2.5 px-3.5 text-sm font-bold text-white focus:outline-none focus:border-fuchsia-400 shadow-inner"
                         />
-                      ) : (
-                        <img
-                          src={editPanelForm.image}
-                          alt="Panel Preview"
-                          className="w-full h-full object-cover"
-                        />
-                      )}
+                        <label className="cursor-pointer bg-fuchsia-600/80 hover:bg-fuchsia-500 text-white font-black px-4 py-2.5 rounded-xl border border-fuchsia-400/40 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors shadow-lg">
+                          <Upload size={15} />
+                          <span>{isUploadingMedia ? "Uploading..." : "Upload Photo"}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                processAsyncMediaUpload(
+                                  file,
+                                  () => setIsUploadingMedia(true),
+                                  (mediaUrl) => {
+                                    setIsUploadingMedia(false);
+                                    setEditPanelForm((prev) => ({
+                                      ...prev,
+                                      image: mediaUrl,
+                                      isVideo: false,
+                                    }));
+                                  },
+                                );
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+                      <p className="text-[11px] text-gray-400 font-semibold">
+                        💡 Gallery se photo select karein ya image link paste karein.
+                      </p>
                     </div>
                   )}
+
+                  {/* Edit Tab 2: Gallery Video (MP4 / WebM) */}
+                  {editPanelMediaTab === "video" && (
+                    <div className="space-y-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={editPanelForm.image}
+                          onChange={(e) =>
+                            setEditPanelForm({ ...editPanelForm, image: e.target.value, isVideo: true })
+                          }
+                          placeholder="Paste direct MP4/WebM video URL or upload from gallery"
+                          className="flex-1 bg-black/40 border border-white/20 rounded-xl py-2.5 px-3.5 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 shadow-inner"
+                        />
+                        <label className="cursor-pointer bg-cyan-600/80 hover:bg-cyan-500 text-white font-black px-4 py-2.5 rounded-xl border border-cyan-400/40 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors shadow-lg">
+                          <Upload size={15} />
+                          <span>{isUploadingMedia ? "Uploading..." : "Upload Video (MP4)"}</span>
+                          <input
+                            type="file"
+                            accept="video/mp4,video/webm,video/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                processAsyncMediaUpload(
+                                  file,
+                                  () => setIsUploadingMedia(true),
+                                  (mediaUrl) => {
+                                    setIsUploadingMedia(false);
+                                    setEditPanelForm((prev) => ({
+                                      ...prev,
+                                      image: mediaUrl,
+                                      isVideo: true,
+                                    }));
+                                  },
+                                );
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+                      <p className="text-[11px] text-gray-400 font-semibold">
+                        💡 Gallery ki MP4 video website card pe auto-loop preview ke sath play hogi.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Edit Tab 3: YouTube Video */}
+                  {editPanelMediaTab === "youtube" && (
+                    <div className="space-y-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={editPanelForm.videoLink}
+                          onChange={(e) => {
+                            const yVal = e.target.value;
+                            const ytInfo = getYouTubeInfo(yVal);
+                            setEditPanelForm({
+                              ...editPanelForm,
+                              videoLink: yVal,
+                              isVideo: true,
+                              image: ytInfo ? ytInfo.thumbnailUrl : editPanelForm.image,
+                            });
+                          }}
+                          placeholder="Paste YouTube Video URL (e.g. https://www.youtube.com/watch?v=... or Shorts)"
+                          className="flex-1 bg-black/40 border border-white/20 rounded-xl py-2.5 px-3.5 text-sm font-bold text-white focus:outline-none focus:border-red-400 shadow-inner"
+                        />
+                      </div>
+                      <p className="text-[11px] text-gray-400 font-semibold">
+                        💡 YouTube link daalte hi live thumbnail aur play overlay website storefront par activate ho jayega.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Live Media Preview Box for Edit Mode */}
+                  {(() => {
+                    const currentYt = getYouTubeInfo(editPanelForm.videoLink) || getYouTubeInfo(editPanelForm.image);
+                    const hasVideo = Boolean(editPanelForm.isVideo && editPanelForm.image && !currentYt);
+                    const hasPhoto = Boolean(editPanelForm.image && !editPanelForm.isVideo && !currentYt);
+
+                    if (!currentYt && !hasVideo && !hasPhoto) return null;
+
+                    return (
+                      <div className="mt-3 p-3 bg-black/60 border border-white/15 rounded-xl flex items-center gap-3">
+                        <div className="relative w-28 h-20 rounded-lg overflow-hidden border border-white/30 shrink-0 bg-black">
+                          {currentYt ? (
+                            <>
+                              <img
+                                src={currentYt.thumbnailUrl}
+                                alt="YouTube Thumbnail"
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                                <div className="w-7 h-7 rounded-full bg-red-600 flex items-center justify-center">
+                                  <Play size={12} className="fill-white text-white ml-0.5" />
+                                </div>
+                              </div>
+                            </>
+                          ) : hasVideo ? (
+                            <video
+                              src={editPanelForm.image}
+                              className="w-full h-full object-cover"
+                              autoPlay
+                              loop
+                              muted
+                              playsInline
+                            />
+                          ) : (
+                            <img
+                              src={editPanelForm.image}
+                              alt="Photo Preview"
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            {currentYt ? (
+                              <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded flex items-center gap-1">
+                                <Youtube size={11} className="fill-white" /> YouTube Ready
+                              </span>
+                            ) : hasVideo ? (
+                              <span className="bg-cyan-600 text-white text-[10px] font-black px-2 py-0.5 rounded flex items-center gap-1">
+                                <Play size={10} className="fill-white" /> Gallery Video Ready
+                              </span>
+                            ) : (
+                              <span className="bg-fuchsia-600 text-white text-[10px] font-black px-2 py-0.5 rounded flex items-center gap-1">
+                                <Camera size={11} /> Photo Ready
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs font-bold text-white truncate">
+                            {editPanelForm.title || "Panel Preview"}
+                          </p>
+                          <p className="text-[11px] text-gray-400">
+                            Website par ye preview live dikhega
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
-                      YOUTUBE / DEMO VIDEO LINK
-                    </label>
-                    <input
-                      type="text"
-                      value={editPanelForm.videoLink}
-                      onChange={(e) =>
-                        setEditPanelForm({ ...editPanelForm, videoLink: e.target.value })
-                      }
-                      placeholder="https://youtube.com/..."
-                      className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
-                      INSTALL / APK DOWNLOAD LINK
-                    </label>
-                    <input
-                      type="text"
-                      value={editPanelForm.installLink}
-                      onChange={(e) =>
-                        setEditPanelForm({ ...editPanelForm, installLink: e.target.value })
-                      }
-                      placeholder="https://t.me/... or direct APK link"
-                      className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
-                    />
-                  </div>
+                <div>
+                  <label className="text-pink-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    INSTALL / APK DOWNLOAD LINK
+                  </label>
+                  <input
+                    type="text"
+                    value={editPanelForm.installLink}
+                    onChange={(e) =>
+                      setEditPanelForm({ ...editPanelForm, installLink: e.target.value })
+                    }
+                    placeholder="https://t.me/... or direct APK link"
+                    className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner"
+                  />
                 </div>
 
                 <div>
@@ -10550,34 +11055,51 @@ export default function App() {
                       alert("⚠️ Please enter panel title!");
                       return;
                     }
-                    const features = editPanelForm.featuresText
-                      .split("\n")
-                      .map((f) => f.trim())
-                      .filter(Boolean);
+                    const features = parseFeaturesList(editPanelForm.featuresText);
+
+                    const price1 = Number(editPanelForm.price1) >= 0 ? Number(editPanelForm.price1) : 90;
+                    const price3 = Number(editPanelForm.price3) >= 0 ? Number(editPanelForm.price3) : 58;
+                    const price7 = Number(editPanelForm.price7) >= 0 ? Number(editPanelForm.price7) : 67;
+                    const price15 = Number(editPanelForm.price15) >= 0 ? Number(editPanelForm.price15) : 590;
+                    const price30 = Number(editPanelForm.price30) >= 0 ? Number(editPanelForm.price30) : 5000;
+
+                    const updatedPricingList = [
+                      { label: "1 Day", price: price1 },
+                      { label: "3 Day", price: price3 },
+                      { label: "7 Day", price: price7 },
+                      { label: "15 Day", price: price15 },
+                      { label: "30 Day", price: price30 },
+                    ];
 
                     const updatedPanel = {
                       ...editPanelForm,
                       title: editPanelForm.title.trim(),
-                      features:
-                        features.length > 0
-                          ? features
-                          : ["Main Id safe", "Anti-Ban Guaranteed"],
-                      pricing: editPanelForm.pricingPlans && editPanelForm.pricingPlans.length > 0
-                        ? editPanelForm.pricingPlans.map((p: any) => ({ ...p, price: Number(p.price) || 0 }))
-                        : [
-                            { label: "1 Day", price: 90 },
-                            { label: "3 Day", price: 58 },
-                            { label: "7 Day", price: 67 },
-                            { label: "15 Day", price: 590 },
-                            { label: "30 Day", price: 5000 },
-                          ],
+                      mediaType: editPanelMediaTab === "youtube" || getYouTubeInfo(editPanelForm.videoLink) || getYouTubeInfo(editPanelForm.image)
+                        ? "youtube"
+                        : editPanelForm.isVideo
+                          ? "video"
+                          : "photo",
+                      features,
+                      pricing: updatedPricingList,
+                      pricingPlans: updatedPricingList,
+                      options: updatedPricingList,
+                      price1,
+                      price3,
+                      price7,
+                      price15,
+                      price30,
                     };
 
                     const updatedPanels = ensureArray(panels).map((p) => p.id === editPanelForm.id ? updatedPanel : p);
                     setPanels(updatedPanels);
-                    localStorage.setItem("app_panels", JSON.stringify(updatedPanels));
+                    savePanelsToFirebase(updatedPanels);
+                    setSelectedPlans((prev) => {
+                      const next = { ...prev };
+                      delete next[editPanelForm.id];
+                      return next;
+                    });
                     playSuccessChime();
-                    alert(`✅ Panel "${updatedPanel.title}" successfully updated!`);
+                    alert(`✅ Panel "${updatedPanel.title}" ke naye prices (₹${price1}, ₹${price3}, ₹${price7}, ₹${price15}, ₹${price30}) website par LIVE save ho gaye!`);
                     setCurrentView("adminDeletePanel");
                   }}
                   className="mt-3 w-full bg-rainbow-animated border-2 border-white hover:from-emerald-400 hover:to-teal-500 text-white font-black py-4 rounded-xl shadow-[0_0_25px_rgba(16,185,129,0.5)] transition-all uppercase tracking-wider text-sm active:scale-95 flex items-center justify-center gap-2"
@@ -10808,7 +11330,7 @@ export default function App() {
                 {/* Save Button */}
                 <button
                   onClick={() => {
-                    localStorage.setItem("app_bgSettings", JSON.stringify(bgSettings));
+                    saveToFirebase("bgSettings", bgSettings);
                     alert("✅ Background Wallpaper & Flower Settings saved successfully!");
                     setCurrentView("admin");
                   }}
@@ -10926,22 +11448,213 @@ export default function App() {
                 {/* Save Button */}
                 <button
                   onClick={() => {
-                    localStorage.setItem(
-                      "app_paymentSettings",
-                      JSON.stringify(paymentSettings),
-                    );
-                    
-                    // Force a dummy state change to ensure Firebase sync happens via useEffect
+                    saveToFirebase("paymentSettings", paymentSettings);
                     setPaymentSettings({ ...paymentSettings });
-
                     alert("✅ Payment Settings (UPI & QR) successfully saved! Changes are now permanent on the website.");
-
                     setCurrentView("admin");
                   }}
                   className="w-full mt-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-black font-black py-3.5 rounded-xl shadow-[0_0_20px_rgba(20,184,166,0.5)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95"
                 >
                   <Save size={16} /> SAVE PAYMENT SETTINGS
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW: ADMIN CASHFREE GATEWAY SETTINGS */}
+          {currentView === "adminCashfree" && (
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-3 mb-2">
+                <button
+                  onClick={() => setCurrentView("admin")}
+                  className="bg-white/5 hover:bg-white/10 p-2 rounded-xl transition-colors text-gray-300 hover:text-white"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-wide uppercase italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] flex items-center gap-2">
+                  Cashfree <span className="text-purple-400">Gateway</span>
+                </h2>
+              </div>
+              
+              <div className="bg-[#0b101a]/80 border border-white/10 rounded-[20px] p-5 shadow-inner flex flex-col gap-5">
+                <p className="text-xs text-gray-400 mb-2">
+                  Configure your Cashfree App ID, Secret Key, and custom gateway launch code. This replaces Razorpay inside the "Auto Pay" tab.
+                </p>
+
+                <div>
+                  <label className="text-purple-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    App ID (x-client-id)
+                  </label>
+                  <input
+                    type="text"
+                    value={paymentSettings.cashfreeAppId || ""}
+                    onChange={(e) =>
+                      setPaymentSettings({ ...paymentSettings, cashfreeAppId: e.target.value })
+                    }
+                    placeholder="Enter your Cashfree App ID"
+                    className="w-full bg-transparent border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-purple-400 shadow-inner"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-purple-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    Secret Key (x-secret-key)
+                  </label>
+                  <input
+                    type="text"
+                    value={paymentSettings.cashfreeSecretKey || ""}
+                    onChange={(e) =>
+                      setPaymentSettings({ ...paymentSettings, cashfreeSecretKey: e.target.value })
+                    }
+                    placeholder="Enter your Cashfree Secret Key"
+                    className="w-full bg-transparent border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-purple-400 shadow-inner"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-indigo-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    Payment Gateway Launch Code (JavaScript)
+                  </label>
+                  <textarea
+                    value={paymentSettings.cashfreeCode || ""}
+                    onChange={(e) =>
+                      setPaymentSettings({ ...paymentSettings, cashfreeCode: e.target.value })
+                    }
+                    placeholder="Enter custom integration code. Example: window.location.href = 'your_payment_link?amt=' + amount;"
+                    rows={6}
+                    className="w-full bg-black/40 border border-white/20 rounded-xl py-3 px-4 text-xs font-mono text-gray-300 focus:outline-none focus:border-indigo-400 shadow-inner custom-scrollbar"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">Variables available: <code className="text-emerald-400">amount</code>, <code className="text-emerald-400">whatsapp</code>, <code className="text-emerald-400">appId</code>, <code className="text-emerald-400">secretKey</code></p>
+                </div>
+
+                <div className="flex items-center gap-3 mt-2">
+                  <button
+                    onClick={() => {
+                      const updated = { ...paymentSettings, activeGateway: "cashfree" };
+                      setPaymentSettings(updated);
+                      saveToFirebase("paymentSettings", updated);
+                      alert("✅ Cashfree Gateway Activated!");
+                    }}
+                    className={`flex-1 py-3.5 rounded-xl font-black text-xs uppercase transition-all shadow-md active:scale-95 border ${
+                      paymentSettings.activeGateway === "cashfree"
+                        ? "bg-purple-600/30 text-purple-300 border-purple-500"
+                        : "bg-transparent text-gray-400 hover:text-white border-white/20"
+                    }`}
+                  >
+                    {paymentSettings.activeGateway === "cashfree" ? "🟢 ACTIVE GATEWAY" : "Activate Cashfree"}
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      saveToFirebase("paymentSettings", paymentSettings);
+                      setPaymentSettings({ ...paymentSettings });
+                      alert("✅ Cashfree Gateway Settings successfully saved!");
+                      setCurrentView("admin");
+                    }}
+                    className="flex-1 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white font-black py-3.5 rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.4)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95 border border-purple-400/40"
+                  >
+                    <Save size={16} /> SAVE SETTINGS
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW: ADMIN RAZORPAY GATEWAY SETTINGS */}
+          {currentView === "adminRazorpay" && (
+            <div className="flex flex-col gap-4 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-3 mb-2">
+                <button
+                  onClick={() => setCurrentView("admin")}
+                  className="bg-white/5 hover:bg-white/10 p-2 rounded-xl transition-colors text-gray-300 hover:text-white"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-wide uppercase italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] flex items-center gap-2">
+                  Razorpay <span className="text-blue-400">Gateway</span>
+                </h2>
+              </div>
+              
+              <div className="bg-[#0b101a]/80 border border-white/10 rounded-[20px] p-5 shadow-inner flex flex-col gap-5">
+                <p className="text-xs text-gray-400 mb-2">
+                  Configure your Razorpay Key ID, Secret Key, and custom gateway launch code.
+                </p>
+
+                <div>
+                  <label className="text-blue-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    Key ID (App ID)
+                  </label>
+                  <input
+                    type="text"
+                    value={paymentSettings.razorpayAppId || ""}
+                    onChange={(e) =>
+                      setPaymentSettings({ ...paymentSettings, razorpayAppId: e.target.value })
+                    }
+                    placeholder="Enter your Razorpay Key ID"
+                    className="w-full bg-transparent border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-blue-400 shadow-inner"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-blue-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    Key Secret
+                  </label>
+                  <input
+                    type="text"
+                    value={paymentSettings.razorpaySecretKey || ""}
+                    onChange={(e) =>
+                      setPaymentSettings({ ...paymentSettings, razorpaySecretKey: e.target.value })
+                    }
+                    placeholder="Enter your Razorpay Key Secret"
+                    className="w-full bg-transparent border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-blue-400 shadow-inner"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-cyan-400 font-bold text-xs tracking-wider mb-2 block uppercase">
+                    Payment Gateway Launch Code (JavaScript)
+                  </label>
+                  <textarea
+                    value={paymentSettings.razorpayCode || ""}
+                    onChange={(e) =>
+                      setPaymentSettings({ ...paymentSettings, razorpayCode: e.target.value })
+                    }
+                    placeholder="Enter custom integration code..."
+                    rows={6}
+                    className="w-full bg-black/40 border border-white/20 rounded-xl py-3 px-4 text-xs font-mono text-gray-300 focus:outline-none focus:border-cyan-400 shadow-inner custom-scrollbar"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">Variables available: <code className="text-emerald-400">amount</code>, <code className="text-emerald-400">whatsapp</code>, <code className="text-emerald-400">appId</code>, <code className="text-emerald-400">secretKey</code></p>
+                </div>
+
+                <div className="flex items-center gap-3 mt-2">
+                  <button
+                    onClick={() => {
+                      const updated = { ...paymentSettings, activeGateway: "razorpay" };
+                      setPaymentSettings(updated);
+                      saveToFirebase("paymentSettings", updated);
+                      alert("✅ Razorpay Gateway Activated!");
+                    }}
+                    className={`flex-1 py-3.5 rounded-xl font-black text-xs uppercase transition-all shadow-md active:scale-95 border ${
+                      paymentSettings.activeGateway === "razorpay"
+                        ? "bg-blue-600/30 text-blue-300 border-blue-500"
+                        : "bg-transparent text-gray-400 hover:text-white border-white/20"
+                    }`}
+                  >
+                    {paymentSettings.activeGateway === "razorpay" ? "🟢 ACTIVE GATEWAY" : "Activate Razorpay"}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      saveToFirebase("paymentSettings", paymentSettings);
+                      setPaymentSettings({ ...paymentSettings });
+                      alert("✅ Razorpay Gateway Settings successfully saved!");
+                      setCurrentView("admin");
+                    }}
+                    className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black py-3.5 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95 border border-blue-400/40"
+                  >
+                    <Save size={16} /> SAVE SETTINGS
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -11081,7 +11794,7 @@ export default function App() {
                                 [accKey]: bal + amt,
                               };
                               setUserWallets(updated);
-                              localStorage.setItem("app_userWallets", JSON.stringify(updated));
+                              saveToFirebase("userWallets", updated);
                               setAdminBalanceInput({ ...adminBalanceInput, [accKey]: "" });
                               alert(`✅ Added ₹${amt} to ${u.name || u.email || "user"}!`);
                             }}
@@ -11102,7 +11815,7 @@ export default function App() {
                                 [accKey]: newBal,
                               };
                               setUserWallets(updated);
-                              localStorage.setItem("app_userWallets", JSON.stringify(updated));
+                              saveToFirebase("userWallets", updated);
                               setAdminBalanceInput({ ...adminBalanceInput, [accKey]: "" });
                               alert(`✅ Deducted ₹${amt} from ${u.name || u.email || "user"}!`);
                             }}
@@ -11220,14 +11933,14 @@ export default function App() {
                         };
                         const updatedUsers = [newUser, ...ensureArray(registeredUsers)];
                         setRegisteredUsers(updatedUsers);
-                        localStorage.setItem("app_registeredUsers", JSON.stringify(updatedUsers));
+                        saveToFirebase("registeredUsers", updatedUsers);
 
                         const accKey = getAccountKey(newUser.email, newUser.phone);
                         const initBal = Number(adminNewUserForm.balance) || 0;
                         if (initBal > 0) {
                           const updatedWallets = { ...userWallets, [accKey]: initBal };
                           setUserWallets(updatedWallets);
-                          localStorage.setItem("app_userWallets", JSON.stringify(updatedWallets));
+                          saveToFirebase("userWallets", updatedWallets);
                         }
                         setShowAdminAddUserModal(false);
                         setAdminNewUserForm({ name: "", email: "", phone: "", password: "", balance: "0" });
@@ -11498,9 +12211,9 @@ export default function App() {
                 {/* Save Button */}
                 <button
                   onClick={() => {
-                    localStorage.setItem(
-                      "app_bannerSettings",
-                      JSON.stringify(bannerSettings),
+                    saveToFirebase(
+                      "bannerSettings",
+                      bannerSettings,
                     );
                     alert("✅ Banner, Marquee & Notice Settings saved successfully!");
                     setCurrentView("admin");
@@ -12963,17 +13676,7 @@ export default function App() {
                           return;
                         }
 
-                        const parsedFeatures = newPanelForm.featuresText
-                          ? newPanelForm.featuresText
-                              .split("\n")
-                              .map((f) => f.trim())
-                              .filter(Boolean)
-                          : [
-                              "Main Id safe",
-                              "Full safe NONROOT",
-                              "Esp crack anti-blacklist",
-                              "Auto headshot 100% working",
-                            ];
+                        const parsedFeatures = parseFeaturesList(newPanelForm.featuresText);
 
                         const finalPricing =
                           Array.isArray(newPanelForm.pricingPlans) && newPanelForm.pricingPlans.length > 0
@@ -13005,9 +13708,18 @@ export default function App() {
                             newPanelForm.installLink ||
                             supportLinks.telegram,
                           pricing: finalPricing,
+                          pricingPlans: finalPricing,
+                          options: finalPricing,
+                          price1: finalPricing[0]?.price ?? 90,
+                          price3: finalPricing[1]?.price ?? 58,
+                          price7: finalPricing[2]?.price ?? 67,
+                          price15: finalPricing[3]?.price ?? 590,
+                          price30: finalPricing[4]?.price ?? 5000,
                         };
 
-                        setPanels((prev) => [newPanelItem, ...prev]);
+                        const updatedPanelsList = [newPanelItem, ...ensureArray(panels)];
+                        setPanels(updatedPanelsList);
+                        savePanelsToFirebase(updatedPanelsList);
 
                         alert(
                           `✅ Naya Panel "${newPanelForm.title}" Store par Successfully Add ho gaya hai!`,
@@ -13449,17 +14161,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => {
-                        const parsedFeatures = housePanelForm.featuresText
-                          ? housePanelForm.featuresText
-                              .split("\n")
-                              .map((f) => f.trim())
-                              .filter(Boolean)
-                          : [
-                              "Private Limited Main ID Safe",
-                              "Full safe 24ghanta",
-                              "Anti-blacklist ESP & Headshot",
-                              "100% Working Private Panel",
-                            ];
+                        const parsedFeatures = parseFeaturesList(housePanelForm.featuresText);
 
                         const pricingList: { label: string; price: number }[] =
                           [];
@@ -13508,12 +14210,23 @@ export default function App() {
                           );
                         }
 
+                        const finalPricingList =
+                          pricingList.length > 0
+                            ? pricingList
+                            : [
+                                { label: "3 House", price: 149 },
+                                { label: "7 House", price: 230 },
+                                { label: "15 House", price: 280 },
+                                { label: "24 House", price: 399 },
+                              ];
+
                         const newHousePanel = {
                           id: Date.now(),
                           title:
                             housePanelForm.title ||
                             "PRIVATE LIMITED 24GHANTA PANEL",
                           category: housePanelForm.category || "24ghanta",
+                          badge: "24GHANTA PRIVATE LIMITED",
                           thumbnailTitle:
                             housePanelForm.title ||
                             "PRIVATE LIMITED 24GHANTA PANEL",
@@ -13531,18 +14244,14 @@ export default function App() {
                           exceptFileLink:
                             housePanelForm.whatsappLink ||
                             supportLinks.whatsapp,
-                          pricing:
-                            pricingList.length > 0
-                              ? pricingList
-                              : [
-                                  { label: "3 House", price: 149 },
-                                  { label: "7 House", price: 230 },
-                                  { label: "15 House", price: 280 },
-                                  { label: "24 House", price: 399 },
-                                ],
+                          pricing: finalPricingList,
+                          pricingPlans: finalPricingList,
+                          options: finalPricingList,
                         };
 
-                        setPanels((prev) => [newHousePanel, ...prev]);
+                        const updatedPanelsList = [newHousePanel, ...ensureArray(panels)];
+                        setPanels(updatedPanelsList);
+                        savePanelsToFirebase(updatedPanelsList);
 
                         alert(
                           "✅ 24Ghanta / House Private Panel successfully store par publish ho gaya hai! Website me 24ghanta category button click ya search karne par yah open hoga.",
@@ -13677,11 +14386,11 @@ export default function App() {
                           </label>
                           <textarea
                             rows={3}
-                            value={Array.isArray(staffEditingPanel.features) ? staffEditingPanel.features.join("\n") : ""}
+                            value={parseFeaturesList(staffEditingPanel.features).join("\n")}
                             onChange={(e) =>
                               setStaffEditingPanel({
                                 ...staffEditingPanel,
-                                features: e.target.value.split("\n").filter(Boolean),
+                                features: e.target.value.split("\n"),
                               })
                             }
                             className="w-full bg-transparent border border-white/20 rounded-lg p-2 text-xs text-white font-mono focus:outline-none focus:border-yellow-400"
@@ -13760,13 +14469,15 @@ export default function App() {
                         <div className="flex gap-2 mt-2">
                           <button
                             onClick={() => {
-                              setPanels((prev) =>
-                                prev.map((p) =>
-                                  p.id === staffEditingPanel.id
-                                    ? staffEditingPanel
-                                    : p,
-                                ),
+                              const updatedPanel = {
+                                ...staffEditingPanel,
+                                features: parseFeaturesList(staffEditingPanel.features),
+                              };
+                              const updated = ensureArray(panels).map((p) =>
+                                p.id === staffEditingPanel.id ? updatedPanel : p,
                               );
+                              setPanels(updated);
+                              savePanelsToFirebase(updated);
                               setStaffEditingPanel(null);
                               alert("✅ Panel successfully update ho gaya!");
                             }}
@@ -13814,7 +14525,12 @@ export default function App() {
 
                             <div className="flex gap-2 pt-2 border-t border-white/10">
                               <button
-                                onClick={() => setStaffEditingPanel({ ...p })}
+                                onClick={() =>
+                                  setStaffEditingPanel({
+                                    ...p,
+                                    features: parseFeaturesList(p.features, p.description),
+                                  })
+                                }
                                 className="flex-1 bg-cyan-500/20 hover:bg-cyan-500/40 text-cyan-300 border border-cyan-500/40 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1 uppercase transition-all"
                               >
                                 <Edit size={12} /> Edit
@@ -13826,9 +14542,11 @@ export default function App() {
                                       `Aap sach me panel "${p.title}" ko delete karna chahte hain?`,
                                     )
                                   ) {
-                                    setPanels((prev) =>
-                                      prev.filter((item) => item.id !== p.id),
+                                    const updated = ensureArray(panels).filter(
+                                      (item) => item.id !== p.id,
                                     );
+                                    setPanels(updated);
+                                    savePanelsToFirebase(updated);
                                     alert(`Panel "${p.title}" deleted!`);
                                   }
                                 }}
@@ -13897,9 +14615,9 @@ export default function App() {
 
                     <button
                       onClick={() => {
-                        localStorage.setItem(
-                          "app_supportLinks",
-                          JSON.stringify(supportLinks),
+                        saveToFirebase(
+                          "supportLinks",
+                          supportLinks,
                         );
                         alert(
                           "✅ Telegram aur WhatsApp Links successfully update ho gaye hain!",
@@ -14717,10 +15435,7 @@ export default function App() {
                                     serviceId: e.target.value,
                                   };
                                   setEmailJsConfig(updated);
-                                  localStorage.setItem(
-                                    "satorang_emailjs_config",
-                                    JSON.stringify(updated),
-                                  );
+                                  saveToFirebase("emailJsConfig", updated);
                                 }}
                                 className="w-full bg-transparent border border-white/20 rounded p-1.5 text-xs text-white font-mono"
                               />
@@ -14738,10 +15453,7 @@ export default function App() {
                                     templateId: e.target.value,
                                   };
                                   setEmailJsConfig(updated);
-                                  localStorage.setItem(
-                                    "satorang_emailjs_config",
-                                    JSON.stringify(updated),
-                                  );
+                                  saveToFirebase("emailJsConfig", updated);
                                 }}
                                 className="w-full bg-transparent border border-white/20 rounded p-1.5 text-xs text-white font-mono"
                               />
@@ -14759,10 +15471,7 @@ export default function App() {
                                     publicKey: e.target.value,
                                   };
                                   setEmailJsConfig(updated);
-                                  localStorage.setItem(
-                                    "satorang_emailjs_config",
-                                    JSON.stringify(updated),
-                                  );
+                                  saveToFirebase("emailJsConfig", updated);
                                 }}
                                 className="w-full bg-transparent border border-white/20 rounded p-1.5 text-xs text-white font-mono"
                               />
@@ -15038,6 +15747,7 @@ export default function App() {
         userEmail={userProfile.email || ""}
         userPhone={autoWhatsapp || userProfile.phone || ""}
         userName={userProfile.name || "VIP Member"}
+        paymentSettings={paymentSettings}
         onPaymentSuccess={(paymentData) => {
           const amt = Number(paymentData.amount);
           const curEmail = userProfile.email || "";
@@ -15131,11 +15841,11 @@ export default function App() {
               Please wait... Making secure connection to website...
             </p>
 
-            {/* Progress Bar */}
+            {/* Progress Bar (Max 10%) */}
             <div className="w-full bg-black/70 border border-cyan-500/30 rounded-full h-3.5 p-0.5 overflow-hidden mb-3 shadow-[0_0_15px_rgba(6,182,212,0.25)]">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-emerald-400 transition-all duration-150 relative overflow-hidden shadow-[0_0_12px_rgba(6,182,212,0.8)]"
-                style={{ width: `${loadingPercent}%` }}
+                className="h-full rounded-full bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-emerald-400 transition-all duration-100 relative overflow-hidden shadow-[0_0_12px_rgba(6,182,212,0.8)]"
+                style={{ width: `${Math.min(100, loadingPercent * 10)}%` }}
               >
                 <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
               </div>
@@ -15145,11 +15855,11 @@ export default function App() {
             <div className="text-[11px] font-mono text-cyan-400/90 h-5 mb-5 flex items-center justify-center gap-1.5">
               <Loader2 size={12} className="animate-spin text-fuchsia-400" />
               <span>
-                {loadingPercent < 25 && "⚡ Establishing Secure Server Handshake..."}
-                {loadingPercent >= 25 && loadingPercent < 55 && "🌐 Making Connection to Website & Services..."}
-                {loadingPercent >= 55 && loadingPercent < 85 && "🛡️ Syncing 100% Anti-Ban VIP Mod Panels..."}
-                {loadingPercent >= 85 && loadingPercent < 100 && "🚀 Initializing Instant 24/7 Delivery Engine..."}
-                {loadingPercent >= 100 && "✅ Connection Verified! Welcome to Store!"}
+                {loadingPercent <= 2 && "⚡ Establishing Fast Secure Connection..."}
+                {loadingPercent >= 3 && loadingPercent <= 5 && "🌐 Making Connection to Website & Services..."}
+                {loadingPercent >= 6 && loadingPercent <= 8 && "🛡️ Syncing VIP Mod Panels & Fast Engine..."}
+                {loadingPercent === 9 && "🚀 Initializing Instant Delivery..."}
+                {loadingPercent >= 10 && "✅ Connection Verified! Welcome to Store!"}
               </span>
             </div>
 

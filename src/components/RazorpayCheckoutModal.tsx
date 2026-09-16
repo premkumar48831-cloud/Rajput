@@ -23,6 +23,7 @@ interface RazorpayCheckoutModalProps {
   userEmail?: string;
   userPhone?: string;
   userName?: string;
+  paymentSettings?: any;
   onPaymentSuccess: (paymentData: {
     paymentId: string;
     orderId: string;
@@ -39,6 +40,7 @@ export const RazorpayCheckoutModal: React.FC<RazorpayCheckoutModalProps> = ({
   userEmail = "",
   userPhone = "",
   userName = "VIP User",
+  paymentSettings,
   onPaymentSuccess,
 }) => {
   const [amount, setAmount] = useState<number | string>(defaultAmount || 100);
@@ -58,24 +60,43 @@ export const RazorpayCheckoutModal: React.FC<RazorpayCheckoutModalProps> = ({
     keyId: string;
     isConfigured: boolean;
   }>({
-    keyId: "",
-    isConfigured: false,
+    keyId: paymentSettings?.razorpayAppId || "rzp_test_TbWSIPFPtuOiJb",
+    isConfigured: true,
   });
 
-  // Fetch gateway configuration from server backend
+  // Fetch gateway configuration from server backend safely with graceful fallback
   useEffect(() => {
-    fetch("/api/razorpay/config")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.status) {
+    let isSubscribed = true;
+
+    const loadConfig = async () => {
+      try {
+        const res = await fetch("/api/razorpay/config");
+        if (res.ok) {
+          const data = await res.json();
+          if (isSubscribed && data && data.status) {
+            setGatewayConfig({
+              keyId: data.key_id || paymentSettings?.razorpayAppId || "rzp_test_TbWSIPFPtuOiJb",
+              isConfigured: Boolean(data.isConfigured),
+            });
+          }
+        }
+      } catch {
+        // Quiet fallback to prop/default settings if backend is restarting or unreachable
+        if (isSubscribed) {
           setGatewayConfig({
-            keyId: data.key_id,
-            isConfigured: data.isConfigured,
+            keyId: paymentSettings?.razorpayAppId || "rzp_test_TbWSIPFPtuOiJb",
+            isConfigured: true,
           });
         }
-      })
-      .catch((err) => console.error("Could not fetch Razorpay config:", err));
-  }, []);
+      }
+    };
+
+    loadConfig();
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [paymentSettings?.razorpayAppId]);
 
   useEffect(() => {
     if (defaultAmount) {
@@ -108,12 +129,17 @@ export const RazorpayCheckoutModal: React.FC<RazorpayCheckoutModalProps> = ({
 
     try {
       // Step 1: Request Order ID from backend
+      const customKeyId = paymentSettings?.razorpayAppId || "";
+      const customKeySecret = paymentSettings?.razorpaySecretKey || "";
+
       const orderRes = await fetch("/api/razorpay/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: numericAmount,
           currency: "INR",
+          key_id: customKeyId || "rzp_test_TbWSIPFPtuOiJb",
+          key_secret: customKeySecret || "ia1CT66DiuzfVLnsM5pxu3Y7",
           notes: {
             userEmail: email || "Guest",
             userPhone: cleanPhone || "N/A",
@@ -128,7 +154,7 @@ export const RazorpayCheckoutModal: React.FC<RazorpayCheckoutModalProps> = ({
         throw new Error(orderData.error || "Failed to initiate Razorpay order from backend.");
       }
 
-      const activeKey = orderData.key_id || gatewayConfig.keyId || "rzp_test_TZUwf1FLBoMyDe";
+      const activeKey = orderData.key_id || gatewayConfig.keyId || "rzp_test_TbWSIPFPtuOiJb";
 
       // Check if Razorpay Checkout script is loaded
       if (typeof (window as any).Razorpay === "undefined") {

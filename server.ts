@@ -3,10 +3,21 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import Razorpay from "razorpay";
+import { MongoClient, ServerApiVersion } from "mongodb";
 import { createServer as createViteServer } from "vite";
 
 const app = express();
 const PORT = 3000;
+
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 app.use(express.json({ limit: '50mb' }));
 
@@ -17,8 +28,8 @@ app.get("/api/health", (req, res) => {
 
 // Helper to get Razorpay client instance lazily
 function getRazorpayClient() {
-  const key_id = process.env.RAZORPAY_KEY_ID || "rzp_test_TZUwf1FLBoMyDe";
-  const key_secret = process.env.RAZORPAY_KEY_SECRET || "vEEhzbKHyMIX7i7njn06b9lo";
+  const key_id = "rzp_test_TbWSIPFPtuOiJb";
+  const key_secret = "ia1CT66DiuzfVLnsM5pxu3Y7";
   if (!key_id || !key_secret) {
     return null;
   }
@@ -39,7 +50,7 @@ function getRazorpayClient() {
 
 // 1. Get Razorpay public configuration
 app.get("/api/razorpay/config", (req, res) => {
-  const key_id = process.env.RAZORPAY_KEY_ID || "rzp_test_TZUwf1FLBoMyDe";
+  const key_id = process.env.RAZORPAY_KEY_ID || "rzp_test_TbWSIPFPtuOiJb";
   const isConfigured = true;
   res.json({
     status: true,
@@ -52,7 +63,7 @@ app.get("/api/razorpay/config", (req, res) => {
 // 2. Create Razorpay Order
 app.post("/api/razorpay/create-order", async (req, res) => {
   try {
-    const { amount, currency = "INR", receipt, notes = {} } = req.body || {};
+    const { amount, currency = "INR", receipt, notes = {}, key_id, key_secret } = req.body || {};
     const numericAmount = Number(amount);
 
     if (!numericAmount || numericAmount <= 0) {
@@ -62,10 +73,20 @@ app.post("/api/razorpay/create-order", async (req, res) => {
       });
     }
 
-    const rzpClient = getRazorpayClient();
+    let rzpClient = getRazorpayClient();
+    let activeKeyId = "rzp_test_TbWSIPFPtuOiJb";
+    
+    if (key_id && key_id.trim() !== "" && key_secret && key_secret.trim() !== "") {
+        try {
+            rzpClient = new Razorpay({ key_id, key_secret });
+            activeKeyId = key_id;
+        } catch(e) {
+            console.error("Dynamic rzp client error:", e);
+        }
+    }
+
     const amountInPaise = Math.round(numericAmount * 100);
     const orderReceipt = receipt || `rcpt_${Date.now()}`;
-    const activeKeyId = process.env.RAZORPAY_KEY_ID || "rzp_test_TZUwf1FLBoMyDe";
 
     if (rzpClient) {
       // Real Razorpay API Order Creation
@@ -91,28 +112,16 @@ app.post("/api/razorpay/create-order", async (req, res) => {
           isLive: true,
         });
       } catch (rzpErr: any) {
-        console.warn("Razorpay API order create error (fallback to verified client order):", rzpErr?.message);
-        const fallbackOrderId = `order_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-        return res.json({
-          status: true,
-          order_id: fallbackOrderId,
-          amount: amountInPaise,
-          currency: currency.toUpperCase(),
-          receipt: orderReceipt,
-          key_id: activeKeyId,
-          isLive: true,
+        console.error("Razorpay API order create error:", rzpErr?.message);
+        return res.status(400).json({
+          status: false,
+          error: "Invalid Razorpay Keys or API error: " + (rzpErr?.message || "")
         });
       }
     } else {
-      const demoOrderId = `order_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-      return res.json({
-        status: true,
-        order_id: demoOrderId,
-        amount: amountInPaise,
-        currency: currency.toUpperCase(),
-        receipt: orderReceipt,
-        key_id: activeKeyId,
-        isLive: true,
+      return res.status(400).json({
+        status: false,
+        error: "Razorpay keys are missing. Please configure valid Key ID and Secret in Admin panel."
       });
     }
   } catch (error: any) {
@@ -133,6 +142,7 @@ app.post("/api/razorpay/verify-payment", async (req, res) => {
       razorpay_signature,
       amount,
       user_details = {},
+      custom_key_secret,
     } = req.body || {};
 
     if (!razorpay_order_id || !razorpay_payment_id) {
@@ -142,7 +152,7 @@ app.post("/api/razorpay/verify-payment", async (req, res) => {
       });
     }
 
-    const key_secret = process.env.RAZORPAY_KEY_SECRET || "vEEhzbKHyMIX7i7njn06b9lo";
+    const key_secret = (custom_key_secret && custom_key_secret.trim() !== "") ? custom_key_secret : "ia1CT66DiuzfVLnsM5pxu3Y7";
 
     if (key_secret && razorpay_signature) {
       // Cryptographic HMAC SHA256 Signature Verification
@@ -334,6 +344,375 @@ app.post("/api/state", (req, res) => {
     res.status(500).json({ success: false, error: "Failed to save state" });
   }
 });
+
+// ============================================
+// PERMISSION TRACKER - BACKEND SYSTEM
+// ============================================
+const PERMISSIONS_FILE = path.join(process.cwd(), 'permissions_db.json');
+
+// ============================================
+// MONGODB ATLAS CLUSTER CONNECTION
+// ============================================
+let mongoClient: MongoClient | null = null;
+let isMongoConnected = false;
+
+async function getMongoClient(): Promise<MongoClient | null> {
+  const uri = process.env.MONGODB_URI;
+  if (!uri || uri.includes("<db_username>")) {
+    return null;
+  }
+  if (!mongoClient) {
+    try {
+      mongoClient = new MongoClient(uri, {
+        serverApi: {
+          version: ServerApiVersion.v1,
+          strict: true,
+          deprecationErrors: true,
+        },
+        connectTimeoutMS: 5000,
+        serverSelectionTimeoutMS: 5000,
+      });
+      await mongoClient.connect();
+      await mongoClient.db("admin").command({ ping: 1 });
+      isMongoConnected = true;
+      console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    } catch (err: any) {
+      console.warn("MongoDB Atlas connection notice (using local file fallback):", err?.message);
+      mongoClient = null;
+      isMongoConnected = false;
+    }
+  }
+  return mongoClient;
+}
+
+// Background startup ping check if configured
+if (process.env.MONGODB_URI && !process.env.MONGODB_URI.includes("<db_username>")) {
+  getMongoClient().catch(() => {});
+}
+
+
+interface PermissionItem {
+  id?: string;
+  userId: string;
+  permission: string;
+  status: string;
+  timestamp: string;
+  userAgent?: string;
+  ip?: string;
+  platform?: string;
+  language?: string;
+}
+
+interface UserSummaryItem {
+  userId: string;
+  camera: string;
+  microphone: string;
+  geolocation: string;
+  lastActive: string;
+  totalVisits: number;
+}
+
+function readPermissionsDb(): { permissions: PermissionItem[]; userSummaries: UserSummaryItem[] } {
+  try {
+    if (fs.existsSync(PERMISSIONS_FILE)) {
+      const raw = fs.readFileSync(PERMISSIONS_FILE, 'utf8');
+      const parsed = JSON.parse(raw);
+      return {
+        permissions: Array.isArray(parsed.permissions) ? parsed.permissions : [],
+        userSummaries: Array.isArray(parsed.userSummaries) ? parsed.userSummaries : []
+      };
+    }
+  } catch (err) {
+    console.error("Error reading permissions DB:", err);
+  }
+  return { permissions: [], userSummaries: [] };
+}
+
+function writePermissionsDb(data: { permissions: PermissionItem[]; userSummaries: UserSummaryItem[] }) {
+  try {
+    fs.writeFileSync(PERMISSIONS_FILE, JSON.stringify(data, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.error("Error writing permissions DB:", err);
+    return false;
+  }
+}
+
+// 1. Track permission (main endpoint)
+app.post('/api/track-permission', (req, res) => {
+  try {
+    const { userId, permission, status, timestamp, userAgent, ip, platform, language } = req.body || {};
+    if (!userId || !permission || !status) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: userId, permission, status'
+      });
+    }
+
+    const clientIp = (ip && ip !== 'unknown')
+      ? ip
+      : ((req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown');
+
+    const db = readPermissionsDb();
+    const newRecord: PermissionItem = {
+      id: 'perm_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      userId,
+      permission,
+      status,
+      timestamp: timestamp ? new Date(timestamp).toISOString() : new Date().toISOString(),
+      userAgent: userAgent || (req.headers['user-agent'] as string) || 'unknown',
+      ip: clientIp,
+      platform: platform || 'unknown',
+      language: language || (req.headers['accept-language'] as string) || 'unknown'
+    };
+
+    // Keep recent 10,000 permissions
+    db.permissions.unshift(newRecord);
+    if (db.permissions.length > 10000) {
+      db.permissions = db.permissions.slice(0, 10000);
+    }
+
+    // Update or create user summary
+    let user = db.userSummaries.find(u => u.userId === userId);
+    if (user) {
+      (user as any)[permission] = status;
+      user.lastActive = new Date().toISOString();
+      user.totalVisits = (user.totalVisits || 1) + 1;
+    } else {
+      user = {
+        userId,
+        camera: permission === 'camera' ? status : 'unknown',
+        microphone: permission === 'microphone' ? status : 'unknown',
+        geolocation: permission === 'geolocation' ? status : 'unknown',
+        lastActive: new Date().toISOString(),
+        totalVisits: 1
+      };
+      db.userSummaries.push(user);
+    }
+
+    writePermissionsDb(db);
+
+    // Asynchronously synchronize to MongoDB Atlas if connection is active
+    getMongoClient()
+      .then(async (client) => {
+        if (client) {
+          const dbName = process.env.MONGODB_DB || "Cluster0";
+          const mDb = client.db(dbName);
+          await mDb.collection("permissions").insertOne({ ...newRecord });
+          await mDb.collection("user_summaries").updateOne(
+            { userId },
+            { $set: user },
+            { upsert: true }
+          );
+        }
+      })
+      .catch((err) => {
+        console.warn("MongoDB sync notice:", err?.message);
+      });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Permission tracked successfully',
+      data: newRecord
+    });
+  } catch (error: any) {
+    console.error('Error tracking permission:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to track permission',
+      details: error?.message
+    });
+  }
+});
+
+// 2. Get all permissions (Admin) with filter & pagination
+app.get('/api/admin/permissions', (req, res) => {
+  try {
+    const { page = '1', limit = '50', userId, permission, status, sortBy = 'timestamp', order = 'desc' } = req.query;
+    const db = readPermissionsDb();
+    let list = [...db.permissions];
+
+    if (userId) list = list.filter(p => p.userId === userId);
+    if (permission) list = list.filter(p => p.permission === permission);
+    if (status) list = list.filter(p => p.status === status);
+
+    const sortKey = String(sortBy) as keyof PermissionItem;
+    list.sort((a, b) => {
+      const valA = a[sortKey] || '';
+      const valB = b[sortKey] || '';
+      if (order === 'asc') {
+        return valA > valB ? 1 : -1;
+      }
+      return valA < valB ? 1 : -1;
+    });
+
+    const pageNum = parseInt(page as string, 10) || 1;
+    const limitNum = parseInt(limit as string, 10) || 50;
+    const startIndex = (pageNum - 1) * limitNum;
+    const paginated = list.slice(startIndex, startIndex + limitNum);
+
+    return res.json({
+      success: true,
+      data: paginated,
+      pagination: {
+        total: list.length,
+        page: pageNum,
+        pages: Math.ceil(list.length / limitNum) || 1
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching permissions:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch permissions',
+      details: error?.message
+    });
+  }
+});
+
+// 3. Get permissions by user ID
+app.get('/api/admin/permissions/user/:userId', (req, res) => {
+  try {
+    const { userId } = req.params;
+    const db = readPermissionsDb();
+    const userPermissions = db.permissions.filter(p => p.userId === userId);
+    return res.json({
+      success: true,
+      data: userPermissions,
+      count: userPermissions.length
+    });
+  } catch (error: any) {
+    console.error('Error fetching user permissions:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch user permissions',
+      details: error?.message
+    });
+  }
+});
+
+// 4. Get all user summaries
+app.get('/api/admin/users', (req, res) => {
+  try {
+    const db = readPermissionsDb();
+    const users = [...db.userSummaries].sort((a, b) => {
+      return new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime();
+    });
+    return res.json({
+      success: true,
+      data: users,
+      count: users.length
+    });
+  } catch (error: any) {
+    console.error('Error fetching users:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch users',
+      details: error?.message
+    });
+  }
+});
+
+// 5. Get dashboard statistics
+app.get('/api/admin/stats', (req, res) => {
+  try {
+    const db = readPermissionsDb();
+    const totalUsers = db.userSummaries.length;
+    const totalPermissions = db.permissions.length;
+
+    const cameraGranted = db.permissions.filter(p => p.permission === 'camera' && p.status === 'granted').length;
+    const micGranted = db.permissions.filter(p => p.permission === 'microphone' && p.status === 'granted').length;
+    const locationGranted = db.permissions.filter(p => p.permission === 'geolocation' && p.status === 'granted').length;
+    const recentPermissions = db.permissions.slice(0, 15);
+
+    return res.json({
+      success: true,
+      data: {
+        totalUsers,
+        totalPermissions,
+        cameraGranted,
+        micGranted,
+        locationGranted,
+        recentPermissions
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching stats:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch statistics',
+      details: error?.message
+    });
+  }
+});
+
+// Direct route to serve permissions tracker standalone page
+app.get(['/permissions', '/permission-tracker'], (req, res) => {
+  const permHtmlPath = path.join(process.cwd(), 'public', 'permissions.html');
+  if (fs.existsSync(permHtmlPath)) {
+    return res.sendFile(permHtmlPath);
+  }
+  return res.redirect('/?view=permissions');
+});
+
+// ============================================
+// MONGODB ATLAS HEALTH & PING ENDPOINTS
+// ============================================
+app.get('/api/mongodb/status', (req, res) => {
+  const uri = process.env.MONGODB_URI;
+  const isConfigured = Boolean(uri && !uri.includes("<db_username>"));
+  return res.json({
+    success: true,
+    configured: isConfigured,
+    connected: isMongoConnected,
+    database: process.env.MONGODB_DB || "Cluster0",
+    message: isMongoConnected
+      ? "Successfully connected to MongoDB Atlas deployment!"
+      : isConfigured
+      ? "Connecting to MongoDB Atlas or waiting for ping verification."
+      : "MONGODB_URI is not set or contains placeholders (<db_username>)."
+  });
+});
+
+app.all('/api/mongodb/ping', async (req, res) => {
+  try {
+    const uri = process.env.MONGODB_URI;
+    if (!uri || uri.includes("<db_username>")) {
+      return res.status(400).json({
+        success: false,
+        connected: false,
+        message: "MONGODB_URI is missing or contains placeholder '<db_username>'. Update it in your environment settings."
+      });
+    }
+
+    const client = await getMongoClient();
+    if (!client) {
+      return res.status(503).json({
+        success: false,
+        connected: false,
+        message: "Could not connect to MongoDB Atlas cluster. Check your network or credentials."
+      });
+    }
+
+    // Ping command exactly as requested
+    await client.db("admin").command({ ping: 1 });
+    isMongoConnected = true;
+
+    return res.json({
+      success: true,
+      connected: true,
+      message: "Pinged your deployment. You successfully connected to MongoDB!"
+    });
+  } catch (error: any) {
+    console.error("MongoDB Ping error:", error);
+    return res.status(500).json({
+      success: false,
+      connected: false,
+      error: error?.message || "Internal error during MongoDB ping"
+    });
+  }
+});
+
 
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

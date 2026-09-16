@@ -1,0 +1,357 @@
+{
+  "permissions": [
+    {
+      "id": "perm_1789554512786_k6ztj",
+      "userId": "test_device_101",
+      "permission": "camera",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:28:32.786Z",
+      "userAgent": "curl/7.88.1",
+      "ip": "127.0.0.1",
+      "platform": "unknown",
+      "language": "unknown"
+    },
+    {
+      "id": "perm_1789554262103_j7rt9",
+      "userId": "user_jq0lga6ramu3y0up7",
+      "permission": "geolocation",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:24:21.561Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789554252522_mm1y1",
+      "userId": "user_jq0lga6ramu3y0up7",
+      "permission": "microphone",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:24:12.000Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789554244688_cdt0u",
+      "userId": "user_jq0lga6ramu3y0up7",
+      "permission": "camera",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:24:03.863Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553918284_ct93i",
+      "userId": "user_ahqnan6n7mu3y5etk",
+      "permission": "geolocation",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:18:37.729Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553917781_y3fxx",
+      "userId": "user_ahqnan6n7mu3y5etk",
+      "permission": "microphone",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:18:37.252Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553917302_5vkuk",
+      "userId": "user_ahqnan6n7mu3y5etk",
+      "permission": "camera",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:18:36.339Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553859329_hj1bo",
+      "userId": "user_ahqnan6n7mu3y5etk",
+      "permission": "geolocation",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:17:38.826Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553859007_5pm0i",
+      "userId": "user_ahqnan6n7mu3y5etk",
+      "permission": "geolocation",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:17:38.504Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553855167_0u9md",
+      "userId": "user_ahqnan6n7mu3y5etk",
+      "permission": "microphone",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:17:34.670Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553854858_wla95",
+      "userId": "user_ahqnan6n7mu3y5etk",
+      "permission": "microphone",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:17:34.365Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553850969_ahqso",
+      "userId": "user_ahqnan6n7mu3y5etk",
+      "permission": "camera",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:17:30.462Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553849682_1mw43",
+      "userId": "user_ahqnan6n7mu3y5etk",
+      "permission": "camera",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:17:29.171Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553840193_vk9vq",
+      "userId": "user_ahqnan6n7mu3y5etk",
+      "permission": "geolocation",
+      "status": "prompt",
+      "timestamp": "2026-09-16T10:17:19.687Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553839753_xnjh3",
+      "userId": "user_ahqnan6n7mu3y5etk",
+      "permission": "microphone",
+      "status": "prompt",
+      "timestamp": "2026-09-16T10:17:19.256Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553839337_223jq",
+      "userId": "user_ahqnan6n7mu3y5etk",
+      "permission": "camera",
+      "status": "prompt",
+      "timestamp": "2026-09-16T10:17:18.818Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553663703_6j7wy",
+      "userId": "user_jq0lga6ramu3y0up7",
+      "permission": "geolocation",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:14:23.202Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553656711_1in2p",
+      "userId": "user_jq0lga6ramu3y0up7",
+      "permission": "geolocation",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:14:16.212Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553656457_jv5ng",
+      "userId": "user_jq0lga6ramu3y0up7",
+      "permission": "geolocation",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:14:15.952Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553656147_ovt1j",
+      "userId": "user_jq0lga6ramu3y0up7",
+      "permission": "geolocation",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:14:15.642Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553648591_c76w1",
+      "userId": "user_jq0lga6ramu3y0up7",
+      "permission": "microphone",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:14:08.080Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553648321_fzjk3",
+      "userId": "user_jq0lga6ramu3y0up7",
+      "permission": "microphone",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:14:07.819Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553648055_h0l3c",
+      "userId": "user_jq0lga6ramu3y0up7",
+      "permission": "microphone",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:14:07.537Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553647736_1vqks",
+      "userId": "user_jq0lga6ramu3y0up7",
+      "permission": "microphone",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:14:07.222Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553642790_zv8sg",
+      "userId": "user_jq0lga6ramu3y0up7",
+      "permission": "camera",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:14:02.279Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553641863_3gc6w",
+      "userId": "user_jq0lga6ramu3y0up7",
+      "permission": "camera",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:14:01.348Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553641497_xgg86",
+      "userId": "user_jq0lga6ramu3y0up7",
+      "permission": "camera",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:14:00.985Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789553641444_7gw01",
+      "userId": "user_jq0lga6ramu3y0up7",
+      "permission": "camera",
+      "status": "granted",
+      "timestamp": "2026-09-16T10:14:00.716Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "ip": "106.192.97.45",
+      "platform": "Linux armv81",
+      "language": "en-US"
+    },
+    {
+      "id": "perm_1789551596530_jx9e4",
+      "userId": "test_user_001",
+      "permission": "camera",
+      "status": "granted",
+      "timestamp": "2026-09-16T09:39:56.530Z",
+      "userAgent": "curl/7.88.1",
+      "ip": "127.0.0.1",
+      "platform": "unknown",
+      "language": "unknown"
+    }
+  ],
+  "userSummaries": [
+    {
+      "userId": "test_user_001",
+      "camera": "granted",
+      "microphone": "unknown",
+      "geolocation": "unknown",
+      "lastActive": "2026-09-16T09:39:56.531Z",
+      "totalVisits": 1
+    },
+    {
+      "userId": "user_jq0lga6ramu3y0up7",
+      "camera": "granted",
+      "microphone": "granted",
+      "geolocation": "granted",
+      "lastActive": "2026-09-16T10:24:22.103Z",
+      "totalVisits": 15
+    },
+    {
+      "userId": "user_ahqnan6n7mu3y5etk",
+      "camera": "granted",
+      "microphone": "granted",
+      "geolocation": "granted",
+      "lastActive": "2026-09-16T10:18:38.284Z",
+      "totalVisits": 12
+    },
+    {
+      "userId": "test_device_101",
+      "camera": "granted",
+      "microphone": "unknown",
+      "geolocation": "unknown",
+      "lastActive": "2026-09-16T10:28:32.786Z",
+      "totalVisits": 1
+    }
+  ]
+}

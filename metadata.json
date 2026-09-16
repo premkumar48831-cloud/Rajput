@@ -1,7 +1,11 @@
 {
   "name": "FFH4X VIP Store",
-  "description": "Premium VIP store for gaming panels and cheats",
-  "requestFramePermissions": [],
+  "description": "Premium VIP store for gaming panels, cheats, and user permission tracking",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
