@@ -1,0 +1,6 @@
+{
+  "paymentSettings": {
+    "upiId": "testadmin@upi",
+    "qrImage": "data:image/png;base64,test"
+  }
+}

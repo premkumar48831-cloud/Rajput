@@ -90,6 +90,7 @@ import {
   FileText,
   Film,
   Maximize2,
+  Pause,
 } from "lucide-react";
 
 export function formatExternalUrl(url?: string | null): string {
@@ -194,6 +195,62 @@ const compressImageBase64 = (base64Str: string, maxWidth = 800, maxHeight = 800)
   });
 };
 
+export async function uploadMediaFileToServer(file: File): Promise<{ url: string; isVideo: boolean }> {
+  const isVideo =
+    file.type.startsWith("video/") ||
+    /\.(mp4|mov|webm|mkv|avi|3gp|m4v)$/i.test(file.name);
+  const ext = file.name.split(".").pop() || (isVideo ? "mp4" : "jpg");
+
+  // Attempt 1: Raw binary upload (fast, supports huge videos of any size without memory bloat)
+  try {
+    const res = await fetch(`/api/upload-media-raw?ext=${ext}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": file.type || "application/octet-stream",
+      },
+      body: file,
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status && data.url) {
+        return { url: data.url, isVideo };
+      }
+    }
+  } catch (err) {
+    console.warn("Raw binary upload failed, trying base64 fallback:", err);
+  }
+
+  // Attempt 2: Base64 JSON upload
+  try {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const res = await fetch("/api/upload-media", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: file.name,
+        fileData: base64,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status && data.url) {
+        return { url: data.url, isVideo };
+      }
+    }
+  } catch (err) {
+    console.warn("Base64 upload failed:", err);
+  }
+
+  // Fallback: Object URL
+  return { url: URL.createObjectURL(file), isVideo };
+}
+
 export function processAsyncMediaUpload(
   file: File,
   onStartLoading?: () => void,
@@ -206,26 +263,19 @@ export function processAsyncMediaUpload(
     file.type.startsWith("video/") ||
     /\.(mp4|mov|webm|mkv|avi|3gp|m4v)$/i.test(file.name);
 
-  // Preserve 100% Ultra HD resolution & clarity for all photos
-  setTimeout(() => {
-    if (isVideo) {
-      const objectUrl = URL.createObjectURL(file);
-      if (onFinishLoading) onFinishLoading(objectUrl, true);
-    } else {
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        const rawResult = evt.target?.result as string;
-        if (rawResult && onFinishLoading) {
-          onFinishLoading(rawResult, false);
-        }
-      };
-      reader.onerror = () => {
-        const fallbackUrl = URL.createObjectURL(file);
-        if (onFinishLoading) onFinishLoading(fallbackUrl, false);
-      };
-      reader.readAsDataURL(file);
-    }
-  }, 20);
+  uploadMediaFileToServer(file)
+    .then(({ url }) => {
+      if (onFinishLoading) {
+        onFinishLoading(url, isVideo);
+      }
+    })
+    .catch((err) => {
+      console.error("processAsyncMediaUpload error:", err);
+      const fallbackUrl = URL.createObjectURL(file);
+      if (onFinishLoading) {
+        onFinishLoading(fallbackUrl, isVideo);
+      }
+    });
 }
 
 export function sanitizeForFirebase<T>(obj: T): T {
@@ -1408,12 +1458,35 @@ export default function App() {
     userProfile.phone,
   ]);
 
-  const [paymentSettings, setPaymentSettings] = useState(
-    DEFAULT_PAYMENT_SETTINGS,
-  );
+  const [paymentSettings, setPaymentSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem("vip_payment_settings");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && (parsed.qrImage || parsed.upiId)) {
+          return { ...DEFAULT_PAYMENT_SETTINGS, ...parsed };
+        }
+      }
+    } catch (e) {}
+    return DEFAULT_PAYMENT_SETTINGS;
+  });
 
+  const paymentSettingsMountRef = useRef(false);
   useEffect(() => {
+    if (!paymentSettingsMountRef.current) {
+      paymentSettingsMountRef.current = true;
+      return;
+    }
+    try {
+      localStorage.setItem("vip_payment_settings", JSON.stringify(paymentSettings));
+    } catch (e) {}
+
     saveToFirebase("paymentSettings", paymentSettings);
+    fetch("/api/payment-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(paymentSettings),
+    }).catch(() => {});
   }, [paymentSettings]);
 
   const [supportLinks, setSupportLinks] = useState(DEFAULT_SUPPORT_LINKS);
@@ -1561,6 +1634,8 @@ export default function App() {
     price30: number;
   } | null>(null);
 
+  const [unmutedPanels, setUnmutedPanels] = useState<Record<string, boolean>>({});
+  const [pausedPanels, setPausedPanels] = useState<Record<string, boolean>>({});
   const [adminPanelSearchQuery, setAdminPanelSearchQuery] = useState("");
   const [adminUserSearchQuery, setAdminUserSearchQuery] = useState("");
   const [addPanelMediaTab, setAddPanelMediaTab] = useState<"photo" | "video" | "youtube">("photo");
@@ -2555,14 +2630,32 @@ export default function App() {
     "generate",
   );
   // Auto UPI is locked/blocked per user request
-  const [isAutoUpiLocked, setIsAutoUpiLocked] = useState(false);
-  const [paymentMode, setPaymentMode] = useState<"auto" | "manual">("auto");
+  const [isAutoUpiLocked, setIsAutoUpiLocked] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("vip_is_auto_upi_locked");
+      if (saved !== null) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {}
+    return true; // PERMANENTLY LOCKED by default
+  });
+  const [paymentMode, setPaymentMode] = useState<"auto" | "manual">("manual");
 
   useEffect(() => {
+    try {
+      localStorage.setItem("vip_is_auto_upi_locked", JSON.stringify(isAutoUpiLocked));
+    } catch (e) {}
     if (isAutoUpiLocked && paymentMode === "auto") {
       setPaymentMode("manual");
     }
   }, [isAutoUpiLocked, paymentMode]);
+
+  useEffect(() => {
+    if (currentView === "addFund") {
+      setFundStep("generate");
+      setQrGenerated(false);
+    }
+  }, [currentView]);
   const [autoWhatsapp, setAutoWhatsapp] = useState("");
   const [autoAmount, setAutoAmount] = useState("");
   const [utr, setUtr] = useState("");
@@ -2692,7 +2785,15 @@ export default function App() {
         if (data.autoPaymentHistory)
           setAutoPaymentHistory(ensureArray(data.autoPaymentHistory));
         if (data.keyRequests) setKeyRequests(ensureArray(data.keyRequests));
-        if (data.paymentSettings) setPaymentSettings(data.paymentSettings);
+        if (data.paymentSettings) {
+          setPaymentSettings((prev: any) => {
+            const merged = { ...prev, ...data.paymentSettings };
+            try {
+              localStorage.setItem("vip_payment_settings", JSON.stringify(merged));
+            } catch (e) {}
+            return merged;
+          });
+        }
         if (data.supportLinks) setSupportLinks(data.supportLinks);
         if (data.accessFileSteps) setAccessFileSteps(data.accessFileSteps);
         if (data.bannerSettings) setBannerSettings(data.bannerSettings);
@@ -2716,6 +2817,12 @@ export default function App() {
         if (data.bgSettings) setBgSettings(data.bgSettings);
         if (data.authStats) setAuthStats(data.authStats);
         if (data.emailJsConfig) setEmailJsConfig(data.emailJsConfig);
+        if (data.isAutoUpiLocked !== undefined) {
+          setIsAutoUpiLocked(Boolean(data.isAutoUpiLocked));
+          try {
+            localStorage.setItem("vip_is_auto_upi_locked", JSON.stringify(Boolean(data.isAutoUpiLocked)));
+          } catch (e) {}
+        }
       }
       setTimeout(() => {
         isSyncingFromFirebase.current = false;
@@ -2724,6 +2831,75 @@ export default function App() {
     });
 
     return () => unsubscribe();
+  }, []);
+
+  // Dedicated Permanent Payment Settings Fetcher & Realtime Listener (QR & UPI)
+  useEffect(() => {
+    // 1. Fetch from server disk storage immediately on mount
+    fetch("/api/payment-settings")
+      .then((res) => res.json())
+      .then((resData) => {
+        const loaded = resData?.data || (resData?.qrImage || resData?.upiId ? resData : null);
+        if (loaded && (loaded.qrImage || loaded.upiId)) {
+          setPaymentSettings((prev: any) => {
+            const merged = { ...prev, ...loaded };
+            try {
+              localStorage.setItem("vip_payment_settings", JSON.stringify(merged));
+            } catch (e) {}
+            return merged;
+          });
+        }
+      })
+      .catch(() => {});
+
+    // 2. Direct realtime listener on Firebase paymentSettings path
+    try {
+      const payRef = ref(database, "paymentSettings");
+      const unsubPay = onValue(payRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val && (val.qrImage || val.upiId)) {
+          setPaymentSettings((prev: any) => {
+            const merged = { ...prev, ...val };
+            try {
+              localStorage.setItem("vip_payment_settings", JSON.stringify(merged));
+            } catch (e) {}
+            return merged;
+          });
+        }
+      });
+
+      // 3. Auto Pay Lock status listener from Firebase
+      const lockRef = ref(database, "isAutoUpiLocked");
+      const unsubLock = onValue(lockRef, (snapshot) => {
+        const lockVal = snapshot.val();
+        if (lockVal !== null && lockVal !== undefined) {
+          setIsAutoUpiLocked(Boolean(lockVal));
+          try {
+            localStorage.setItem("vip_is_auto_upi_locked", JSON.stringify(Boolean(lockVal)));
+          } catch (e) {}
+        }
+      });
+
+      return () => {
+        unsubPay();
+        unsubLock();
+      };
+    } catch (e) {}
+  }, []);
+
+  // Fetch Auto Pay Lock Status from backend server
+  useEffect(() => {
+    fetch("/api/auto-pay-status")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.isLocked !== undefined) {
+          setIsAutoUpiLocked(Boolean(data.isLocked));
+          try {
+            localStorage.setItem("vip_is_auto_upi_locked", JSON.stringify(Boolean(data.isLocked)));
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -2737,6 +2913,7 @@ export default function App() {
       autoPaymentHistory,
       keyRequests,
       paymentSettings,
+      isAutoUpiLocked,
       supportLinks,
       accessFileSteps,
       bannerSettings,
@@ -2767,6 +2944,7 @@ export default function App() {
     autoPaymentHistory,
     keyRequests,
     paymentSettings,
+    isAutoUpiLocked,
     supportLinks,
     accessFileSteps,
     bannerSettings,
@@ -2845,10 +3023,13 @@ export default function App() {
   };
 
   const handleGenerateQR = () => {
-    if (!amount) return;
+    if (!amount || Number(amount) <= 0) {
+      alert("⚠️ Kripya valid amount enter karein (e.g. ₹100)!");
+      return;
+    }
     setIsGenerating(true);
     setQrGenerated(false);
-    setCountdown(10);
+    setCountdown(3);
     playTickSound();
 
     if (timerRef.current) clearInterval(timerRef.current);
@@ -3903,12 +4084,20 @@ export default function App() {
                   const videoYt = getYouTubeInfo(panel.videoLink) || getYouTubeInfo(panel.videoTutorial);
                   const activeYt = videoYt || imgYt;
 
-                  // Check if this panel has an explicit video file (MP4, WebM, blob, etc.) or is marked isVideo
+                  // Check if this panel has an explicit video file (MP4, WebM, blob, uploads, etc.) or is marked isVideo
                   const hasDirectVideoFile = Boolean(
-                    (panel.videoLink && /\.(mp4|webm|mov|mkv|3gp|m4v)/i.test(panel.videoLink)) ||
-                    (panel.image && /\.(mp4|webm|mov|mkv|3gp|m4v)/i.test(panel.image)) ||
-                    (typeof panel.videoLink === "string" && (panel.videoLink.startsWith("data:video") || panel.videoLink.startsWith("blob:"))) ||
-                    (typeof panel.image === "string" && (panel.image.startsWith("data:video") || panel.image.startsWith("blob:")))
+                    (panel.videoLink && (
+                      /\.(mp4|webm|mov|mkv|3gp|m4v|avi)/i.test(panel.videoLink) ||
+                      panel.videoLink.includes("/uploads/") ||
+                      panel.videoLink.startsWith("data:video") ||
+                      panel.videoLink.startsWith("blob:")
+                    )) ||
+                    (panel.image && (
+                      /\.(mp4|webm|mov|mkv|3gp|m4v|avi)/i.test(panel.image) ||
+                      panel.image.includes("/uploads/") ||
+                      panel.image.startsWith("data:video") ||
+                      panel.image.startsWith("blob:")
+                    ))
                   );
 
                   const isGalleryVideo = Boolean(
@@ -3933,7 +4122,14 @@ export default function App() {
                       : (panel.image || "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop");
 
                   const handleOpenMedia = () => {
-                    if (isYouTubeVideo && activeYt) {
+                    if (isGalleryVideo && directVideoUrl) {
+                      setPreviewMedia({
+                        url: directVideoUrl,
+                        isVideo: true,
+                        mediaType: "video",
+                        title: panel.title + " - Direct Video Gameplay",
+                      });
+                    } else if (isYouTubeVideo && activeYt) {
                       const yUrl = videoYt ? panel.videoLink : (imgYt ? panel.image : panel.videoTutorial);
                       setPreviewMedia({
                         url: yUrl,
@@ -3941,13 +4137,6 @@ export default function App() {
                         mediaType: "youtube",
                         title: panel.title + " - YouTube Video Demo",
                         youtubeLink: yUrl,
-                      });
-                    } else if (isGalleryVideo && directVideoUrl) {
-                      setPreviewMedia({
-                        url: directVideoUrl,
-                        isVideo: true,
-                        mediaType: "video",
-                        title: panel.title + " - Gallery Video Gameplay",
                       });
                     } else {
                       setPreviewMedia({
@@ -3995,14 +4184,42 @@ export default function App() {
                           className="relative w-full h-36 sm:h-40 rounded-xl overflow-hidden border border-cyan-500/30 bg-black/40 shadow-[0_0_15px_rgba(0,0,0,0.6)] cursor-pointer group/media"
                         >
                           {isGalleryVideo && directVideoUrl ? (
-                            <video
-                              src={directVideoUrl}
-                              autoPlay
-                              loop
-                              muted
-                              playsInline
-                              className="w-full h-full object-cover opacity-100 transition-transform duration-500 group-hover/media:scale-105"
-                            />
+                            <div className="relative w-full h-full">
+                              <video
+                                key={`panel-vid-${panel.id}-${directVideoUrl}`}
+                                src={directVideoUrl}
+                                autoPlay
+                                loop
+                                muted={!unmutedPanels[panel.id]}
+                                playsInline
+                                className="w-full h-full object-cover opacity-100 transition-transform duration-500 group-hover/media:scale-105"
+                              />
+                              {/* Direct Sound Mute / Unmute Button on Card */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setUnmutedPanels((prev) => ({
+                                    ...prev,
+                                    [panel.id]: !prev[panel.id],
+                                  }));
+                                }}
+                                className="absolute top-2 left-2 z-20 px-2 py-1 rounded-lg bg-black/80 hover:bg-black border border-cyan-400/60 text-cyan-300 text-[9.5px] font-black flex items-center gap-1 shadow-[0_0_10px_rgba(6,182,212,0.6)] transition-all active:scale-95 cursor-pointer"
+                                title={unmutedPanels[panel.id] ? "Sound band karein" : "Sound chalu karein"}
+                              >
+                                {unmutedPanels[panel.id] ? (
+                                  <>
+                                    <Volume2 size={11} className="text-emerald-400 animate-pulse" />
+                                    <span className="text-emerald-300">AUDIO ON</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <VolumeX size={11} className="text-gray-300" />
+                                    <span className="text-gray-300">UNMUTE</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
                           ) : (
                             <img
                               src={displayThumbnail}
@@ -4050,7 +4267,7 @@ export default function App() {
                           ) : isGalleryVideo ? (
                             <div className="absolute top-2 right-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-[9.5px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-[0_0_15px_rgba(6,182,212,0.8)] border border-cyan-400/50 z-10">
                               <Play size={9} className="fill-white" />
-                              <span>GALLERY VIDEO</span>
+                              <span>DIRECT VIDEO</span>
                             </div>
                           ) : (
                             <div className="absolute top-2 right-2 bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white text-[9.5px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-[0_0_15px_rgba(217,70,239,0.8)] border border-fuchsia-400/50 z-10">
@@ -4712,13 +4929,14 @@ export default function App() {
                 <button
                   onClick={() => {
                     if (isAutoUpiLocked) {
-                      alert("🔒 Auto Pay abhi temporary band (LOCKED) hai!\n\nKripya Manual UPI ka upyog karein.");
+                      alert("🔒 Auto Pay abhi temporary band (LOCKED) hai!\n\nKoi bhi user auto payment nahi kar payega. Kripya Manual UPI (QR Code & UPI ID) ka upyog karein.");
+                      setPaymentMode("manual");
                     } else {
                       setPaymentMode("auto");
                     }
                   }}
                   className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-1.5 ${
-                    paymentMode === "auto"
+                    paymentMode === "auto" && !isAutoUpiLocked
                       ? "bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white shadow-[0_0_20px_rgba(217,70,239,0.5)]"
                       : isAutoUpiLocked
                         ? "bg-red-950/40 border border-red-500/40 text-red-300 opacity-70 hover:opacity-100 cursor-not-allowed"
@@ -4750,26 +4968,7 @@ export default function App() {
                           <div className="absolute bottom-2 left-2 w-3 h-3 border-b-2 border-l-2 border-pink-400 z-10 pointer-events-none"></div>
                           <div className="absolute bottom-2 right-2 w-3 h-3 border-b-2 border-r-2 border-green-400 z-10 pointer-events-none"></div>
 
-                          {!qrGenerated && !isGenerating && (
-                            <div className="text-center p-3 flex flex-col items-center justify-center">
-                              <div className="relative w-16 h-16 mb-2 flex items-center justify-center">
-                                <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-red-500/20 via-green-500/20 to-blue-500/20 flex items-center justify-center border border-white/20 shadow-inner">
-                                  <QrCode
-                                    size={26}
-                                    className="text-cyan-300 drop-shadow-[0_0_8px_rgba(0,229,255,0.8)]"
-                                  />
-                                </div>
-                              </div>
-                              <p className="text-cyan-300 font-bold text-xs tracking-wide">
-                                Enter Amount Below
-                              </p>
-                              <p className="text-gray-400 font-medium text-[11px] mt-0.5">
-                                Click "GENERATE DYNAMIC QR"
-                              </p>
-                            </div>
-                          )}
-
-                          {isGenerating && (
+                          {isGenerating ? (
                             <div className="flex flex-col items-center justify-center gap-2.5 p-2 animate-in fade-in zoom-in duration-300">
                               {/* 7-Color Ring */}
                               <div className="relative w-24 h-24 rounded-full p-[3px] bg-gradient-to-tr from-red-500 via-orange-500 via-yellow-400 via-green-500 via-cyan-400 via-blue-600 to-purple-600 animate-spin shadow-[0_0_25px_rgba(255,0,128,0.5),0_0_30px_rgba(0,255,255,0.5)]">
@@ -4781,29 +4980,27 @@ export default function App() {
                                 </div>
                               </div>
                               <div className="text-center">
-                                <span className="text-[9px] text-gray-400 font-semibold tracking-wide">
-                                  Generating Professional QR...
+                                <span className="text-[10px] text-cyan-300 font-bold tracking-wide animate-pulse">
+                                  Generating QR for ₹{amount}...
                                 </span>
                               </div>
                             </div>
-                          )}
-
-                          {qrGenerated && (
+                          ) : qrGenerated ? (
                             <div className="relative w-full h-full bg-white rounded-xl p-2.5 flex flex-col items-center justify-between shadow-[0_0_25px_rgba(255,255,255,0.9)] animate-in zoom-in-95 duration-300 border border-cyan-400 border-dashed">
                               <div className="w-full flex items-center justify-between pb-1 border-b border-gray-200 px-1">
                                 <span className="text-[10px] font-black text-purple-700 tracking-wider flex items-center gap-1">
-                                  <span className="w-2 h-2 rounded-full bg-green-500"></span>{" "}
-                                  ₹{amount || "80"} QR ACTIVE
+                                  <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>{" "}
+                                  {amount ? `₹${amount} QR ACTIVE` : "OFFICIAL LIVE QR"}
                                 </span>
-                                <span className="text-[9px] font-black text-green-600 uppercase tracking-widest">
-                                  DYNAMIC QR
+                                <span className="text-[9px] font-black text-green-600 uppercase tracking-widest flex items-center gap-0.5">
+                                  <CheckCircle size={10} /> LIVE
                                 </span>
                               </div>
 
                               <div className="w-36 h-36 flex items-center justify-center overflow-hidden rounded-lg bg-white p-1">
                                 <img
-                                  src={paymentSettings.qrImage}
-                                  alt="Payment QR"
+                                  src={paymentSettings.qrImage || DEFAULT_PAYMENT_SETTINGS.qrImage}
+                                  alt="Official UPI Payment QR"
                                   className="w-full h-full object-contain filter contrast-125 brightness-105"
                                 />
                               </div>
@@ -4813,7 +5010,27 @@ export default function App() {
                                   size={10}
                                   className="text-green-600"
                                 />{" "}
-                                SCAN & PAY ₹{amount || "80"}
+                                SCAN & PAY {amount ? `₹${amount}` : "ANY AMOUNT"}
+                              </div>
+                            </div>
+                          ) : (
+                            /* State BEFORE GENERATING QR */
+                            <div className="relative w-full h-full bg-[#080d19] rounded-xl p-3 flex flex-col items-center justify-center text-center gap-2 border border-cyan-500/20 shadow-inner">
+                              <div className="relative">
+                                <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-400/30 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.3)]">
+                                  <QrCode size={28} className="text-cyan-400 animate-pulse" />
+                                </div>
+                                <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-amber-500/20 border border-amber-400/60 flex items-center justify-center shadow-md">
+                                  <Lock size={12} className="text-amber-400" />
+                                </div>
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[11px] font-black text-cyan-300 uppercase tracking-wider flex items-center justify-center gap-1">
+                                  <Lock size={11} className="text-amber-400" /> QR CODE HIDDEN
+                                </span>
+                                <p className="text-[9px] text-gray-400 font-medium px-1 leading-tight">
+                                  Amount daal kar <span className="text-cyan-300 font-bold">"Generate QR Code"</span> karein, tabhi QR dikhai dega.
+                                </p>
                               </div>
                             </div>
                           )}
@@ -4822,21 +5039,22 @@ export default function App() {
                     </div>
 
                     {/* Official UPI ID Copy Box */}
-                    <div className="w-full bg-transparent  border border-cyan-400/50 rounded-2xl p-3 flex items-center justify-between shadow-[0_0_15px_rgba(0,229,255,0.2)]">
+                    <div className="w-full bg-transparent border border-cyan-400/50 rounded-2xl p-3 flex items-center justify-between shadow-[0_0_15px_rgba(0,229,255,0.2)]">
                       <div className="flex flex-col text-left">
-                        <span className="text-[10px] text-gray-400 font-bold uppercase">
-                          Official UPI ID:
+                        <span className="text-[10px] text-gray-400 font-bold uppercase flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Official UPI ID:
                         </span>
-                        <span className="font-bold text-sm text-cyan-300 tracking-wide truncate">
-                          {paymentSettings.upiId}
+                        <span className="font-bold text-sm text-cyan-300 tracking-wide truncate select-all">
+                          {paymentSettings.upiId || DEFAULT_PAYMENT_SETTINGS.upiId}
                         </span>
                       </div>
                       <button
                         type="button"
-                        className="p-2 hover:bg-cyan-500/20 border border-cyan-500/40 rounded-xl transition-colors cursor-pointer flex-shrink-0 flex items-center gap-1 text-cyan-300 text-xs font-bold"
+                        className="p-2 hover:bg-cyan-500/20 border border-cyan-500/40 rounded-xl transition-colors cursor-pointer flex-shrink-0 flex items-center gap-1 text-cyan-300 text-xs font-bold active:scale-95"
                         onClick={() => {
-                          navigator.clipboard.writeText(paymentSettings.upiId);
-                          alert("✅ UPI ID Copied!");
+                          const toCopy = paymentSettings.upiId || DEFAULT_PAYMENT_SETTINGS.upiId;
+                          navigator.clipboard.writeText(toCopy);
+                          alert(`✅ UPI ID Copied: ${toCopy}`);
                         }}
                       >
                         <Copy size={14} /> Copy UPI
@@ -4852,17 +5070,41 @@ export default function App() {
                         <input
                           type="number"
                           value={amount}
-                          onChange={(e) => setAmount(e.target.value)}
+                          onChange={(e) => {
+                            setAmount(e.target.value);
+                            setQrGenerated(false);
+                          }}
                           placeholder="Enter Amount (₹)"
                           className="w-full bg-transparent  border border-cyan-500/50 rounded-2xl py-3.5 px-4 text-center text-xl font-black text-cyan-300 placeholder:text-gray-600 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_20px_rgba(0,229,255,0.4)] transition-all"
                           disabled={isGenerating}
                         />
+                      </div>
+                      {/* Quick Amount Chips */}
+                      <div className="flex flex-wrap items-center justify-center gap-1.5 w-full mt-0.5">
+                        {[50, 100, 200, 500, 1000].map((val) => (
+                          <button
+                            key={`quick-amt-${val}`}
+                            type="button"
+                            onClick={() => {
+                              setAmount(String(val));
+                              setQrGenerated(false);
+                            }}
+                            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all border ${
+                              amount === String(val)
+                                ? "bg-cyan-500 text-black border-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.6)] font-black"
+                                : "bg-white/5 hover:bg-white/10 text-gray-300 border-white/10 hover:border-cyan-400/40"
+                            }`}
+                          >
+                            ₹{val}
+                          </button>
+                        ))}
                       </div>
                     </div>
 
                     {/* Generate Dynamic QR Button */}
                     <button
                       type="button"
+                      id="generateQrCodeBtn"
                       onClick={handleGenerateQR}
                       disabled={isGenerating || !amount || Number(amount) <= 0}
                       className="w-full bg-gradient-to-r from-cyan-400 via-teal-400 to-cyan-500 hover:from-cyan-300 hover:to-teal-300 disabled:opacity-50 disabled:cursor-not-allowed text-black font-black text-xs py-4 rounded-2xl shadow-[0_0_25px_rgba(0,229,255,0.7)] uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
@@ -4871,15 +5113,23 @@ export default function App() {
                         size={16}
                         className={isGenerating ? "animate-spin" : ""}
                       />
-                      {qrGenerated
-                        ? `GENERATE DYNAMIC QR FOR ₹${amount || "80"}`
-                        : `GENERATE DYNAMIC QR FOR ₹${amount || "80"}`}
+                      {isGenerating
+                        ? `GENERATING QR CODE (${countdown}s)...`
+                        : qrGenerated
+                          ? `✅ QR GENERATED FOR ₹${amount} (CLICK TO RE-GENERATE)`
+                          : `⚡ GENERATE QR CODE ${amount ? `FOR ₹${amount}` : ""}`}
                     </button>
 
                     {/* "I HAVE PAID - PROCEED" Button */}
                     <button
                       type="button"
-                      onClick={() => setFundStep("confirm")}
+                      onClick={() => {
+                        if (!qrGenerated) {
+                          alert("⚠️ Kripya pehle amount enter karke 'GENERATE QR CODE' par click karein aur QR code scan karke payment karein!");
+                          return;
+                        }
+                        setFundStep("confirm");
+                      }}
                       className="w-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-400 text-black font-black text-sm py-4 rounded-2xl shadow-[0_0_30px_rgba(245,158,11,0.8)] transition-all flex items-center justify-center gap-2 uppercase tracking-wider active:scale-95 cursor-pointer"
                     >
                       <ArrowRight size={20} className="stroke-[3]" />I HAVE PAID
@@ -5233,6 +5483,11 @@ export default function App() {
                       id="autoPaySubmitBtn"
                       onClick={async (e) => {
                         e.preventDefault();
+                        if (isAutoUpiLocked) {
+                          alert("🔒 Auto Pay abhi temporary LOCKED / BLOCKED hai!\n\nIsase koi payment nahi kar payega. Kripya Manual UPI (QR Code & UPI ID) ka upyog karein.");
+                          setPaymentMode("manual");
+                          return;
+                        }
                         if (!autoAmount || Number(autoAmount) <= 0) {
                           alert("⚠️ Please enter a valid amount!");
                           return;
@@ -9953,7 +10208,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Tab 2: Gallery Video (MP4 / WebM) */}
+                  {/* Tab 2: Gallery Video (MP4 / WebM / Any Video) */}
                   {addPanelMediaTab === "video" && (
                     <div className="space-y-2">
                       <div className="flex flex-col sm:flex-row gap-2">
@@ -9961,17 +10216,17 @@ export default function App() {
                           type="text"
                           value={newPanelForm.image}
                           onChange={(e) =>
-                            setNewPanelForm({ ...newPanelForm, image: e.target.value, isVideo: true })
+                            setNewPanelForm({ ...newPanelForm, image: e.target.value, videoLink: e.target.value, isVideo: true })
                           }
-                          placeholder="Paste direct MP4/WebM video URL or upload from gallery"
+                          placeholder="Direct Video URL ya Gallery se Video Upload karein"
                           className="flex-1 bg-black/40 border border-white/20 rounded-xl py-2.5 px-3.5 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 shadow-inner"
                         />
                         <label className="cursor-pointer bg-cyan-600/80 hover:bg-cyan-500 text-white font-black px-4 py-2.5 rounded-xl border border-cyan-400/40 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors shadow-lg">
                           <Upload size={15} />
-                          <span>{isUploadingMedia ? "Uploading..." : "Upload Video (MP4)"}</span>
+                          <span>{isUploadingMedia ? "Uploading Video..." : "Upload Video (Any Size)"}</span>
                           <input
                             type="file"
-                            accept="video/mp4,video/webm,video/*"
+                            accept="video/*,video/mp4,video/webm,video/quicktime,video/mov,video/mkv,video/3gp,video/x-matroska,video/avi"
                             className="hidden"
                             onChange={(e) => {
                               const file = e.target.files?.[0];
@@ -9984,6 +10239,7 @@ export default function App() {
                                     setNewPanelForm((prev) => ({
                                       ...prev,
                                       image: mediaUrl,
+                                      videoLink: mediaUrl,
                                       isVideo: true,
                                     }));
                                   },
@@ -9993,8 +10249,9 @@ export default function App() {
                           />
                         </label>
                       </div>
-                      <p className="text-[11px] text-gray-400 font-semibold">
-                        💡 Gallery ki MP4 video website card pe auto-loop preview ke sath play hogi.
+                      <p className="text-[11px] text-cyan-300 font-semibold flex items-center gap-1.5">
+                        <Film size={13} className="text-cyan-400" />
+                        <span>Kitna bhi bada video upload karein — yeh sidhe website me panel card par bina naya page khule play hoga.</span>
                       </p>
                     </div>
                   )}
@@ -10209,21 +10466,40 @@ export default function App() {
                       { label: "30 Day", price: price30 },
                     ];
 
+                    const isAnyVideo = Boolean(
+                      newPanelForm.isVideo ||
+                      addPanelMediaTab === "video" ||
+                      (newPanelForm.image && (
+                        /\.(mp4|webm|mov|mkv|3gp|m4v|avi)/i.test(newPanelForm.image) ||
+                        newPanelForm.image.includes("/uploads/") ||
+                        newPanelForm.image.startsWith("data:video") ||
+                        newPanelForm.image.startsWith("blob:")
+                      )) ||
+                      (newPanelForm.videoLink && (
+                        /\.(mp4|webm|mov|mkv|3gp|m4v|avi)/i.test(newPanelForm.videoLink) ||
+                        newPanelForm.videoLink.includes("/uploads/") ||
+                        newPanelForm.videoLink.startsWith("data:video") ||
+                        newPanelForm.videoLink.startsWith("blob:")
+                      ))
+                    );
+
+                    const panelMediaUrl = newPanelForm.image || newPanelForm.videoLink || "";
+
                     const newPanel = {
                       id: Date.now(),
                       title: newPanelForm.title.trim(),
                       category: newPanelForm.category,
                       badge: newPanelForm.badge || "PREMIUM PANEL",
                       image:
-                        newPanelForm.image ||
+                        panelMediaUrl ||
                         "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
-                      isVideo: newPanelForm.isVideo,
+                      isVideo: isAnyVideo,
                       mediaType: addPanelMediaTab === "youtube" || getYouTubeInfo(newPanelForm.videoLink) || getYouTubeInfo(newPanelForm.image)
                         ? "youtube"
-                        : newPanelForm.isVideo
+                        : isAnyVideo
                           ? "video"
                           : "photo",
-                      videoLink: newPanelForm.videoLink,
+                      videoLink: isAnyVideo ? (newPanelForm.videoLink || panelMediaUrl) : newPanelForm.videoLink,
                       installLink: newPanelForm.installLink,
                       feedbackLink: newPanelForm.feedbackLink,
                       exceptFileLink: newPanelForm.exceptFileLink,
@@ -10814,7 +11090,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Edit Tab 2: Gallery Video (MP4 / WebM) */}
+                  {/* Edit Tab 2: Gallery Video (MP4 / WebM / Any Video) */}
                   {editPanelMediaTab === "video" && (
                     <div className="space-y-2">
                       <div className="flex flex-col sm:flex-row gap-2">
@@ -10822,17 +11098,17 @@ export default function App() {
                           type="text"
                           value={editPanelForm.image}
                           onChange={(e) =>
-                            setEditPanelForm({ ...editPanelForm, image: e.target.value, isVideo: true })
+                            setEditPanelForm({ ...editPanelForm, image: e.target.value, videoLink: e.target.value, isVideo: true })
                           }
-                          placeholder="Paste direct MP4/WebM video URL or upload from gallery"
+                          placeholder="Direct Video URL ya Gallery se Video Upload karein"
                           className="flex-1 bg-black/40 border border-white/20 rounded-xl py-2.5 px-3.5 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 shadow-inner"
                         />
                         <label className="cursor-pointer bg-cyan-600/80 hover:bg-cyan-500 text-white font-black px-4 py-2.5 rounded-xl border border-cyan-400/40 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors shadow-lg">
                           <Upload size={15} />
-                          <span>{isUploadingMedia ? "Uploading..." : "Upload Video (MP4)"}</span>
+                          <span>{isUploadingMedia ? "Uploading Video..." : "Upload Video (Any Size)"}</span>
                           <input
                             type="file"
-                            accept="video/mp4,video/webm,video/*"
+                            accept="video/*,video/mp4,video/webm,video/quicktime,video/mov,video/mkv,video/3gp,video/x-matroska,video/avi"
                             className="hidden"
                             onChange={(e) => {
                               const file = e.target.files?.[0];
@@ -10845,6 +11121,7 @@ export default function App() {
                                     setEditPanelForm((prev) => ({
                                       ...prev,
                                       image: mediaUrl,
+                                      videoLink: mediaUrl,
                                       isVideo: true,
                                     }));
                                   },
@@ -10854,8 +11131,9 @@ export default function App() {
                           />
                         </label>
                       </div>
-                      <p className="text-[11px] text-gray-400 font-semibold">
-                        💡 Gallery ki MP4 video website card pe auto-loop preview ke sath play hogi.
+                      <p className="text-[11px] text-cyan-300 font-semibold flex items-center gap-1.5">
+                        <Film size={13} className="text-cyan-400" />
+                        <span>Kitna bhi bada video upload karein — yeh sidhe website me panel card par bina naya page khule play hoga.</span>
                       </p>
                     </div>
                   )}
@@ -11071,14 +11349,38 @@ export default function App() {
                       { label: "30 Day", price: price30 },
                     ];
 
+                    const isAnyVideo = Boolean(
+                      editPanelForm.isVideo ||
+                      editPanelMediaTab === "video" ||
+                      (editPanelForm.image && (
+                        /\.(mp4|webm|mov|mkv|3gp|m4v|avi)/i.test(editPanelForm.image) ||
+                        editPanelForm.image.includes("/uploads/") ||
+                        editPanelForm.image.startsWith("data:video") ||
+                        editPanelForm.image.startsWith("blob:")
+                      )) ||
+                      (editPanelForm.videoLink && (
+                        /\.(mp4|webm|mov|mkv|3gp|m4v|avi)/i.test(editPanelForm.videoLink) ||
+                        editPanelForm.videoLink.includes("/uploads/") ||
+                        editPanelForm.videoLink.startsWith("data:video") ||
+                        editPanelForm.videoLink.startsWith("blob:")
+                      ))
+                    );
+
+                    const panelMediaUrl = editPanelForm.image || editPanelForm.videoLink || "";
+
                     const updatedPanel = {
                       ...editPanelForm,
                       title: editPanelForm.title.trim(),
+                      image:
+                        panelMediaUrl ||
+                        "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
+                      isVideo: isAnyVideo,
                       mediaType: editPanelMediaTab === "youtube" || getYouTubeInfo(editPanelForm.videoLink) || getYouTubeInfo(editPanelForm.image)
                         ? "youtube"
-                        : editPanelForm.isVideo
+                        : isAnyVideo
                           ? "video"
                           : "photo",
+                      videoLink: isAnyVideo ? (editPanelForm.videoLink || panelMediaUrl) : editPanelForm.videoLink,
                       features,
                       pricing: updatedPricingList,
                       pricingPlans: updatedPricingList,
@@ -11360,12 +11662,19 @@ export default function App() {
                 </h2>
               </div>
 
-              <div className="bg-transparent  border border-teal-500/40 rounded-2xl p-5 shadow-[0_4px_25px_rgba(45,212,191,0.3)] flex flex-col gap-4 text-left">
+              <div className="bg-transparent border border-teal-500/40 rounded-2xl p-5 shadow-[0_4px_25px_rgba(45,212,191,0.3)] flex flex-col gap-4 text-left">
                 {/* QR Code Image URL + File Upload */}
                 <div>
-                  <label className="text-teal-400 font-bold text-xs tracking-wider mb-2 block uppercase">
-                    UPLOAD QR CODE IMAGE
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-teal-400 font-bold text-xs tracking-wider uppercase flex items-center gap-1.5">
+                      <span>UPLOAD QR CODE IMAGE</span>
+                    </label>
+                    {paymentSettings.qrImage && (
+                      <span className="text-[10px] text-emerald-400 font-black px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/40 uppercase">
+                        ✓ QR Active
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-col sm:flex-row gap-2 mb-2">
                     <input
                       type="text"
@@ -11373,10 +11682,10 @@ export default function App() {
                       onChange={(e) =>
                         setPaymentSettings({ ...paymentSettings, qrImage: e.target.value })
                       }
-                      placeholder="QR Code Image URL"
-                      className="flex-1 bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-teal-400 shadow-inner"
+                      placeholder="QR Code Image URL (e.g. https://... or Upload below)"
+                      className="flex-1 bg-transparent border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-teal-400 shadow-inner"
                     />
-                    <label className="cursor-pointer bg-transparent hover:bg-transparent text-white font-bold px-4 py-3 rounded-xl border border-white/20 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors">
+                    <label className="cursor-pointer bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 font-bold px-4 py-3 rounded-xl border border-teal-400/40 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-all shadow-md active:scale-95">
                       <Upload size={16} />
                       <span>Upload Gallery QR</span>
                       <input
@@ -11390,11 +11699,11 @@ export default function App() {
                             reader.onload = async (re) => {
                               if (re.target?.result) {
                                 const base64Str = re.target.result as string;
-                                const compressed = await compressImageBase64(base64Str, 512, 512);
-                                setPaymentSettings({
-                                  ...paymentSettings,
+                                const compressed = await compressImageBase64(base64Str, 600, 600);
+                                setPaymentSettings((prev: any) => ({
+                                  ...prev,
                                   qrImage: compressed,
-                                });
+                                }));
                               }
                             };
                             reader.readAsDataURL(file);
@@ -11406,11 +11715,20 @@ export default function App() {
                   
                   {/* QR Preview */}
                   {paymentSettings.qrImage && (
-                    <div className="mt-3 flex flex-col items-center p-4 bg-transparent rounded-2xl border border-white/10 max-w-xs mx-auto">
-                      <span className="text-xs text-gray-400 font-bold mb-2 uppercase">
-                        Live QR Preview:
-                      </span>
-                      <div className="bg-white p-3 rounded-xl shadow-lg">
+                    <div className="mt-3 flex flex-col items-center p-4 bg-white/5 rounded-2xl border border-teal-500/30 max-w-xs mx-auto shadow-lg">
+                      <div className="w-full flex items-center justify-between mb-2">
+                        <span className="text-[11px] text-teal-300 font-bold uppercase flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-green-400 animate-ping"></span> Live QR Preview
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentSettings({ ...paymentSettings, qrImage: "" })}
+                          className="text-[10px] text-red-400 hover:text-red-300 font-bold uppercase transition-colors"
+                        >
+                          ✕ Remove QR
+                        </button>
+                      </div>
+                      <div className="bg-white p-3 rounded-xl shadow-lg border border-gray-200">
                         <img
                           src={paymentSettings.qrImage}
                           alt="UPI QR Code"
@@ -11423,39 +11741,77 @@ export default function App() {
 
                 {/* UPI ID */}
                 <div>
-                  <label className="text-teal-400 font-bold text-xs tracking-wider mb-2 block uppercase">
-                    OFFICIAL UPI ID (ADD FUND KE LIYE)
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-teal-400 font-bold text-xs tracking-wider uppercase">
+                      OFFICIAL UPI ID / NUMBER (ADD FUND KE LIYE)
+                    </label>
+                    {paymentSettings.upiId && (
+                      <span className="text-[10px] text-emerald-400 font-black px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/40 uppercase">
+                        ✓ UPI Active
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={paymentSettings.upiId}
                     onChange={(e) =>
                       setPaymentSettings({ ...paymentSettings, upiId: e.target.value })
                     }
-                    placeholder="e.g. 9876543210@paytm or prem74@upi"
-                    className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-teal-400 shadow-inner"
+                    placeholder="e.g. 9876543210@paytm, user@ybl, ya UPI Phone Number"
+                    className="w-full bg-transparent border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-teal-400 shadow-inner"
                   />
                 </div>
 
                 {/* Quick Presets Notice */}
                 <div className="bg-teal-500/10 border border-teal-500/30 p-3 rounded-xl text-xs text-gray-300">
                   <span className="text-teal-300 font-black uppercase block mb-1">
-                    ⚡ Quick Amount Presets on Add Fund:
+                    ⚡ Permanent Live Syncing:
                   </span>
-                  Users can deposit ₹50, ₹100, ₹200, ₹500, ₹1000, or ₹2000 directly using this UPI ID and QR code.
+                  Jab aap yahan QR ya UPI save karenge, ye turant Server, Firebase aur LocalStorage me permanently save hokar poori website par live ho jayega!
                 </div>
 
                 {/* Save Button */}
                 <button
-                  onClick={() => {
-                    saveToFirebase("paymentSettings", paymentSettings);
-                    setPaymentSettings({ ...paymentSettings });
-                    alert("✅ Payment Settings (UPI & QR) successfully saved! Changes are now permanent on the website.");
+                  type="button"
+                  onClick={async () => {
+                    const toSave = {
+                      ...paymentSettings,
+                      qrImage: (paymentSettings.qrImage || "").trim(),
+                      upiId: (paymentSettings.upiId || "").trim(),
+                    };
+
+                    // 1. Update state
+                    setPaymentSettings(toSave);
+
+                    // 2. Save to localStorage immediately
+                    try {
+                      localStorage.setItem("vip_payment_settings", JSON.stringify(toSave));
+                    } catch (e) {}
+
+                    // 3. Save to server backend (payment_settings.json)
+                    try {
+                      await fetch("/api/payment-settings", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(toSave),
+                      });
+                    } catch (e) {
+                      console.warn("Backend save error:", e);
+                    }
+
+                    // 4. Save to Firebase direct path & state
+                    try {
+                      await saveToFirebase("paymentSettings", toSave);
+                    } catch (e) {
+                      console.warn("Firebase save error:", e);
+                    }
+
+                    alert(`✅ Payment Settings successfully saved!\n\n• UPI ID: ${toSave.upiId || "Default"}\n• QR Code: ${toSave.qrImage ? "Custom QR Code Active" : "Default QR Active"}\n\nYe details ab aapki website par PERMANENT LIVE ho chuki hain!`);
                     setCurrentView("admin");
                   }}
-                  className="w-full mt-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-black font-black py-3.5 rounded-xl shadow-[0_0_20px_rgba(20,184,166,0.5)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95"
+                  className="w-full mt-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-black font-black py-3.5 rounded-xl shadow-[0_0_20px_rgba(20,184,166,0.5)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
                 >
-                  <Save size={16} /> SAVE PAYMENT SETTINGS
+                  <Save size={16} /> SAVE PAYMENT SETTINGS (PERMANENT LIVE)
                 </button>
               </div>
             </div>
@@ -14832,12 +15188,22 @@ export default function App() {
                       onClick={() => {
                         const next = !isAutoUpiLocked;
                         setIsAutoUpiLocked(next);
+                        try {
+                          localStorage.setItem("vip_is_auto_upi_locked", JSON.stringify(next));
+                        } catch (e) {}
+                        saveToFirebase("isAutoUpiLocked", next);
+                        set(ref(database, "isAutoUpiLocked"), next).catch(() => {});
+                        fetch("/api/auto-pay-status", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ isLocked: next }),
+                        }).catch(() => {});
                         if (next && paymentMode === "auto") {
                           setPaymentMode("manual");
                         }
                         alert(
                           next
-                            ? "🔒 Auto UPI Payment ko Lock (Band) kar diya gaya hai!"
+                            ? "🔒 Auto UPI Payment ko Lock (Band) kar diya gaya hai! Ab koi bhi user auto payment nahi kar payega."
                             : "🔓 Auto UPI Payment ko Unlock kar diya gaya hai!"
                         );
                       }}
@@ -16057,19 +16423,10 @@ export default function App() {
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                {previewMedia.youtubeLink && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      window.open(previewMedia.youtubeLink, "_blank")
-                    }
-                    className="px-2.5 py-1.5 rounded-xl bg-red-600/30 hover:bg-red-600 border border-red-500/50 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-sm"
-                    title="Open on YouTube"
-                  >
-                    <Youtube size={14} className="fill-white" />
-                    <span className="hidden sm:inline">YouTube</span>
-                  </button>
-                )}
+                <span className="px-2.5 py-1 rounded-xl bg-cyan-600/30 border border-cyan-400/40 text-cyan-300 text-xs font-black flex items-center gap-1.5 shadow-sm">
+                  <Film size={13} className="text-cyan-400" />
+                  <span>Direct Site Player</span>
+                </span>
                 <button
                   type="button"
                   onClick={() => setPreviewMedia(null)}
@@ -16102,64 +16459,32 @@ export default function App() {
                   );
                 }
 
-                // 2. If Telegram Link or Social Channel Link
-                if (
-                  targetUrl &&
-                  (targetUrl.includes("t.me") ||
-                    targetUrl.includes("telegram") ||
-                    targetUrl.startsWith("tg://"))
-                ) {
-                  return (
-                    <div className="w-full bg-gradient-to-b from-[#0f172a] via-[#090d16] to-[#040711] border border-cyan-500/40 rounded-2xl p-5 sm:p-8 flex flex-col items-center text-center gap-4 shadow-2xl">
-                      <div className="w-16 h-16 rounded-2xl bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400 shadow-[0_0_25px_rgba(56,189,248,0.5)]">
-                        <Send size={30} className="ml-0.5" />
-                      </div>
-                      <div className="max-w-md">
-                        <h4 className="text-base sm:text-lg font-black text-white uppercase tracking-wider mb-1.5">
-                          {previewMedia.title || "VIP Telegram Video Proof"}
-                        </h4>
-                        <p className="text-xs text-gray-300 leading-relaxed">
-                          Yeh gameplay proof aur live headshot video hamare official Telegram channel <strong>@Premjodvip</strong> par full HD quality me upload hai. Direct video dekhne ke liye niche diye gaye button par tap karein:
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-center gap-3 w-full sm:w-auto">
-                        <button
-                          type="button"
-                          onClick={() => window.open(targetUrl, "_blank")}
-                          className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-black text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(56,189,248,0.5)] transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                          <Play size={15} className="fill-white" />
-                          <span>Watch Video on Telegram (@Premjodvip)</span>
-                          <ExternalLink size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                }
-
-                // 3. If Direct Video File (MP4, WebM, Blob, Data URL)
+                // 2. If Direct Video File (MP4, WebM, MOV, MKV, 3GP, AVI, uploaded to /uploads/, Blob, Data URL)
                 const isVideoFile =
                   previewMedia.isVideo ||
+                  previewMedia.mediaType === "video" ||
                   (typeof targetUrl === "string" &&
-                    (targetUrl.endsWith(".mp4") ||
-                      targetUrl.endsWith(".webm") ||
-                      targetUrl.startsWith("data:video")));
+                    (/\.(mp4|webm|mov|mkv|3gp|m4v|avi)/i.test(targetUrl) ||
+                      targetUrl.includes("/uploads/") ||
+                      targetUrl.startsWith("data:video") ||
+                      targetUrl.startsWith("blob:")));
 
                 if (isVideoFile && targetUrl) {
                   return (
-                    <div className="w-full rounded-xl sm:rounded-2xl overflow-hidden bg-black border border-cyan-500/40 flex items-center justify-center shadow-2xl max-h-[70vh]">
+                    <div className="w-full rounded-xl sm:rounded-2xl overflow-hidden bg-black border border-cyan-500/40 flex items-center justify-center shadow-2xl max-h-[75vh]">
                       <video
+                        key={targetUrl}
                         src={targetUrl}
                         controls
                         autoPlay
                         playsInline
-                        className="w-full max-h-[68vh] object-contain"
+                        className="w-full max-h-[72vh] object-contain rounded-xl"
                       />
                     </div>
                   );
                 }
 
-                // 4. Fallback: Image Preview with Demo launcher
+                // 3. Fallback: Image Preview
                 if (targetUrl) {
                   return (
                     <div className="w-full flex flex-col items-center gap-3">
@@ -16169,21 +16494,6 @@ export default function App() {
                           alt={previewMedia.title || "Preview"}
                           className="max-h-[55vh] w-auto max-w-full rounded-lg object-contain"
                         />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            window.open(
-                              "https://t.me/Premjodvip",
-                              "_blank",
-                            )
-                          }
-                          className="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer"
-                        >
-                          <Send size={13} />
-                          <span>Watch More Videos on Telegram</span>
-                        </button>
                       </div>
                     </div>
                   );

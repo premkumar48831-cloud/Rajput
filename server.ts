@@ -19,7 +19,91 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '500mb' }));
+app.use(express.urlencoded({ limit: '500mb', extended: true }));
+
+// Ensure upload directory exists and is statically served
+const UPLOAD_DIR = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(UPLOAD_DIR)) {
+  try {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  } catch (e) {
+    console.error("Failed to create uploads directory:", e);
+  }
+}
+app.use("/uploads", express.static(UPLOAD_DIR));
+
+// 1. Raw Binary Upload (Supports huge videos of any size with minimal memory)
+app.post("/api/upload-media-raw", express.raw({ type: "*/*", limit: "500mb" }), (req, res) => {
+  try {
+    const rawExt = (req.query.ext as string) || "mp4";
+    const cleanExt = rawExt.startsWith(".") ? rawExt : `.${rawExt}`;
+    const uniqueName = `video_${Date.now()}_${crypto.randomBytes(6).toString("hex")}${cleanExt}`;
+    const filePath = path.join(UPLOAD_DIR, uniqueName);
+    fs.writeFileSync(filePath, req.body);
+    const publicUrl = `/uploads/${uniqueName}`;
+    console.log(`[Upload Raw] Saved ${uniqueName} (${(req.body.length / (1024 * 1024)).toFixed(2)} MB)`);
+    return res.json({
+      status: true,
+      url: publicUrl,
+      size: req.body.length,
+      filename: uniqueName,
+    });
+  } catch (err: any) {
+    console.error("Upload raw error:", err);
+    return res.status(500).json({ status: false, error: err?.message || "Upload failed" });
+  }
+});
+
+// 2. Base64/Multipart Upload Fallback
+app.post("/api/upload-media", (req, res) => {
+  try {
+    const { filename, fileData } = req.body || {};
+    if (!fileData) {
+      return res.status(400).json({ status: false, error: "No file data provided" });
+    }
+    let buffer: Buffer;
+    let ext = ".mp4";
+    if (typeof fileData === "string" && fileData.startsWith("data:")) {
+      const matches = fileData.match(/^data:([^;]+);base64,(.+)$/);
+      if (matches) {
+        const mime = matches[1].toLowerCase();
+        if (mime.includes("webm")) ext = ".webm";
+        else if (mime.includes("mp4")) ext = ".mp4";
+        else if (mime.includes("quicktime") || mime.includes("mov")) ext = ".mov";
+        else if (mime.includes("mkv")) ext = ".mkv";
+        else if (mime.includes("png")) ext = ".png";
+        else if (mime.includes("jpeg") || mime.includes("jpg")) ext = ".jpg";
+        buffer = Buffer.from(matches[2], "base64");
+      } else {
+        buffer = Buffer.from(fileData, "base64");
+      }
+    } else {
+      buffer = Buffer.from(fileData, "base64");
+    }
+
+    if (filename && filename.includes(".")) {
+      const dotExt = path.extname(filename).toLowerCase();
+      if (dotExt) ext = dotExt;
+    }
+
+    const uniqueName = `video_${Date.now()}_${crypto.randomBytes(6).toString("hex")}${ext}`;
+    const filePath = path.join(UPLOAD_DIR, uniqueName);
+    fs.writeFileSync(filePath, buffer);
+    const publicUrl = `/uploads/${uniqueName}`;
+    console.log(`[Upload Base64] Saved ${uniqueName} (${(buffer.length / (1024 * 1024)).toFixed(2)} MB)`);
+
+    return res.json({
+      status: true,
+      url: publicUrl,
+      size: buffer.length,
+      filename: uniqueName,
+    });
+  } catch (err: any) {
+    console.error("Upload error:", err);
+    return res.status(500).json({ status: false, error: err?.message || "Upload failed" });
+  }
+});
 
 // Health check endpoint for Cloud Run
 app.get("/api/health", (req, res) => {
@@ -63,6 +147,17 @@ app.get("/api/razorpay/config", (req, res) => {
 // 2. Create Razorpay Order
 app.post("/api/razorpay/create-order", async (req, res) => {
   try {
+    // Check if Auto Pay is locked / blocked
+    const paySettings = readPaymentSettings() || {};
+    const servState = readState() || {};
+    const isLocked = paySettings.isAutoUpiLocked ?? servState.isAutoUpiLocked ?? true;
+    if (isLocked) {
+      return res.status(403).json({
+        status: false,
+        error: "🔒 Auto Pay abhi temporary LOCKED / BLOCKED hai. Isase koi payment nahi ho sakti. Kripya Manual UPI ka upyog karein."
+      });
+    }
+
     const { amount, currency = "INR", receipt, notes = {}, key_id, key_secret } = req.body || {};
     const numericAmount = Number(amount);
 
@@ -192,6 +287,7 @@ app.post("/api/razorpay/verify-payment", async (req, res) => {
 });
 
 const DATA_FILE = path.join(process.cwd(), 'server_state.json');
+const PAYMENT_SETTINGS_FILE = path.join(process.cwd(), 'payment_settings.json');
 
 // Helper to read server state
 function readState() {
@@ -213,6 +309,30 @@ function writeState(state: any) {
     return true;
   } catch (e) {
     console.error('Error writing server state:', e);
+    return false;
+  }
+}
+
+// Helper to read persistent payment settings
+function readPaymentSettings() {
+  try {
+    if (fs.existsSync(PAYMENT_SETTINGS_FILE)) {
+      const data = fs.readFileSync(PAYMENT_SETTINGS_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.error('Error reading payment settings:', e);
+  }
+  return null;
+}
+
+// Helper to write persistent payment settings
+function writePaymentSettings(settings: any) {
+  try {
+    fs.writeFileSync(PAYMENT_SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
+    return true;
+  } catch (e) {
+    console.error('Error writing payment settings:', e);
     return false;
   }
 }
@@ -343,6 +463,79 @@ app.post("/api/state", (req, res) => {
   } else {
     res.status(500).json({ success: false, error: "Failed to save state" });
   }
+});
+
+// Dedicated Permanent Payment Settings Endpoints (QR Code & UPI ID)
+app.get("/api/payment-settings", (req, res) => {
+  const settings = readPaymentSettings();
+  if (settings && (settings.qrImage || settings.upiId)) {
+    return res.json({ status: true, data: settings });
+  }
+  const state = readState();
+  if (state && state.paymentSettings) {
+    return res.json({ status: true, data: state.paymentSettings });
+  }
+  return res.json({ status: false, data: null });
+});
+
+app.post("/api/payment-settings", (req, res) => {
+  try {
+    const newSettings = req.body;
+    if (!newSettings || typeof newSettings !== "object") {
+      return res.status(400).json({ status: false, error: "Invalid payload" });
+    }
+    const current = readPaymentSettings() || {};
+    const merged = { ...current, ...newSettings };
+    writePaymentSettings(merged);
+
+    // Also update server_state.json if available
+    const state = readState() || {};
+    state.paymentSettings = merged;
+    writeState(state);
+
+    console.log("[PaymentSettings] Successfully saved to disk permanently:", {
+      upiId: merged.upiId,
+      hasQr: !!merged.qrImage,
+      qrLength: merged.qrImage ? merged.qrImage.length : 0
+    });
+
+    return res.json({
+      status: true,
+      message: "Payment settings saved permanently",
+      data: merged
+    });
+  } catch (err: any) {
+    console.error("[PaymentSettings] Error saving settings:", err);
+    return res.status(500).json({ status: false, error: err?.message || "Failed to save" });
+  }
+});
+
+// Auto Pay Lock Status Endpoints
+app.get("/api/auto-pay-status", (req, res) => {
+  const paySettings = readPaymentSettings() || {};
+  const servState = readState() || {};
+  const isLocked = paySettings.isAutoUpiLocked ?? servState.isAutoUpiLocked ?? true;
+  return res.json({ status: true, isLocked });
+});
+
+app.post("/api/auto-pay-status", (req, res) => {
+  const { isLocked } = req.body || {};
+  const val = isLocked !== undefined ? Boolean(isLocked) : true;
+  
+  const paySettings = readPaymentSettings() || {};
+  paySettings.isAutoUpiLocked = val;
+  writePaymentSettings(paySettings);
+
+  const servState = readState() || {};
+  servState.isAutoUpiLocked = val;
+  writeState(servState);
+
+  console.log(`[AutoPay] Lock status updated: isLocked = ${val}`);
+  return res.json({ 
+    status: true, 
+    isLocked: val, 
+    message: val ? "Auto Pay is now LOCKED" : "Auto Pay is now UNLOCKED" 
+  });
 });
 
 // ============================================
