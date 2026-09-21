@@ -1,6 +1,22 @@
 {
   "paymentSettings": {
-    "upiId": "testadmin@upi",
-    "qrImage": "data:image/png;base64,test"
+    "qrImage": "https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg",
+    "upiId": "7496055058@nyes",
+    "cashfreeAppId": "",
+    "cashfreeSecretKey": "",
+    "cashfreeCode": "",
+    "razorpayAppId": "rzp_test_TbWSIPFPtuOiJb",
+    "razorpaySecretKey": "ia1CT66DiuzfVLnsM5pxu3Y7",
+    "razorpayCode": "",
+    "activeGateway": "none"
+  },
+  "bgSettings": {
+    "enabled": true,
+    "customImage": "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop",
+    "isVideo": false,
+    "enableFlowers": true,
+    "flowerSpeed": 1,
+    "darknessOverlay": 0,
+    "themeHue": 0
   }
 }

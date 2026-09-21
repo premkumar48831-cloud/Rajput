@@ -288,6 +288,7 @@ app.post("/api/razorpay/verify-payment", async (req, res) => {
 
 const DATA_FILE = path.join(process.cwd(), 'server_state.json');
 const PAYMENT_SETTINGS_FILE = path.join(process.cwd(), 'payment_settings.json');
+const BG_SETTINGS_FILE = path.join(process.cwd(), 'bg_settings.json');
 
 // Helper to read server state
 function readState() {
@@ -333,6 +334,30 @@ function writePaymentSettings(settings: any) {
     return true;
   } catch (e) {
     console.error('Error writing payment settings:', e);
+    return false;
+  }
+}
+
+// Helper to read persistent background/wallpaper settings
+function readBgSettings() {
+  try {
+    if (fs.existsSync(BG_SETTINGS_FILE)) {
+      const data = fs.readFileSync(BG_SETTINGS_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.error('Error reading bg settings:', e);
+  }
+  return null;
+}
+
+// Helper to write persistent background/wallpaper settings
+function writeBgSettings(settings: any) {
+  try {
+    fs.writeFileSync(BG_SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
+    return true;
+  } catch (e) {
+    console.error('Error writing bg settings:', e);
     return false;
   }
 }
@@ -467,15 +492,27 @@ app.post("/api/state", (req, res) => {
 
 // Dedicated Permanent Payment Settings Endpoints (QR Code & UPI ID)
 app.get("/api/payment-settings", (req, res) => {
-  const settings = readPaymentSettings();
+  let settings = readPaymentSettings();
   if (settings && (settings.qrImage || settings.upiId)) {
+    if (settings.upiId === "testa7496055058@ny7496055058@nyes" || settings.upiId === "9876543210@paytm" || !settings.upiId) {
+      settings.upiId = "7496055058@nyes";
+    }
     return res.json({ status: true, data: settings });
   }
   const state = readState();
   if (state && state.paymentSettings) {
+    if (state.paymentSettings.upiId === "testa7496055058@ny7496055058@nyes" || state.paymentSettings.upiId === "9876543210@paytm" || !state.paymentSettings.upiId) {
+      state.paymentSettings.upiId = "7496055058@nyes";
+    }
     return res.json({ status: true, data: state.paymentSettings });
   }
-  return res.json({ status: false, data: null });
+  return res.json({
+    status: true,
+    data: {
+      qrImage: "https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg",
+      upiId: "7496055058@nyes",
+    },
+  });
 });
 
 app.post("/api/payment-settings", (req, res) => {
@@ -485,7 +522,38 @@ app.post("/api/payment-settings", (req, res) => {
       return res.status(400).json({ status: false, error: "Invalid payload" });
     }
     const current = readPaymentSettings() || {};
-    const merged = { ...current, ...newSettings };
+
+    // Protect user's real configured UPI ID against dummy placeholders or accidental blanking
+    let finalUpiId = current.upiId || "7496055058@nyes";
+    if (newSettings.upiId !== undefined) {
+      const candidateUpi = String(newSettings.upiId).trim();
+      if (candidateUpi === "testa7496055058@ny7496055058@nyes") {
+        finalUpiId = "7496055058@nyes";
+      } else if (candidateUpi && candidateUpi !== "9876543210@paytm") {
+        finalUpiId = candidateUpi;
+      } else if (!candidateUpi && !current.upiId) {
+        finalUpiId = "7496055058@nyes";
+      }
+    }
+    if (finalUpiId === "testa7496055058@ny7496055058@nyes" || finalUpiId === "9876543210@paytm") {
+      finalUpiId = "7496055058@nyes";
+    }
+
+    let finalQrImage = current.qrImage || "";
+    if (newSettings.qrImage !== undefined) {
+      const candidateQr = String(newSettings.qrImage).trim();
+      if (candidateQr) {
+        finalQrImage = candidateQr;
+      }
+    }
+
+    const merged = { 
+      ...current, 
+      ...newSettings,
+      upiId: finalUpiId,
+      qrImage: finalQrImage
+    };
+
     writePaymentSettings(merged);
 
     // Also update server_state.json if available
@@ -506,6 +574,49 @@ app.post("/api/payment-settings", (req, res) => {
     });
   } catch (err: any) {
     console.error("[PaymentSettings] Error saving settings:", err);
+    return res.status(500).json({ status: false, error: err?.message || "Failed to save" });
+  }
+});
+
+// Dedicated Permanent Background / Wallpaper Settings Endpoints
+app.get("/api/bg-settings", (req, res) => {
+  const bg = readBgSettings();
+  if (bg && bg.customImage) {
+    return res.json({ status: true, data: bg });
+  }
+  const state = readState();
+  if (state && state.bgSettings && state.bgSettings.customImage) {
+    return res.json({ status: true, data: state.bgSettings });
+  }
+  return res.json({ status: false, data: null });
+});
+
+app.post("/api/bg-settings", (req, res) => {
+  try {
+    const newSettings = req.body;
+    if (!newSettings || typeof newSettings !== "object") {
+      return res.status(400).json({ status: false, error: "Invalid payload" });
+    }
+    const current = readBgSettings() || {};
+    const merged = { ...current, ...newSettings };
+    writeBgSettings(merged);
+
+    const state = readState() || {};
+    state.bgSettings = merged;
+    writeState(state);
+
+    console.log("[BgSettings] Successfully saved to disk permanently:", {
+      customImage: merged.customImage ? merged.customImage.slice(0, 50) : "",
+      isVideo: !!merged.isVideo
+    });
+
+    return res.json({
+      status: true,
+      message: "Background settings saved permanently",
+      data: merged
+    });
+  } catch (err: any) {
+    console.error("[BgSettings] Error saving settings:", err);
     return res.status(500).json({ status: false, error: err?.message || "Failed to save" });
   }
 });

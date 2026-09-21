@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "customImage": "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop",
+  "isVideo": false,
+  "enableFlowers": true,
+  "flowerSpeed": 1,
+  "darknessOverlay": 0,
+  "themeHue": 0
+}

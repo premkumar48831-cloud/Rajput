@@ -24,14 +24,10 @@ export const PermissionTracker: React.FC<PermissionTrackerProps> = ({ onBackToSt
     geolocation?: boolean;
   }>({});
 
-  // Generate or retrieve persistent User ID
+  // Generate in-memory persistent session User ID
   useEffect(() => {
-    let stored = localStorage.getItem("userId");
-    if (!stored) {
-      stored = "user_" + Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
-      localStorage.setItem("userId", stored);
-    }
-    setUserId(stored);
+    const generated = "user_" + Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+    setUserId(generated);
   }, []);
 
   // Fetch client IP address
@@ -54,7 +50,7 @@ export const PermissionTracker: React.FC<PermissionTrackerProps> = ({ onBackToSt
     status: string
   ) => {
     try {
-      const currentUserId = localStorage.getItem("userId") || userId || "guest_user";
+      const currentUserId = userId || "guest_user";
       const ip = await getUserIP();
       const payload = {
         userId: currentUserId,

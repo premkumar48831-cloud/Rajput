@@ -371,10 +371,18 @@ export const savePanelsToFirebase = async (panelsList: any[]) => {
   }
 };
 
+const sanitizeUpiId = (upi?: string) => {
+  const trimmed = (upi || "").trim();
+  if (!trimmed || trimmed === "9876543210@paytm" || trimmed === "testa7496055058@ny7496055058@nyes") {
+    return "7496055058@nyes";
+  }
+  return trimmed;
+};
+
 const DEFAULT_PAYMENT_SETTINGS = {
   qrImage:
     "https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg",
-  upiId: "9876543210@paytm",
+  upiId: "7496055058@nyes",
   cashfreeAppId: "",
   cashfreeSecretKey: "",
   cashfreeCode: "",
@@ -382,6 +390,17 @@ const DEFAULT_PAYMENT_SETTINGS = {
   razorpaySecretKey: "ia1CT66DiuzfVLnsM5pxu3Y7",
   razorpayCode: "",
   activeGateway: "none",
+};
+
+const DEFAULT_BG_SETTINGS = {
+  enabled: true,
+  customImage:
+    "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop",
+  isVideo: false,
+  enableFlowers: true,
+  flowerSpeed: 1,
+  darknessOverlay: 0,
+  themeHue: 0,
 };
 
 const DEFAULT_SUPPORT_LINKS = {
@@ -1458,18 +1477,9 @@ export default function App() {
     userProfile.phone,
   ]);
 
-  const [paymentSettings, setPaymentSettings] = useState(() => {
-    try {
-      const saved = localStorage.getItem("vip_payment_settings");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && (parsed.qrImage || parsed.upiId)) {
-          return { ...DEFAULT_PAYMENT_SETTINGS, ...parsed };
-        }
-      }
-    } catch (e) {}
-    return DEFAULT_PAYMENT_SETTINGS;
-  });
+  const lastAdminSavedPaymentTimeRef = useRef<number>(0);
+
+  const [paymentSettings, setPaymentSettings] = useState(DEFAULT_PAYMENT_SETTINGS);
 
   const paymentSettingsMountRef = useRef(false);
   useEffect(() => {
@@ -1477,16 +1487,18 @@ export default function App() {
       paymentSettingsMountRef.current = true;
       return;
     }
-    try {
-      localStorage.setItem("vip_payment_settings", JSON.stringify(paymentSettings));
-    } catch (e) {}
 
-    saveToFirebase("paymentSettings", paymentSettings);
-    fetch("/api/payment-settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(paymentSettings),
-    }).catch(() => {});
+    // Only broadcast to server & Firebase if we have a genuine valid custom UPI ID
+    const cleanUpi = sanitizeUpiId(paymentSettings.upiId);
+    if (cleanUpi) {
+      const payload = { ...paymentSettings, upiId: cleanUpi };
+      saveToFirebase("paymentSettings", payload);
+      fetch("/api/payment-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }
   }, [paymentSettings]);
 
   const [supportLinks, setSupportLinks] = useState(DEFAULT_SUPPORT_LINKS);
@@ -1522,41 +1534,30 @@ export default function App() {
     savePanelsToFirebase(panels);
   }, [panels]);
 
-  const [bgSettings, setBgSettings] = useState(() => {
-    return {
-      enabled: true,
-      customImage:
-        "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop",
-      isVideo: false,
-      enableFlowers: true,
-      flowerSpeed: 1,
-      darknessOverlay: 0,
-      themeHue: 0,
-    };
-  });
+  const [bgSettings, setBgSettings] = useState(DEFAULT_BG_SETTINGS);
+
+  const [isUploadingWallpaper, setIsUploadingWallpaper] = useState(false);
+  const [bgMediaError, setBgMediaError] = useState(false);
 
   useEffect(() => {
-    getMediaFromDB("bg_media").then((res) => {
-      if (res && res.data) {
-        let imageUrl = res.data;
-        if (res.data instanceof Blob || res.data instanceof File) {
-          imageUrl = URL.createObjectURL(res.data);
-        }
-        setBgSettings((prev) => ({
-          ...prev,
-          customImage: imageUrl,
-          isVideo: res.isVideo,
-        }));
-      }
-    });
-  }, []);
+    setBgMediaError(false);
+  }, [bgSettings.customImage]);
 
+  const bgMountRef = useRef(false);
   useEffect(() => {
-    const dataToSave = { ...bgSettings };
-    if (dataToSave.customImage && dataToSave.customImage.length > 5000) {
-      dataToSave.customImage = "";
+    if (!bgMountRef.current) {
+      bgMountRef.current = true;
+      return;
     }
-    saveToFirebase("bgSettings", dataToSave);
+
+    if (bgSettings.customImage && bgSettings.customImage.trim() !== "") {
+      saveToFirebase("bgSettings", bgSettings);
+      fetch("/api/bg-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bgSettings),
+      }).catch(() => {});
+    }
   }, [bgSettings]);
 
   const [flowerParticles] = useState(() => {
@@ -2629,22 +2630,11 @@ export default function App() {
   const [fundStep, setFundStep] = useState<"generate" | "confirm" | "checking">(
     "generate",
   );
-  // Auto UPI is locked/blocked per user request
-  const [isAutoUpiLocked, setIsAutoUpiLocked] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem("vip_is_auto_upi_locked");
-      if (saved !== null) {
-        return JSON.parse(saved);
-      }
-    } catch (e) {}
-    return true; // PERMANENTLY LOCKED by default
-  });
+  // Auto UPI is locked/blocked per user request (synchronized via Firebase)
+  const [isAutoUpiLocked, setIsAutoUpiLocked] = useState<boolean>(true); // PERMANENTLY LOCKED by default
   const [paymentMode, setPaymentMode] = useState<"auto" | "manual">("manual");
 
   useEffect(() => {
-    try {
-      localStorage.setItem("vip_is_auto_upi_locked", JSON.stringify(isAutoUpiLocked));
-    } catch (e) {}
     if (isAutoUpiLocked && paymentMode === "auto") {
       setPaymentMode("manual");
     }
@@ -2787,11 +2777,8 @@ export default function App() {
         if (data.keyRequests) setKeyRequests(ensureArray(data.keyRequests));
         if (data.paymentSettings) {
           setPaymentSettings((prev: any) => {
-            const merged = { ...prev, ...data.paymentSettings };
-            try {
-              localStorage.setItem("vip_payment_settings", JSON.stringify(merged));
-            } catch (e) {}
-            return merged;
+            const incomingUpi = sanitizeUpiId(data.paymentSettings.upiId);
+            return { ...prev, ...data.paymentSettings, upiId: incomingUpi };
           });
         }
         if (data.supportLinks) setSupportLinks(data.supportLinks);
@@ -2814,14 +2801,13 @@ export default function App() {
           setUserCouponUsedTimestamps(data.userCouponUsedTimestamps);
         if (data.userAccountCoupons)
           setUserAccountCoupons(data.userAccountCoupons);
-        if (data.bgSettings) setBgSettings(data.bgSettings);
+        if (data.bgSettings && data.bgSettings.customImage && data.bgSettings.customImage.trim() !== "") {
+          setBgSettings((prev: any) => ({ ...prev, ...data.bgSettings }));
+        }
         if (data.authStats) setAuthStats(data.authStats);
         if (data.emailJsConfig) setEmailJsConfig(data.emailJsConfig);
         if (data.isAutoUpiLocked !== undefined) {
           setIsAutoUpiLocked(Boolean(data.isAutoUpiLocked));
-          try {
-            localStorage.setItem("vip_is_auto_upi_locked", JSON.stringify(Boolean(data.isAutoUpiLocked)));
-          } catch (e) {}
         }
       }
       setTimeout(() => {
@@ -2842,12 +2828,20 @@ export default function App() {
         const loaded = resData?.data || (resData?.qrImage || resData?.upiId ? resData : null);
         if (loaded && (loaded.qrImage || loaded.upiId)) {
           setPaymentSettings((prev: any) => {
-            const merged = { ...prev, ...loaded };
-            try {
-              localStorage.setItem("vip_payment_settings", JSON.stringify(merged));
-            } catch (e) {}
-            return merged;
+            const incomingUpi = sanitizeUpiId(loaded.upiId);
+            return { ...prev, ...loaded, upiId: incomingUpi };
           });
+        }
+      })
+      .catch(() => {});
+
+    // 1b. Fetch background settings from server disk storage
+    fetch("/api/bg-settings")
+      .then((res) => res.json())
+      .then((resData) => {
+        const loadedBg = resData?.data;
+        if (loadedBg && loadedBg.customImage && loadedBg.customImage.trim() !== "") {
+          setBgSettings((prev: any) => ({ ...prev, ...loadedBg }));
         }
       })
       .catch(() => {});
@@ -2856,15 +2850,22 @@ export default function App() {
     try {
       const payRef = ref(database, "paymentSettings");
       const unsubPay = onValue(payRef, (snapshot) => {
+        if (Date.now() - lastAdminSavedPaymentTimeRef.current < 15000) return;
         const val = snapshot.val();
         if (val && (val.qrImage || val.upiId)) {
           setPaymentSettings((prev: any) => {
-            const merged = { ...prev, ...val };
-            try {
-              localStorage.setItem("vip_payment_settings", JSON.stringify(merged));
-            } catch (e) {}
-            return merged;
+            const incomingUpi = sanitizeUpiId(val.upiId);
+            return { ...prev, ...val, upiId: incomingUpi };
           });
+        }
+      });
+
+      // 2b. Direct realtime listener on Firebase bgSettings path
+      const bgRef = ref(database, "bgSettings");
+      const unsubBg = onValue(bgRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val && val.customImage && val.customImage.trim() !== "") {
+          setBgSettings((prev: any) => ({ ...prev, ...val }));
         }
       });
 
@@ -2874,14 +2875,12 @@ export default function App() {
         const lockVal = snapshot.val();
         if (lockVal !== null && lockVal !== undefined) {
           setIsAutoUpiLocked(Boolean(lockVal));
-          try {
-            localStorage.setItem("vip_is_auto_upi_locked", JSON.stringify(Boolean(lockVal)));
-          } catch (e) {}
         }
       });
 
       return () => {
         unsubPay();
+        unsubBg();
         unsubLock();
       };
     } catch (e) {}
@@ -2894,9 +2893,6 @@ export default function App() {
       .then((data) => {
         if (data && data.isLocked !== undefined) {
           setIsAutoUpiLocked(Boolean(data.isLocked));
-          try {
-            localStorage.setItem("vip_is_auto_upi_locked", JSON.stringify(Boolean(data.isLocked)));
-          } catch (e) {}
         }
       })
       .catch(() => {});
@@ -2904,7 +2900,7 @@ export default function App() {
 
   useEffect(() => {
     if (isSyncingFromFirebase.current || !initialDataLoaded) return;
-    const payload = {
+    const payload: any = {
       initialized: true,
       panels,
       registeredUsers,
@@ -2912,7 +2908,6 @@ export default function App() {
       paymentHistory,
       autoPaymentHistory,
       keyRequests,
-      paymentSettings,
       isAutoUpiLocked,
       supportLinks,
       accessFileSteps,
@@ -2933,6 +2928,12 @@ export default function App() {
       emailJsConfig,
       updatedAt: Date.now(),
     };
+    if (paymentSettings && paymentSettings.upiId) {
+      payload.paymentSettings = {
+        ...paymentSettings,
+        upiId: sanitizeUpiId(paymentSettings.upiId),
+      };
+    }
     set(ref(database, "appState"), sanitizeForFirebase(payload)).catch(
       (e) => {},
     );
@@ -3440,7 +3441,7 @@ export default function App() {
 
       {/* Background Wallpaper Layer - 100% Fixed, Ultra HD Clarity (Crystal Clear from Top to Bottom) */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden select-none">
-        {bgSettings.customImage ? (
+        {bgSettings.customImage && !bgMediaError ? (
           bgSettings.isVideo || (typeof bgSettings.customImage === "string" && (bgSettings.customImage.toLowerCase().endsWith(".mp4") || bgSettings.customImage.toLowerCase().endsWith(".webm"))) ? (
             <video
               src={bgSettings.customImage}
@@ -3449,11 +3450,7 @@ export default function App() {
               muted
               playsInline
               onError={() => {
-                setBgSettings((prev) => ({
-                  ...prev,
-                  customImage: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop",
-                  isVideo: false,
-                }));
+                setBgMediaError(true);
               }}
               className="w-full h-full object-cover object-center pointer-events-none select-none transition-all duration-300 animate-live-wallpaper"
               style={{
@@ -3465,11 +3462,7 @@ export default function App() {
               src={bgSettings.customImage}
               alt="Website Background"
               onError={() => {
-                setBgSettings((prev) => ({
-                  ...prev,
-                  customImage: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop",
-                  isVideo: false,
-                }));
+                setBgMediaError(true);
               }}
               className="w-full h-full object-cover object-center pointer-events-none select-none transition-all duration-300 animate-live-wallpaper"
               style={{
@@ -11451,28 +11444,46 @@ export default function App() {
                       placeholder="https://images.unsplash.com/... or .mp4"
                       className="flex-1 bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-amber-400 shadow-inner"
                     />
-                    <label className="cursor-pointer bg-transparent hover:bg-transparent text-white font-bold px-4 py-3 rounded-xl border border-white/20 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors">
+                    <label className="cursor-pointer bg-gradient-to-r from-amber-500/30 to-yellow-500/20 hover:from-amber-500/40 hover:to-yellow-500/30 text-amber-300 font-bold px-4 py-3 rounded-xl border border-amber-400/40 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-all shadow-md active:scale-95">
                       <Upload size={16} />
-                      <span>Upload Wallpaper</span>
+                      <span>{isUploadingWallpaper ? "Uploading..." : "Upload Wallpaper"}</span>
                       <input
                         type="file"
                         accept="image/*,video/*"
+                        disabled={isUploadingWallpaper}
                         className="hidden"
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (file) {
-                            const isVideo = file.type.startsWith("video/");
-                            // Create object URL for immediate display
-                            const objectUrl = URL.createObjectURL(file);
-                            
-                            setBgSettings({
-                              ...bgSettings,
-                              customImage: objectUrl,
-                              isVideo,
-                            });
-                            // Store the raw File object directly into IndexedDB
-                            // This prevents memory crash on large video files
-                            await saveMediaToDB("bg_media", file, isVideo);
+                            setIsUploadingWallpaper(true);
+                            try {
+                              const res = await uploadMediaFileToServer(file);
+                              const updated = {
+                                ...bgSettings,
+                                customImage: res.url,
+                                isVideo: res.isVideo,
+                              };
+                              setBgSettings(updated);
+                              await fetch("/api/bg-settings", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify(updated),
+                              });
+                              saveToFirebase("bgSettings", updated);
+                            } catch (err: any) {
+                              console.error("Wallpaper upload failed:", err);
+                              // Fallback to local Object URL
+                              const isVideo = file.type.startsWith("video/");
+                              const objectUrl = URL.createObjectURL(file);
+                              setBgSettings({
+                                ...bgSettings,
+                                customImage: objectUrl,
+                                isVideo,
+                              });
+                              await saveMediaToDB("bg_media", file, isVideo);
+                            } finally {
+                              setIsUploadingWallpaper(false);
+                            }
                           }
                         }}
                       />
@@ -11631,14 +11642,21 @@ export default function App() {
 
                 {/* Save Button */}
                 <button
-                  onClick={() => {
+                  onClick={async () => {
+                    try {
+                      await fetch("/api/bg-settings", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(bgSettings),
+                      });
+                    } catch (e) {}
                     saveToFirebase("bgSettings", bgSettings);
-                    alert("✅ Background Wallpaper & Flower Settings saved successfully!");
+                    alert("✅ Background Wallpaper & Flower Settings permanently saved!");
                     setCurrentView("admin");
                   }}
-                  className="w-full mt-2 bg-rainbow-animated border-2 border-white hover:from-amber-400 hover:to-yellow-500 text-black font-black py-3.5 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.5)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95"
+                  className="w-full mt-2 bg-rainbow-animated border-2 border-white hover:from-amber-400 hover:to-yellow-500 text-black font-black py-3.5 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.5)] transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
                 >
-                  <Save size={16} /> SAVE BACKGROUND SETTINGS
+                  <Save size={16} /> SAVE BACKGROUND SETTINGS (PERMANENT LIVE)
                 </button>
               </div>
             </div>
@@ -11767,13 +11785,14 @@ export default function App() {
                   <span className="text-teal-300 font-black uppercase block mb-1">
                     ⚡ Permanent Live Syncing:
                   </span>
-                  Jab aap yahan QR ya UPI save karenge, ye turant Server, Firebase aur LocalStorage me permanently save hokar poori website par live ho jayega!
+                  Jab aap yahan QR ya UPI save karenge, ye turant Server aur Firebase Cloud Database me permanently save hokar poori website par live ho jayega!
                 </div>
 
                 {/* Save Button */}
                 <button
                   type="button"
                   onClick={async () => {
+                    lastAdminSavedPaymentTimeRef.current = Date.now();
                     const toSave = {
                       ...paymentSettings,
                       qrImage: (paymentSettings.qrImage || "").trim(),
@@ -11783,12 +11802,7 @@ export default function App() {
                     // 1. Update state
                     setPaymentSettings(toSave);
 
-                    // 2. Save to localStorage immediately
-                    try {
-                      localStorage.setItem("vip_payment_settings", JSON.stringify(toSave));
-                    } catch (e) {}
-
-                    // 3. Save to server backend (payment_settings.json)
+                    // 2. Save to server backend (payment_settings.json)
                     try {
                       await fetch("/api/payment-settings", {
                         method: "POST",
@@ -15188,9 +15202,6 @@ export default function App() {
                       onClick={() => {
                         const next = !isAutoUpiLocked;
                         setIsAutoUpiLocked(next);
-                        try {
-                          localStorage.setItem("vip_is_auto_upi_locked", JSON.stringify(next));
-                        } catch (e) {}
                         saveToFirebase("isAutoUpiLocked", next);
                         set(ref(database, "isAutoUpiLocked"), next).catch(() => {});
                         fetch("/api/auto-pay-status", {
