@@ -379,6 +379,19 @@ const sanitizeUpiId = (upi?: string) => {
   return trimmed;
 };
 
+const shallowEqual = (objA: any, objB: any): boolean => {
+  if (objA === objB) return true;
+  if (!objA || !objB || typeof objA !== "object" || typeof objB !== "object") return false;
+  const keysA = Object.keys(objA);
+  const keysB = Object.keys(objB);
+  if (keysA.length !== keysB.length) return false;
+  for (let i = 0; i < keysA.length; i++) {
+    const key = keysA[i];
+    if (objA[key] !== objB[key]) return false;
+  }
+  return true;
+};
+
 const DEFAULT_PAYMENT_SETTINGS = {
   qrImage:
     "https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg",
@@ -1478,6 +1491,16 @@ export default function App() {
   ]);
 
   const lastAdminSavedPaymentTimeRef = useRef<number>(0);
+  const isSyncingFromFirebase = useRef(true);
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+  const lastSavedPaymentRef = useRef<string>("");
+  const lastSavedBgRef = useRef<string>("");
+  const lastSavedPanelsRef = useRef<string>("");
+  const lastSavedSupportRef = useRef<string>("");
+  const lastSavedStepsRef = useRef<string>("");
+  const lastSavedBannerRef = useRef<string>("");
+  const lastSavedAppStateHashRef = useRef<string>("");
+  const appStateDebounceTimer = useRef<any>(null);
 
   const [paymentSettings, setPaymentSettings] = useState(DEFAULT_PAYMENT_SETTINGS);
 
@@ -1485,8 +1508,13 @@ export default function App() {
   useEffect(() => {
     if (!paymentSettingsMountRef.current) {
       paymentSettingsMountRef.current = true;
+      lastSavedPaymentRef.current = JSON.stringify(paymentSettings);
       return;
     }
+    if (isSyncingFromFirebase.current || !initialDataLoaded) return;
+    const currentStr = JSON.stringify(paymentSettings);
+    if (currentStr === lastSavedPaymentRef.current) return;
+    lastSavedPaymentRef.current = currentStr;
 
     // Only broadcast to server & Firebase if we have a genuine valid custom UPI ID
     const cleanUpi = sanitizeUpiId(paymentSettings.upiId);
@@ -1499,21 +1527,39 @@ export default function App() {
         body: JSON.stringify(payload),
       }).catch(() => {});
     }
-  }, [paymentSettings]);
+  }, [paymentSettings, initialDataLoaded]);
 
   const [supportLinks, setSupportLinks] = useState(DEFAULT_SUPPORT_LINKS);
-
+  const supportMountRef = useRef(false);
   useEffect(() => {
+    if (!supportMountRef.current) {
+      supportMountRef.current = true;
+      lastSavedSupportRef.current = JSON.stringify(supportLinks);
+      return;
+    }
+    if (isSyncingFromFirebase.current || !initialDataLoaded) return;
+    const currentStr = JSON.stringify(supportLinks);
+    if (currentStr === lastSavedSupportRef.current) return;
+    lastSavedSupportRef.current = currentStr;
     saveToFirebase("supportLinks", supportLinks);
-  }, [supportLinks]);
+  }, [supportLinks, initialDataLoaded]);
 
   const [accessFileSteps, setAccessFileSteps] = useState(
     DEFAULT_ACCESS_FILE_STEPS,
   );
-
+  const stepsMountRef = useRef(false);
   useEffect(() => {
+    if (!stepsMountRef.current) {
+      stepsMountRef.current = true;
+      lastSavedStepsRef.current = JSON.stringify(accessFileSteps);
+      return;
+    }
+    if (isSyncingFromFirebase.current || !initialDataLoaded) return;
+    const currentStr = JSON.stringify(accessFileSteps);
+    if (currentStr === lastSavedStepsRef.current) return;
+    lastSavedStepsRef.current = currentStr;
     saveToFirebase("accessFileSteps", accessFileSteps);
-  }, [accessFileSteps]);
+  }, [accessFileSteps, initialDataLoaded]);
 
   const [showAccessFilesModal, setShowAccessFilesModal] = useState(false);
   const [activePanelFileUrl, setActivePanelFileUrl] = useState("");
@@ -1521,18 +1567,36 @@ export default function App() {
   const [bannerSettings, setBannerSettings] = useState(
     DEFAULT_BANNER_SETTINGS,
   );
-
+  const bannerMountRef = useRef(false);
   useEffect(() => {
+    if (!bannerMountRef.current) {
+      bannerMountRef.current = true;
+      lastSavedBannerRef.current = JSON.stringify(bannerSettings);
+      return;
+    }
+    if (isSyncingFromFirebase.current || !initialDataLoaded) return;
+    const currentStr = JSON.stringify(bannerSettings);
+    if (currentStr === lastSavedBannerRef.current) return;
+    lastSavedBannerRef.current = currentStr;
     saveToFirebase("bannerSettings", bannerSettings);
-  }, [bannerSettings]);
+  }, [bannerSettings, initialDataLoaded]);
 
   const [dismissedNoticeModal, setDismissedNoticeModal] = useState(false);
 
   const [panels, setPanels] = useState<any[]>(DEFAULT_STORE_PANELS);
-
+  const panelsMountRef = useRef(false);
   useEffect(() => {
+    if (!panelsMountRef.current) {
+      panelsMountRef.current = true;
+      lastSavedPanelsRef.current = JSON.stringify(panels);
+      return;
+    }
+    if (isSyncingFromFirebase.current || !initialDataLoaded) return;
+    const currentStr = JSON.stringify(panels);
+    if (currentStr === lastSavedPanelsRef.current) return;
+    lastSavedPanelsRef.current = currentStr;
     savePanelsToFirebase(panels);
-  }, [panels]);
+  }, [panels, initialDataLoaded]);
 
   const [bgSettings, setBgSettings] = useState(DEFAULT_BG_SETTINGS);
 
@@ -1547,8 +1611,13 @@ export default function App() {
   useEffect(() => {
     if (!bgMountRef.current) {
       bgMountRef.current = true;
+      lastSavedBgRef.current = JSON.stringify(bgSettings);
       return;
     }
+    if (isSyncingFromFirebase.current || !initialDataLoaded) return;
+    const currentStr = JSON.stringify(bgSettings);
+    if (currentStr === lastSavedBgRef.current) return;
+    lastSavedBgRef.current = currentStr;
 
     if (bgSettings.customImage && bgSettings.customImage.trim() !== "") {
       saveToFirebase("bgSettings", bgSettings);
@@ -1558,7 +1627,7 @@ export default function App() {
         body: JSON.stringify(bgSettings),
       }).catch(() => {});
     }
-  }, [bgSettings]);
+  }, [bgSettings, initialDataLoaded]);
 
   const [flowerParticles] = useState(() => {
     const colors = [
@@ -2751,9 +2820,6 @@ export default function App() {
     };
   }, []);
 
-  const isSyncingFromFirebase = useRef(true);
-  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
-
   useEffect(() => {
     const stateRef = ref(database, "appState");
     const unsubscribe = onValue(stateRef, (snapshot) => {
@@ -2765,36 +2831,45 @@ export default function App() {
             ...p,
             features: parseFeaturesList(p.features, p.description),
           }));
-          setPanels(loadedPanels);
+          setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
         }
         if (data.registeredUsers)
-          setRegisteredUsers(ensureArray(data.registeredUsers));
-        if (data.bannedUsers) setBannedUsers(ensureArray(data.bannedUsers));
+          setRegisteredUsers((prev) => JSON.stringify(prev) === JSON.stringify(data.registeredUsers) ? prev : ensureArray(data.registeredUsers));
+        if (data.bannedUsers)
+          setBannedUsers((prev) => JSON.stringify(prev) === JSON.stringify(data.bannedUsers) ? prev : ensureArray(data.bannedUsers));
         if (data.paymentHistory)
-          setPaymentHistory(ensureArray(data.paymentHistory));
+          setPaymentHistory((prev) => JSON.stringify(prev) === JSON.stringify(data.paymentHistory) ? prev : ensureArray(data.paymentHistory));
         if (data.autoPaymentHistory)
-          setAutoPaymentHistory(ensureArray(data.autoPaymentHistory));
-        if (data.keyRequests) setKeyRequests(ensureArray(data.keyRequests));
+          setAutoPaymentHistory((prev) => JSON.stringify(prev) === JSON.stringify(data.autoPaymentHistory) ? prev : ensureArray(data.autoPaymentHistory));
+        if (data.keyRequests)
+          setKeyRequests((prev) => JSON.stringify(prev) === JSON.stringify(data.keyRequests) ? prev : ensureArray(data.keyRequests));
         if (data.paymentSettings) {
           setPaymentSettings((prev: any) => {
             const incomingUpi = sanitizeUpiId(data.paymentSettings.upiId);
-            return { ...prev, ...data.paymentSettings, upiId: incomingUpi };
+            const next = { ...prev, ...data.paymentSettings, upiId: incomingUpi };
+            return shallowEqual(prev, next) ? prev : next;
           });
         }
-        if (data.supportLinks) setSupportLinks(data.supportLinks);
-        if (data.accessFileSteps) setAccessFileSteps(data.accessFileSteps);
-        if (data.bannerSettings) setBannerSettings(data.bannerSettings);
+        if (data.supportLinks)
+          setSupportLinks((prev: any) => shallowEqual(prev, data.supportLinks) ? prev : data.supportLinks);
+        if (data.accessFileSteps)
+          setAccessFileSteps((prev: any) => shallowEqual(prev, data.accessFileSteps) ? prev : data.accessFileSteps);
+        if (data.bannerSettings)
+          setBannerSettings((prev: any) => shallowEqual(prev, data.bannerSettings) ? prev : data.bannerSettings);
         if (data.approvedResellers)
-          setApprovedResellers(ensureArray(data.approvedResellers));
+          setApprovedResellers((prev) => JSON.stringify(prev) === JSON.stringify(data.approvedResellers) ? prev : ensureArray(data.approvedResellers));
         if (data.referWebsiteLink) setReferWebsiteLink(data.referWebsiteLink);
         if (data.referBonusAmount) setReferBonusAmount(data.referBonusAmount);
-        if (data.spinRewards) setSpinRewards(ensureArray(data.spinRewards));
-        if (data.spinRequests) setSpinRequests(ensureArray(data.spinRequests));
+        if (data.spinRewards)
+          setSpinRewards((prev) => JSON.stringify(prev) === JSON.stringify(data.spinRewards) ? prev : ensureArray(data.spinRewards));
+        if (data.spinRequests)
+          setSpinRequests((prev) => JSON.stringify(prev) === JSON.stringify(data.spinRequests) ? prev : ensureArray(data.spinRequests));
         if (data.referRequests)
-          setReferRequests(ensureArray(data.referRequests));
-        if (data.userWallets) setUserWallets(data.userWallets);
+          setReferRequests((prev) => JSON.stringify(prev) === JSON.stringify(data.referRequests) ? prev : ensureArray(data.referRequests));
+        if (data.userWallets)
+          setUserWallets((prev) => shallowEqual(prev, data.userWallets) ? prev : data.userWallets);
         if (data.userAccountProfiles)
-          setUserAccountProfiles(data.userAccountProfiles);
+          setUserAccountProfiles((prev) => shallowEqual(prev, data.userAccountProfiles) ? prev : data.userAccountProfiles);
         if (data.userSpinTimestamps)
           setUserSpinTimestamps(data.userSpinTimestamps);
         if (data.userCouponUsedTimestamps)
@@ -2802,7 +2877,10 @@ export default function App() {
         if (data.userAccountCoupons)
           setUserAccountCoupons(data.userAccountCoupons);
         if (data.bgSettings && data.bgSettings.customImage && data.bgSettings.customImage.trim() !== "") {
-          setBgSettings((prev: any) => ({ ...prev, ...data.bgSettings }));
+          setBgSettings((prev: any) => {
+            const next = { ...prev, ...data.bgSettings };
+            return shallowEqual(prev, next) ? prev : next;
+          });
         }
         if (data.authStats) setAuthStats(data.authStats);
         if (data.emailJsConfig) setEmailJsConfig(data.emailJsConfig);
@@ -2829,7 +2907,8 @@ export default function App() {
         if (loaded && (loaded.qrImage || loaded.upiId)) {
           setPaymentSettings((prev: any) => {
             const incomingUpi = sanitizeUpiId(loaded.upiId);
-            return { ...prev, ...loaded, upiId: incomingUpi };
+            const next = { ...prev, ...loaded, upiId: incomingUpi };
+            return shallowEqual(prev, next) ? prev : next;
           });
         }
       })
@@ -2841,7 +2920,10 @@ export default function App() {
       .then((resData) => {
         const loadedBg = resData?.data;
         if (loadedBg && loadedBg.customImage && loadedBg.customImage.trim() !== "") {
-          setBgSettings((prev: any) => ({ ...prev, ...loadedBg }));
+          setBgSettings((prev: any) => {
+            const next = { ...prev, ...loadedBg };
+            return shallowEqual(prev, next) ? prev : next;
+          });
         }
       })
       .catch(() => {});
@@ -2855,7 +2937,8 @@ export default function App() {
         if (val && (val.qrImage || val.upiId)) {
           setPaymentSettings((prev: any) => {
             const incomingUpi = sanitizeUpiId(val.upiId);
-            return { ...prev, ...val, upiId: incomingUpi };
+            const next = { ...prev, ...val, upiId: incomingUpi };
+            return shallowEqual(prev, next) ? prev : next;
           });
         }
       });
@@ -2865,7 +2948,10 @@ export default function App() {
       const unsubBg = onValue(bgRef, (snapshot) => {
         const val = snapshot.val();
         if (val && val.customImage && val.customImage.trim() !== "") {
-          setBgSettings((prev: any) => ({ ...prev, ...val }));
+          setBgSettings((prev: any) => {
+            const next = { ...prev, ...val };
+            return shallowEqual(prev, next) ? prev : next;
+          });
         }
       });
 
@@ -2900,43 +2986,63 @@ export default function App() {
 
   useEffect(() => {
     if (isSyncingFromFirebase.current || !initialDataLoaded) return;
-    const payload: any = {
-      initialized: true,
-      panels,
-      registeredUsers,
-      bannedUsers,
-      paymentHistory,
-      autoPaymentHistory,
-      keyRequests,
-      isAutoUpiLocked,
-      supportLinks,
-      accessFileSteps,
-      bannerSettings,
-      approvedResellers,
-      referWebsiteLink,
-      referBonusAmount,
-      spinRewards,
-      spinRequests,
-      referRequests,
-      userWallets,
-      userAccountProfiles,
-      userSpinTimestamps,
-      userCouponUsedTimestamps,
-      userAccountCoupons,
-      bgSettings,
-      authStats,
-      emailJsConfig,
-      updatedAt: Date.now(),
-    };
-    if (paymentSettings && paymentSettings.upiId) {
-      payload.paymentSettings = {
-        ...paymentSettings,
-        upiId: sanitizeUpiId(paymentSettings.upiId),
-      };
+
+    if (appStateDebounceTimer.current) {
+      clearTimeout(appStateDebounceTimer.current);
     }
-    set(ref(database, "appState"), sanitizeForFirebase(payload)).catch(
-      (e) => {},
-    );
+
+    appStateDebounceTimer.current = setTimeout(() => {
+      if (isSyncingFromFirebase.current || !initialDataLoaded) return;
+
+      const payload: any = {
+        initialized: true,
+        panels,
+        registeredUsers,
+        bannedUsers,
+        paymentHistory,
+        autoPaymentHistory,
+        keyRequests,
+        isAutoUpiLocked,
+        supportLinks,
+        accessFileSteps,
+        bannerSettings,
+        approvedResellers,
+        referWebsiteLink,
+        referBonusAmount,
+        spinRewards,
+        spinRequests,
+        referRequests,
+        userWallets,
+        userAccountProfiles,
+        userSpinTimestamps,
+        userCouponUsedTimestamps,
+        userAccountCoupons,
+        bgSettings,
+        authStats,
+        emailJsConfig,
+      };
+      if (paymentSettings && paymentSettings.upiId) {
+        payload.paymentSettings = {
+          ...paymentSettings,
+          upiId: sanitizeUpiId(paymentSettings.upiId),
+        };
+      }
+
+      const hash = JSON.stringify(payload);
+      if (hash === lastSavedAppStateHashRef.current) return;
+      lastSavedAppStateHashRef.current = hash;
+
+      payload.updatedAt = Date.now();
+      set(ref(database, "appState"), sanitizeForFirebase(payload)).catch(
+        (e) => {},
+      );
+    }, 800);
+
+    return () => {
+      if (appStateDebounceTimer.current) {
+        clearTimeout(appStateDebounceTimer.current);
+      }
+    };
   }, [
     panels,
     registeredUsers,
@@ -2963,6 +3069,7 @@ export default function App() {
     bgSettings,
     authStats,
     emailJsConfig,
+    initialDataLoaded,
   ]);
 
   const playTickSound = () => {
@@ -3440,10 +3547,22 @@ export default function App() {
       `}</style>
 
       {/* Background Wallpaper Layer - 100% Fixed, Ultra HD Clarity (Crystal Clear from Top to Bottom) */}
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden select-none">
-        {bgSettings.customImage && !bgMediaError ? (
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden select-none bg-[#080d1a]">
+        {/* Base Fallback Image Always Mounted Underneath - Prevents Any Black/White Screen Flash */}
+        <img
+          src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop"
+          alt="Default Base Background"
+          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none select-none animate-live-wallpaper"
+          style={{
+            filter: `contrast(1.08) brightness(100%)`,
+          }}
+        />
+
+        {/* Custom Wallpaper Layer - Crossfades in smoothly on top, never unmounts abruptly */}
+        {bgSettings.customImage && (
           bgSettings.isVideo || (typeof bgSettings.customImage === "string" && (bgSettings.customImage.toLowerCase().endsWith(".mp4") || bgSettings.customImage.toLowerCase().endsWith(".webm"))) ? (
             <video
+              key={bgSettings.customImage}
               src={bgSettings.customImage}
               autoPlay
               loop
@@ -3452,33 +3571,31 @@ export default function App() {
               onError={() => {
                 setBgMediaError(true);
               }}
-              className="w-full h-full object-cover object-center pointer-events-none select-none transition-all duration-300 animate-live-wallpaper"
+              onLoadedData={() => {
+                setBgMediaError(false);
+              }}
+              className={`absolute inset-0 w-full h-full object-cover object-center pointer-events-none select-none transition-opacity duration-700 animate-live-wallpaper ${bgMediaError ? "opacity-0" : "opacity-100"}`}
               style={{
                 filter: `contrast(1.08) brightness(100%)`,
               }}
             />
           ) : (
             <img
+              key={bgSettings.customImage}
               src={bgSettings.customImage}
               alt="Website Background"
               onError={() => {
                 setBgMediaError(true);
               }}
-              className="w-full h-full object-cover object-center pointer-events-none select-none transition-all duration-300 animate-live-wallpaper"
+              onLoad={() => {
+                setBgMediaError(false);
+              }}
+              className={`absolute inset-0 w-full h-full object-cover object-center pointer-events-none select-none transition-opacity duration-700 animate-live-wallpaper ${bgMediaError ? "opacity-0" : "opacity-100"}`}
               style={{
                 filter: `contrast(1.08) brightness(100%)`,
               }}
             />
           )
-        ) : (
-          <img
-            src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop"
-            alt="Default Background"
-            className="w-full h-full object-cover object-center pointer-events-none select-none animate-live-wallpaper"
-            style={{
-              filter: `contrast(1.08) brightness(100%)`,
-            }}
-          />
         )}
       </div>
 
