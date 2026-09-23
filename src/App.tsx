@@ -424,13 +424,21 @@ export const isLegacyDummyPanel = (p: any): boolean => {
   return false;
 };
 
-export const savePanelsToFirebase = async (panelsList: any[]) => {
+export const savePanelsToFirebase = async (panelsList: any[], allowEmpty: boolean = false) => {
   try {
     const validPanels = ensureArray(panelsList).filter((p) => !isLegacyDummyPanel(p));
+    if (validPanels.length === 0 && !allowEmpty) {
+      console.log("[Panels Guard] Ignored empty panels save request to prevent accidental deletion.");
+      return;
+    }
     const clean = sanitizeForFirebase(validPanels);
     await set(ref(database, "panels"), clean);
     await set(ref(database, "appState/panels"), clean);
-    fetch("/api/panels", {
+    try {
+      localStorage.setItem("vip_store_panels", JSON.stringify(validPanels));
+    } catch (_) {}
+    const query = allowEmpty ? "?forceEmpty=true" : "";
+    fetch(`/api/panels${query}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(validPanels),
@@ -1575,20 +1583,27 @@ export default function App() {
 
   const [dismissedNoticeModal, setDismissedNoticeModal] = useState(false);
 
-  const [panels, setPanels] = useState<any[]>(DEFAULT_STORE_PANELS);
-  const panelsMountRef = useRef(false);
+  const [panels, setPanels] = useState<any[]>(() => {
+    try {
+      const cached = localStorage.getItem("vip_store_panels");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.filter((p: any) => !isLegacyDummyPanel(p));
+        }
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  // Keep localStorage continuously updated whenever valid panels are present
   useEffect(() => {
-    if (!panelsMountRef.current) {
-      panelsMountRef.current = true;
-      lastSavedPanelsRef.current = JSON.stringify(panels);
-      return;
+    if (Array.isArray(panels) && panels.length > 0) {
+      try {
+        localStorage.setItem("vip_store_panels", JSON.stringify(panels));
+      } catch (_) {}
     }
-    if (isSyncingFromFirebase.current || !initialDataLoaded) return;
-    const currentStr = JSON.stringify(panels);
-    if (currentStr === lastSavedPanelsRef.current) return;
-    lastSavedPanelsRef.current = currentStr;
-    savePanelsToFirebase(panels);
-  }, [panels, initialDataLoaded]);
+  }, [panels]);
 
   const [bgSettings, setBgSettings] = useState(() => {
     try {
@@ -2864,9 +2879,12 @@ export default function App() {
               ...p,
               features: parseFeaturesList(p.features, p.description),
             }));
-          setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
-          if (hadLegacy) {
-            savePanelsToFirebase(loadedPanels);
+          if (loadedPanels.length > 0) {
+            setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
+            try { localStorage.setItem("vip_store_panels", JSON.stringify(loadedPanels)); } catch (_) {}
+            if (hadLegacy) {
+              savePanelsToFirebase(loadedPanels, false);
+            }
           }
         }
         if (data.registeredUsers)
@@ -2975,7 +2993,20 @@ export default function App() {
               ...p,
               features: parseFeaturesList(p.features, p.description),
             }));
-          setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
+          if (loadedPanels.length > 0) {
+            setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
+            try { localStorage.setItem("vip_store_panels", JSON.stringify(loadedPanels)); } catch (_) {}
+            // Sync to Firebase if needed
+            savePanelsToFirebase(loadedPanels, false);
+          } else {
+            // Disk returned empty array, check if client already has panels in state/cache to recover
+            setPanels((prev) => {
+              if (prev.length > 0) {
+                savePanelsToFirebase(prev, false);
+              }
+              return prev;
+            });
+          }
         }
       })
       .catch(() => {});
@@ -3020,9 +3051,12 @@ export default function App() {
               ...p,
               features: parseFeaturesList(p.features, p.description),
             }));
-          setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
-          if (hadLegacy) {
-            savePanelsToFirebase(loadedPanels);
+          if (loadedPanels.length > 0) {
+            setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
+            try { localStorage.setItem("vip_store_panels", JSON.stringify(loadedPanels)); } catch (_) {}
+            if (hadLegacy) {
+              savePanelsToFirebase(loadedPanels, false);
+            }
           }
         }
       });
@@ -3067,9 +3101,11 @@ export default function App() {
     appStateDebounceTimer.current = setTimeout(() => {
       if (isSyncingFromFirebase.current || !initialDataLoaded) return;
 
+      const cleanPanels = ensureArray(panels).filter((p: any) => !isLegacyDummyPanel(p));
+
       const payload: any = {
         initialized: true,
-        panels,
+        ...(cleanPanels.length > 0 ? { panels: cleanPanels } : {}),
         registeredUsers,
         bannedUsers,
         paymentHistory,
@@ -11134,7 +11170,7 @@ export default function App() {
                                   (p) => p.id !== panel.id
                                 );
                                 setPanels(updated);
-                                savePanelsToFirebase(updated);
+                                savePanelsToFirebase(updated, true);
                                 alert(`🗑️ Panel "${panel.title}" deleted successfully!`);
                               }
                             }}
@@ -15289,7 +15325,7 @@ export default function App() {
                                       (item) => item.id !== p.id,
                                     );
                                     setPanels(updated);
-                                    savePanelsToFirebase(updated);
+                                    savePanelsToFirebase(updated, true);
                                     alert(`Panel "${p.title}" deleted!`);
                                   }
                                 }}

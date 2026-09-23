@@ -691,6 +691,19 @@ app.post("/api/panels", (req, res) => {
       return res.status(400).json({ status: false, error: "Invalid panels array" });
     }
     const cleanPanels = incomingPanels.filter((p: any) => !isDummyPanelServer(p));
+
+    // SAFEGUARD: If client sends [] but server disk already has panels, prevent accidental wipe unless forceEmpty=true
+    const existing = readPanels() || [];
+    const forceEmpty = req.query.forceEmpty === "true" || (body && body.forceEmpty === true);
+    if (cleanPanels.length === 0 && existing.length > 0 && !forceEmpty) {
+      console.log(`[Panels Safeguard] Blocked empty sync from overwriting ${existing.length} existing panels.`);
+      return res.json({
+        status: true,
+        message: "Existing panels preserved against accidental empty wipe",
+        data: existing
+      });
+    }
+
     writePanels(cleanPanels);
 
     const state = readState() || {};
