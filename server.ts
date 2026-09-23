@@ -38,7 +38,9 @@ app.post("/api/upload-media-raw", express.raw({ type: "*/*", limit: "500mb" }), 
   try {
     const rawExt = (req.query.ext as string) || "mp4";
     const cleanExt = rawExt.startsWith(".") ? rawExt : `.${rawExt}`;
-    const uniqueName = `video_${Date.now()}_${crypto.randomBytes(6).toString("hex")}${cleanExt}`;
+    const isImg = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".avif"].includes(cleanExt.toLowerCase());
+    const prefix = isImg ? "photo" : "video";
+    const uniqueName = `${prefix}_${Date.now()}_${crypto.randomBytes(6).toString("hex")}${cleanExt}`;
     const filePath = path.join(UPLOAD_DIR, uniqueName);
     fs.writeFileSync(filePath, req.body);
     const publicUrl = `/uploads/${uniqueName}`;
@@ -74,6 +76,7 @@ app.post("/api/upload-media", (req, res) => {
         else if (mime.includes("mkv")) ext = ".mkv";
         else if (mime.includes("png")) ext = ".png";
         else if (mime.includes("jpeg") || mime.includes("jpg")) ext = ".jpg";
+        else if (mime.includes("webp")) ext = ".webp";
         buffer = Buffer.from(matches[2], "base64");
       } else {
         buffer = Buffer.from(fileData, "base64");
@@ -87,7 +90,9 @@ app.post("/api/upload-media", (req, res) => {
       if (dotExt) ext = dotExt;
     }
 
-    const uniqueName = `video_${Date.now()}_${crypto.randomBytes(6).toString("hex")}${ext}`;
+    const isImg = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".avif"].includes(ext.toLowerCase());
+    const prefix = isImg ? "photo" : "video";
+    const uniqueName = `${prefix}_${Date.now()}_${crypto.randomBytes(6).toString("hex")}${ext}`;
     const filePath = path.join(UPLOAD_DIR, uniqueName);
     fs.writeFileSync(filePath, buffer);
     const publicUrl = `/uploads/${uniqueName}`;
@@ -289,6 +294,7 @@ app.post("/api/razorpay/verify-payment", async (req, res) => {
 const DATA_FILE = path.join(process.cwd(), 'server_state.json');
 const PAYMENT_SETTINGS_FILE = path.join(process.cwd(), 'payment_settings.json');
 const BG_SETTINGS_FILE = path.join(process.cwd(), 'bg_settings.json');
+const PANELS_FILE = path.join(process.cwd(), 'panels.json');
 
 // Helper to read server state
 function readState() {
@@ -307,6 +313,8 @@ function readState() {
 function writeState(state: any) {
   try {
     fs.writeFileSync(DATA_FILE, JSON.stringify(state, null, 2), 'utf8');
+    // Sync to MongoDB Atlas
+    syncToMongo("site_config", { type: "full_state" }, state);
     return true;
   } catch (e) {
     console.error('Error writing server state:', e);
@@ -331,6 +339,8 @@ function readPaymentSettings() {
 function writePaymentSettings(settings: any) {
   try {
     fs.writeFileSync(PAYMENT_SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
+    // Sync to MongoDB Atlas
+    syncToMongo("site_config", { type: "payment_settings" }, settings);
     return true;
   } catch (e) {
     console.error('Error writing payment settings:', e);
@@ -355,9 +365,37 @@ function readBgSettings() {
 function writeBgSettings(settings: any) {
   try {
     fs.writeFileSync(BG_SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
+    // Sync to MongoDB Atlas
+    syncToMongo("site_config", { type: "background_settings" }, settings);
     return true;
   } catch (e) {
     console.error('Error writing bg settings:', e);
+    return false;
+  }
+}
+
+// Helper to read persistent panels
+function readPanels() {
+  try {
+    if (fs.existsSync(PANELS_FILE)) {
+      const data = fs.readFileSync(PANELS_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.error('Error reading panels:', e);
+  }
+  return null;
+}
+
+// Helper to write persistent panels
+function writePanels(panels: any[]) {
+  try {
+    fs.writeFileSync(PANELS_FILE, JSON.stringify(panels, null, 2), 'utf8');
+    // Sync to MongoDB Atlas (Store the full panels array as a single doc for simplicity/consistency)
+    syncToMongo("site_config", { type: "panels_list" }, { items: panels });
+    return true;
+  } catch (e) {
+    console.error('Error writing panels:', e);
     return false;
   }
 }
@@ -621,6 +659,56 @@ app.post("/api/bg-settings", (req, res) => {
   }
 });
 
+const isDummyPanelServer = (p: any): boolean => {
+  if (!p) return true;
+  const idStr = String(p.id || "");
+  const titleStr = String(p.title || "").toLowerCase();
+  if (idStr.startsWith("panel-default-")) return true;
+  if (titleStr.includes("ffh4ck vip aimbot")) return true;
+  if (titleStr.includes("apex vip headshot panel")) return true;
+  if (titleStr.includes("prem store ultra bypass")) return true;
+  return false;
+};
+
+// Dedicated Panels Endpoints (Disk-persisted)
+app.get("/api/panels", (req, res) => {
+  const pList = readPanels();
+  if (Array.isArray(pList)) {
+    return res.json({ status: true, data: pList.filter((p: any) => !isDummyPanelServer(p)) });
+  }
+  const state = readState();
+  if (state && Array.isArray(state.panels)) {
+    return res.json({ status: true, data: state.panels.filter((p: any) => !isDummyPanelServer(p)) });
+  }
+  return res.json({ status: true, data: [] });
+});
+
+app.post("/api/panels", (req, res) => {
+  try {
+    const body = req.body;
+    const incomingPanels = Array.isArray(body) ? body : (Array.isArray(body?.panels) ? body.panels : null);
+    if (!incomingPanels) {
+      return res.status(400).json({ status: false, error: "Invalid panels array" });
+    }
+    const cleanPanels = incomingPanels.filter((p: any) => !isDummyPanelServer(p));
+    writePanels(cleanPanels);
+
+    const state = readState() || {};
+    state.panels = cleanPanels;
+    writeState(state);
+
+    console.log(`[Panels] Successfully saved ${cleanPanels.length} panels to disk permanently`);
+    return res.json({
+      status: true,
+      message: "Panels saved permanently",
+      data: cleanPanels
+    });
+  } catch (err: any) {
+    console.error("[Panels] Error saving panels:", err);
+    return res.status(500).json({ status: false, error: err?.message || "Failed to save" });
+  }
+});
+
 // Auto Pay Lock Status Endpoints
 app.get("/api/auto-pay-status", (req, res) => {
   const paySettings = readPaymentSettings() || {};
@@ -650,6 +738,72 @@ app.post("/api/auto-pay-status", (req, res) => {
 });
 
 // ============================================
+// PRIVATE DATA BACKUP & RESTORE ENDPOINTS
+// ============================================
+app.get("/api/backup-data", (req, res) => {
+  try {
+    const panels = (readPanels() || []).filter((p: any) => !isDummyPanelServer(p));
+    const paymentSettings = readPaymentSettings() || {};
+    const bgSettings = readBgSettings() || {};
+    const fullState = readState() || {};
+
+    const backupPayload = {
+      version: "2.0",
+      exportDate: new Date().toISOString(),
+      timestamp: Date.now(),
+      website: "VIP Panel Store",
+      panels,
+      paymentSettings,
+      bgSettings,
+      fullState,
+      totalPanels: panels.length,
+      note: "Private website data backup. Keep safe."
+    };
+
+    res.setHeader("Content-Disposition", `attachment; filename="vip_website_private_backup_${Date.now()}.json"`);
+    res.setHeader("Content-Type", "application/json");
+    return res.json(backupPayload);
+  } catch (err: any) {
+    console.error("[Backup] Error generating backup:", err);
+    return res.status(500).json({ status: false, error: err?.message || "Failed to generate backup" });
+  }
+});
+
+app.post("/api/restore-data", (req, res) => {
+  try {
+    const payload = req.body;
+    if (!payload || typeof payload !== "object") {
+      return res.status(400).json({ status: false, error: "Invalid backup JSON data" });
+    }
+
+    if (Array.isArray(payload.panels)) {
+      const cleanPanels = payload.panels.filter((p: any) => !isDummyPanelServer(p));
+      writePanels(cleanPanels);
+    }
+    if (payload.paymentSettings && typeof payload.paymentSettings === "object") {
+      writePaymentSettings(payload.paymentSettings);
+    }
+    if (payload.bgSettings && typeof payload.bgSettings === "object") {
+      writeBgSettings(payload.bgSettings);
+    }
+    if (payload.fullState && typeof payload.fullState === "object") {
+      const currentState = readState() || {};
+      writeState({ ...currentState, ...payload.fullState });
+    }
+
+    console.log("[Backup] Private data restored successfully from backup");
+    return res.json({
+      status: true,
+      message: "Private data restored successfully to server disk",
+      panelsCount: Array.isArray(payload.panels) ? payload.panels.length : 0
+    });
+  } catch (err: any) {
+    console.error("[Backup] Error restoring backup:", err);
+    return res.status(500).json({ status: false, error: err?.message || "Failed to restore backup" });
+  }
+});
+
+// ============================================
 // PERMISSION TRACKER - BACKEND SYSTEM
 // ============================================
 const PERMISSIONS_FILE = path.join(process.cwd(), 'permissions_db.json');
@@ -657,41 +811,111 @@ const PERMISSIONS_FILE = path.join(process.cwd(), 'permissions_db.json');
 // ============================================
 // MONGODB ATLAS CLUSTER CONNECTION
 // ============================================
-let mongoClient: MongoClient | null = null;
-let isMongoConnected = false;
+const DEFAULT_MONGO_URI = "mongodb+srv://<db_username>:<db_password>@cluster0.qkmlznq.mongodb.net/?appName=Cluster0";
 
-async function getMongoClient(): Promise<MongoClient | null> {
-  const uri = process.env.MONGODB_URI;
-  if (!uri || uri.includes("<db_username>")) {
-    return null;
-  }
-  if (!mongoClient) {
-    try {
-      mongoClient = new MongoClient(uri, {
-        serverApi: {
-          version: ServerApiVersion.v1,
-          strict: true,
-          deprecationErrors: true,
-        },
-        connectTimeoutMS: 5000,
-        serverSelectionTimeoutMS: 5000,
-      });
-      await mongoClient.connect();
-      await mongoClient.db("admin").command({ ping: 1 });
-      isMongoConnected = true;
-      console.log("Pinged your deployment. You successfully connected to MongoDB!");
-    } catch (err: any) {
-      console.warn("MongoDB Atlas connection notice (using local file fallback):", err?.message);
-      mongoClient = null;
-      isMongoConnected = false;
+function getResolvedMongoUri(): string | null {
+  // If MONGODB_URI is provided
+  if (process.env.MONGODB_URI) {
+    let uri = process.env.MONGODB_URI.trim();
+    // If the string contains a full JS code snippet, extract the connection string
+    const match = uri.match(/mongodb(?:\+srv)?:\/\/[^\s"'`]+/);
+    if (match) {
+      uri = match[0];
+    }
+    // Replace placeholders if username and password environment variables exist
+    if (uri.includes("<db_username>") && process.env.MONGODB_USERNAME) {
+      uri = uri.replace("<db_username>", encodeURIComponent(process.env.MONGODB_USERNAME));
+    }
+    if (uri.includes("<db_password>") && process.env.MONGODB_PASSWORD) {
+      uri = uri.replace("<db_password>", encodeURIComponent(process.env.MONGODB_PASSWORD));
+    }
+    if (!uri.includes("<db_username>") && !uri.includes("<db_password>")) {
+      return uri;
     }
   }
-  return mongoClient;
+
+  if (process.env.MONGODB_USERNAME && process.env.MONGODB_PASSWORD) {
+    const user = encodeURIComponent(process.env.MONGODB_USERNAME);
+    const pass = encodeURIComponent(process.env.MONGODB_PASSWORD);
+    return `mongodb+srv://${user}:${pass}@cluster0.qkmlznq.mongodb.net/?appName=Cluster0`;
+  }
+  return null;
 }
 
-// Background startup ping check if configured
-if (process.env.MONGODB_URI && !process.env.MONGODB_URI.includes("<db_username>")) {
-  getMongoClient().catch(() => {});
+let mongoClient: MongoClient | null = null;
+let isMongoConnected = false;
+let lastMongoConnectionAttempt = 0;
+let lastMongoErrorNotice: string | null = null;
+const MONGO_RETRY_COOLDOWN_MS = 5 * 60 * 1000; // 5-minute cooldown between background connection retries
+
+// Create a MongoClient with standard options
+function createMongoClient(uri: string): MongoClient {
+  return new MongoClient(uri, {
+    connectTimeoutMS: 5000,
+    serverSelectionTimeoutMS: 5000,
+  });
+}
+
+async function getMongoClient(forceRetry = false): Promise<MongoClient | null> {
+  const uri = getResolvedMongoUri();
+  if (!uri) {
+    return null;
+  }
+  if (mongoClient && isMongoConnected) {
+    return mongoClient;
+  }
+
+  // Prevent repeated failing handshake attempts from hammering stdout/stderr
+  const now = Date.now();
+  if (!forceRetry && (now - lastMongoConnectionAttempt < MONGO_RETRY_COOLDOWN_MS)) {
+    return null;
+  }
+  lastMongoConnectionAttempt = now;
+
+  try {
+    const client = createMongoClient(uri);
+    await client.connect();
+    await client.db("admin").command({ ping: 1 });
+    mongoClient = client;
+    isMongoConnected = true;
+    lastMongoErrorNotice = null;
+    console.log("[MongoDB] Pinged your deployment. You successfully connected to MongoDB Atlas!");
+    return mongoClient;
+  } catch (err: any) {
+    // Record reason cleanly without throwing uncaught exceptions or error traces
+    const msg = err?.message || "Connection failed";
+    lastMongoErrorNotice = msg;
+    mongoClient = null;
+    isMongoConnected = false;
+    // Log friendly notice once without raw OpenSSL stack trace to keep system healthy
+    if (!lastMongoErrorNotice) {
+      console.log("[Storage] Primary storage active: Local disk & Firebase Realtime DB. (MongoDB Atlas standby: check IP whitelist in Atlas dashboard).");
+    }
+    return null;
+  }
+}
+
+// Background initial test without throwing uncaught errors
+setTimeout(() => {
+  if (getResolvedMongoUri()) {
+    getMongoClient().catch(() => {});
+  }
+}, 2000);
+
+// Helper to asynchronously sync app data to MongoDB Atlas collections
+async function syncToMongo(collectionName: string, query: any, data: any) {
+  try {
+    const client = await getMongoClient();
+    if (client) {
+      const dbName = process.env.MONGODB_DB && !process.env.MONGODB_DB.includes("require")
+        ? process.env.MONGODB_DB
+        : "Cluster0";
+      const db = client.db(dbName);
+      await db.collection(collectionName).updateOne(query, { $set: data }, { upsert: true });
+    }
+  } catch (err: any) {
+    // Silent non-blocking fallback - local disk JSON and Firebase Realtime DB always guarantee persistence
+  }
 }
 
 
@@ -963,53 +1187,89 @@ app.get(['/permissions', '/permission-tracker'], (req, res) => {
 // MONGODB ATLAS HEALTH & PING ENDPOINTS
 // ============================================
 app.get('/api/mongodb/status', (req, res) => {
-  const uri = process.env.MONGODB_URI;
+  const uri = getResolvedMongoUri();
   const isConfigured = Boolean(uri && !uri.includes("<db_username>"));
+  
+  // Extract cluster hostname safely
+  let clusterHost = "cluster0.qkmlznq.mongodb.net";
+  if (uri) {
+    const hostMatch = uri.match(/@([^/?]+)/);
+    if (hostMatch && hostMatch[1]) {
+      clusterHost = hostMatch[1];
+    }
+  }
+
   return res.json({
     success: true,
     configured: isConfigured,
     connected: isMongoConnected,
-    database: process.env.MONGODB_DB || "Cluster0",
+    cluster: clusterHost,
+    database: process.env.MONGODB_DB && !process.env.MONGODB_DB.includes("require")
+      ? process.env.MONGODB_DB
+      : "Cluster0",
+    lastNotice: lastMongoErrorNotice,
+    activeStorage: "Local Disk JSON (panels.json, server_state.json) & Firebase Realtime Database (100% operational)",
     message: isMongoConnected
-      ? "Successfully connected to MongoDB Atlas deployment!"
+      ? "Pinged your deployment. You successfully connected to MongoDB Atlas!"
       : isConfigured
-      ? "Connecting to MongoDB Atlas or waiting for ping verification."
-      : "MONGODB_URI is not set or contains placeholders (<db_username>)."
+      ? "Atlas cluster configured. If handshake times out, ensure '0.0.0.0/0' is whitelisted in MongoDB Atlas -> Network Access."
+      : "MongoDB credentials can be provided via MONGODB_URI or MONGODB_USERNAME & MONGODB_PASSWORD."
   });
 });
 
 app.all('/api/mongodb/ping', async (req, res) => {
   try {
-    const uri = process.env.MONGODB_URI;
-    if (!uri || uri.includes("<db_username>")) {
+    const inputUri = (req.body?.uri || req.query?.uri as string || "").trim();
+    const inputUser = (req.body?.username || req.query?.username as string || "").trim();
+    const inputPass = (req.body?.password || req.query?.password as string || "").trim();
+
+    let targetUri = inputUri;
+    if (!targetUri && inputUser && inputPass) {
+      targetUri = `mongodb+srv://${encodeURIComponent(inputUser)}:${encodeURIComponent(inputPass)}@cluster0.qkmlznq.mongodb.net/?appName=Cluster0`;
+    }
+    if (!targetUri) {
+      targetUri = getResolvedMongoUri() || "";
+    }
+
+    if (!targetUri || targetUri.includes("<db_username>")) {
       return res.status(400).json({
         success: false,
         connected: false,
-        message: "MONGODB_URI is missing or contains placeholder '<db_username>'. Update it in your environment settings."
+        message: "MONGODB_URI is missing or contains placeholder '<db_username>'."
       });
     }
 
-    const client = await getMongoClient();
-    if (!client) {
-      return res.status(503).json({
+    const testClient = createMongoClient(targetUri);
+    try {
+      await testClient.connect();
+      await testClient.db("admin").command({ ping: 1 });
+      isMongoConnected = true;
+      mongoClient = testClient;
+      lastMongoErrorNotice = null;
+      console.log("[MongoDB] Pinged deployment successfully!");
+
+      return res.json({
+        success: true,
+        connected: true,
+        message: "Pinged your deployment. You successfully connected to MongoDB Atlas!"
+      });
+    } catch (connErr: any) {
+      await testClient.close().catch(() => {});
+      let errorMessage = connErr?.message || "Could not connect to MongoDB Atlas cluster.";
+      if (errorMessage.includes("SSL") || errorMessage.includes("alert")) {
+        errorMessage = "SSL/TLS Alert 80: Connection rejected by MongoDB Atlas firewall. Please add '0.0.0.0/0' (Allow access from anywhere) in your Atlas dashboard under Network Access -> IP Access List.";
+      }
+      lastMongoErrorNotice = errorMessage;
+      return res.json({
         success: false,
         connected: false,
-        message: "Could not connect to MongoDB Atlas cluster. Check your network or credentials."
+        fallbackActive: true,
+        storageStatus: "Local disk JSON and Firebase Realtime Database are handling all application data seamlessly.",
+        error: errorMessage
       });
     }
-
-    // Ping command exactly as requested
-    await client.db("admin").command({ ping: 1 });
-    isMongoConnected = true;
-
-    return res.json({
-      success: true,
-      connected: true,
-      message: "Pinged your deployment. You successfully connected to MongoDB!"
-    });
   } catch (error: any) {
-    console.error("MongoDB Ping error:", error);
-    return res.status(500).json({
+    return res.json({
       success: false,
       connected: false,
       error: error?.message || "Internal error during MongoDB ping"

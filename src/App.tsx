@@ -91,6 +91,9 @@ import {
   Film,
   Maximize2,
   Pause,
+  Database,
+  Shield,
+  HardDrive,
 } from "lucide-react";
 
 export function formatExternalUrl(url?: string | null): string {
@@ -333,6 +336,56 @@ export function getYouTubeInfo(url: string | undefined | null) {
   return null;
 }
 
+export function isDirectVideoUrl(url: string | undefined | null): boolean {
+  if (!url || typeof url !== "string") return false;
+  const clean = url.trim().toLowerCase();
+  return (
+    /\.(mp4|webm|mov|mkv|3gp|m4v|avi)(\?.*)?$/i.test(clean) ||
+    clean.includes("/uploads/video_") ||
+    clean.startsWith("data:video") ||
+    clean.startsWith("blob:")
+  );
+}
+
+export function isDirectImageUrl(url: string | undefined | null): boolean {
+  if (!url || typeof url !== "string") return false;
+  const clean = url.trim().toLowerCase();
+  return (
+    /\.(jpg|jpeg|png|webp|gif|svg|avif)(\?.*)?$/i.test(clean) ||
+    clean.includes("/uploads/photo_") ||
+    clean.startsWith("data:image")
+  );
+}
+
+export function resolvePanelMedia(panel: any) {
+  const pImg = typeof panel?.image === "string" ? panel.image.trim() : "";
+  const pVid = typeof panel?.videoLink === "string" ? panel.videoLink.trim() : (typeof panel?.videoTutorial === "string" ? panel.videoTutorial.trim() : "");
+
+  const ytInfo = getYouTubeInfo(pVid) || getYouTubeInfo(pImg);
+  
+  // Strictly identify direct video URLs
+  const directVideoUrl = isDirectVideoUrl(pVid) ? pVid : (isDirectVideoUrl(pImg) ? pImg : null);
+  
+  // If it's a social link (Telegram, FB, etc.) and NOT a direct video/youtube, don't treat as video
+  const isSocialLink = pVid.includes("t.me/") || pVid.includes("facebook.com/") || pVid.includes("instagram.com/");
+  const hasValidVideo = Boolean(ytInfo || directVideoUrl || (panel?.isVideo && !isSocialLink));
+
+  // Photo resolution
+  const photoUrl = (pImg && !isDirectVideoUrl(pImg) && !getYouTubeInfo(pImg)) 
+    ? pImg 
+    : (ytInfo ? ytInfo.thumbnailUrl : (panel?.photoUrl || "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop"));
+
+  return {
+    hasVideo: hasValidVideo,
+    hasPhoto: Boolean(pImg && !isDirectVideoUrl(pImg) && !getYouTubeInfo(pImg)),
+    activeYt: ytInfo,
+    directVideoUrl,
+    photoUrl,
+    isYouTube: Boolean(ytInfo),
+    isGalleryVideo: Boolean(directVideoUrl && !ytInfo),
+  };
+}
+
 // FIREBASE GOOGLE LOGIN & DATABASE CONFIG (ffh4ckjodvipff)
 const firebaseConfig = {
   apiKey: "AIzaSyDnylEQQKI-PbVCnBgNY9zx5Vx85yi3SCo",
@@ -360,12 +413,29 @@ export const saveToFirebase = async (path: string, data: any) => {
   }
 };
 
+export const isLegacyDummyPanel = (p: any): boolean => {
+  if (!p) return true;
+  const idStr = String(p.id || "");
+  const titleStr = String(p.title || "").toLowerCase();
+  if (idStr.startsWith("panel-default-")) return true;
+  if (titleStr.includes("ffh4ck vip aimbot")) return true;
+  if (titleStr.includes("apex vip headshot panel")) return true;
+  if (titleStr.includes("prem store ultra bypass")) return true;
+  return false;
+};
+
 export const savePanelsToFirebase = async (panelsList: any[]) => {
   try {
-    const clean = sanitizeForFirebase(panelsList);
+    const validPanels = ensureArray(panelsList).filter((p) => !isLegacyDummyPanel(p));
+    const clean = sanitizeForFirebase(validPanels);
     await set(ref(database, "panels"), clean);
     await set(ref(database, "appState/panels"), clean);
-    console.log("[Firebase] Panels successfully synced to cloud");
+    fetch("/api/panels", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(validPanels),
+    }).catch(() => {});
+    console.log("[Firebase & Server] Panels successfully synced:", validPanels.length);
   } catch (err) {
     console.error("[Firebase] Error syncing panels:", err);
   }
@@ -468,86 +538,7 @@ const initDB = () => {
   });
 };
 
-const DEFAULT_STORE_PANELS = [
-  {
-    id: "panel-default-1",
-    title: "🔥 FFH4CK VIP AIMBOT & ESP (MOD MENU)",
-    category: "VIP ESP & AIMBOT",
-    badge: "PREMIUM PANELS",
-    features: [
-      "100% Main ID Safe Antiban",
-      "Auto Headshot 100% Accuracy",
-      "ESP Line, Name & Distance",
-      "Bullet Tracking & No Recoil",
-    ],
-    description: "100% Antiban VIP Mod for Free Fire with Aimbot, ESP Line, Name, Distance & Bullet Tracking.",
-    status: "Active",
-    installLink: "https://t.me/Premjodvip",
-    videoTutorial: "https://t.me/Premjodvip",
-    options: [
-      { label: "1 Day", price: 50 },
-      { label: "7 Day", price: 180 },
-      { label: "30 Day", price: 350 },
-    ],
-    pricingPlans: [
-      { label: "1 Day", price: 50 },
-      { label: "7 Day", price: 180 },
-      { label: "30 Day", price: 350 },
-    ],
-  },
-  {
-    id: "panel-default-2",
-    title: "⚡ APEX VIP HEADSHOT PANEL v3.5",
-    category: "HEADSHOT PANEL",
-    badge: "VIP MOD MENU",
-    features: [
-      "High Headshot Accuracy 99%",
-      "Safe Main Account ID",
-      "Super Smooth Bypass All Devices",
-      "Anti-Blacklist Anti-Detection",
-    ],
-    description: "High headshot accuracy, safe main account ID, super smooth bypass for all devices.",
-    status: "Active",
-    installLink: "https://t.me/Premjodvip",
-    videoTutorial: "https://t.me/Premjodvip",
-    options: [
-      { label: "1 Day", price: 40 },
-      { label: "7 Day", price: 140 },
-      { label: "30 Day", price: 250 },
-    ],
-    pricingPlans: [
-      { label: "1 Day", price: 40 },
-      { label: "7 Day", price: 140 },
-      { label: "30 Day", price: 250 },
-    ],
-  },
-  {
-    id: "panel-default-3",
-    title: "👑 PREM STORE ULTRA BYPASS v4.0",
-    category: "BYPASS & MOD",
-    badge: "EXCLUSIVE BYPASS",
-    features: [
-      "Ultra Bypass for PC & Mobile",
-      "Zero Lag High FPS Mode",
-      "Anti-Blacklist Protection",
-      "Instant Server Unban Fix",
-    ],
-    description: "Ultra Bypass for PC & Mobile Emulator, zero lag, anti-blacklist protection.",
-    status: "Active",
-    installLink: "https://t.me/Premjodvip",
-    videoTutorial: "https://t.me/Premjodvip",
-    options: [
-      { label: "1 Day", price: 60 },
-      { label: "7 Day", price: 220 },
-      { label: "30 Day", price: 450 },
-    ],
-    pricingPlans: [
-      { label: "1 Day", price: 60 },
-      { label: "7 Day", price: 220 },
-      { label: "30 Day", price: 450 },
-    ],
-  },
-];
+const DEFAULT_STORE_PANELS: any[] = [];
 
 const saveMediaToDB = async (key: string, data: any, isVideo: boolean) => {
   try {
@@ -604,6 +595,7 @@ export default function App() {
     | "policies"
     | "permissions"
     | "adminPermissions"
+    | "adminPrivateData"
   >("home");
   const [staffTab, setStaffTab] = useState<
     | "overview"
@@ -1598,14 +1590,43 @@ export default function App() {
     savePanelsToFirebase(panels);
   }, [panels, initialDataLoaded]);
 
-  const [bgSettings, setBgSettings] = useState(DEFAULT_BG_SETTINGS);
+  const [bgSettings, setBgSettings] = useState(() => {
+    try {
+      const cached = localStorage.getItem("vip_bg_settings");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === "object" && parsed.customImage) {
+          return { ...DEFAULT_BG_SETTINGS, ...parsed };
+        }
+      }
+    } catch (_) {}
+    return DEFAULT_BG_SETTINGS;
+  });
 
   const [isUploadingWallpaper, setIsUploadingWallpaper] = useState(false);
   const [bgMediaError, setBgMediaError] = useState(false);
 
+  // Preload wallpaper immediately in memory so browser keeps it decoded without any flicker
   useEffect(() => {
-    setBgMediaError(false);
-  }, [bgSettings.customImage]);
+    if (bgSettings.customImage) {
+      try {
+        localStorage.setItem("vip_bg_settings", JSON.stringify(bgSettings));
+      } catch (_) {}
+
+      const isVid = Boolean(
+        bgSettings.isVideo ||
+        (typeof bgSettings.customImage === "string" && (
+          bgSettings.customImage.toLowerCase().endsWith(".mp4") ||
+          bgSettings.customImage.toLowerCase().endsWith(".webm") ||
+          bgSettings.customImage.includes("video_")
+        ))
+      );
+      if (!isVid && typeof bgSettings.customImage === "string" && bgSettings.customImage.startsWith("http")) {
+        const preloader = new Image();
+        preloader.src = bgSettings.customImage;
+      }
+    }
+  }, [bgSettings]);
 
   const bgMountRef = useRef(false);
   useEffect(() => {
@@ -1620,6 +1641,9 @@ export default function App() {
     lastSavedBgRef.current = currentStr;
 
     if (bgSettings.customImage && bgSettings.customImage.trim() !== "") {
+      try {
+        localStorage.setItem("vip_bg_settings", JSON.stringify(bgSettings));
+      } catch (_) {}
       saveToFirebase("bgSettings", bgSettings);
       fetch("/api/bg-settings", {
         method: "POST",
@@ -1659,6 +1683,11 @@ export default function App() {
     {},
   );
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const [isUploadingEditPhoto, setIsUploadingEditPhoto] = useState(false);
+  const [isUploadingEditVideo, setIsUploadingEditVideo] = useState(false);
+  const [cardMediaMode, setCardMediaMode] = useState<Record<string | number, "video" | "photo">>({});
   const [isUploadingFeedbackMedia, setIsUploadingFeedbackMedia] = useState(false);
   const [isUploadingVideoMedia, setIsUploadingVideoMedia] = useState(false);
 
@@ -2826,12 +2855,19 @@ export default function App() {
       const data = snapshot.val();
       if (data && data.initialized) {
         isSyncingFromFirebase.current = true;
-        if (data.panels && ensureArray(data.panels).length > 0) {
-          const loadedPanels = ensureArray(data.panels).map((p: any) => ({
-            ...p,
-            features: parseFeaturesList(p.features, p.description),
-          }));
+        if (data.panels !== undefined) {
+          const rawPanels = ensureArray(data.panels);
+          const hadLegacy = rawPanels.some((p: any) => isLegacyDummyPanel(p));
+          const loadedPanels = rawPanels
+            .filter((p: any) => !isLegacyDummyPanel(p))
+            .map((p: any) => ({
+              ...p,
+              features: parseFeaturesList(p.features, p.description),
+            }));
           setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
+          if (hadLegacy) {
+            savePanelsToFirebase(loadedPanels);
+          }
         }
         if (data.registeredUsers)
           setRegisteredUsers((prev) => JSON.stringify(prev) === JSON.stringify(data.registeredUsers) ? prev : ensureArray(data.registeredUsers));
@@ -2928,6 +2964,22 @@ export default function App() {
       })
       .catch(() => {});
 
+    // 1c. Fetch panels from server disk storage
+    fetch("/api/panels")
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData?.status && Array.isArray(resData?.data)) {
+          const loadedPanels = resData.data
+            .filter((p: any) => !isLegacyDummyPanel(p))
+            .map((p: any) => ({
+              ...p,
+              features: parseFeaturesList(p.features, p.description),
+            }));
+          setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
+        }
+      })
+      .catch(() => {});
+
     // 2. Direct realtime listener on Firebase paymentSettings path
     try {
       const payRef = ref(database, "paymentSettings");
@@ -2955,6 +3007,26 @@ export default function App() {
         }
       });
 
+      // 2c. Direct realtime listener on Firebase panels path
+      const panelsRef = ref(database, "panels");
+      const unsubPanels = onValue(panelsRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val !== null && val !== undefined) {
+          const rawPanels = ensureArray(val);
+          const hadLegacy = rawPanels.some((p: any) => isLegacyDummyPanel(p));
+          const loadedPanels = rawPanels
+            .filter((p: any) => !isLegacyDummyPanel(p))
+            .map((p: any) => ({
+              ...p,
+              features: parseFeaturesList(p.features, p.description),
+            }));
+          setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
+          if (hadLegacy) {
+            savePanelsToFirebase(loadedPanels);
+          }
+        }
+      });
+
       // 3. Auto Pay Lock status listener from Firebase
       const lockRef = ref(database, "isAutoUpiLocked");
       const unsubLock = onValue(lockRef, (snapshot) => {
@@ -2967,6 +3039,7 @@ export default function App() {
       return () => {
         unsubPay();
         unsubBg();
+        unsubPanels();
         unsubLock();
       };
     } catch (e) {}
@@ -3548,54 +3621,57 @@ export default function App() {
 
       {/* Background Wallpaper Layer - 100% Fixed, Ultra HD Clarity (Crystal Clear from Top to Bottom) */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden select-none bg-[#080d1a]">
-        {/* Base Fallback Image Always Mounted Underneath - Prevents Any Black/White Screen Flash */}
-        <img
-          src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop"
-          alt="Default Base Background"
-          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none select-none animate-live-wallpaper"
-          style={{
-            filter: `contrast(1.08) brightness(100%)`,
-          }}
-        />
-
-        {/* Custom Wallpaper Layer - Crossfades in smoothly on top, never unmounts abruptly */}
-        {bgSettings.customImage && (
-          bgSettings.isVideo || (typeof bgSettings.customImage === "string" && (bgSettings.customImage.toLowerCase().endsWith(".mp4") || bgSettings.customImage.toLowerCase().endsWith(".webm"))) ? (
+        {/* If customImage is defined, render it directly and stably without remounting or disappearing */}
+        {bgSettings.customImage ? (
+          bgSettings.isVideo || (typeof bgSettings.customImage === "string" && (
+            bgSettings.customImage.toLowerCase().endsWith(".mp4") ||
+            bgSettings.customImage.toLowerCase().endsWith(".webm") ||
+            bgSettings.customImage.includes("video_")
+          )) ? (
             <video
-              key={bgSettings.customImage}
               src={bgSettings.customImage}
               autoPlay
               loop
               muted
               playsInline
-              onError={() => {
-                setBgMediaError(true);
-              }}
-              onLoadedData={() => {
-                setBgMediaError(false);
-              }}
-              className={`absolute inset-0 w-full h-full object-cover object-center pointer-events-none select-none transition-opacity duration-700 animate-live-wallpaper ${bgMediaError ? "opacity-0" : "opacity-100"}`}
+              className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none select-none animate-live-wallpaper"
               style={{
-                filter: `contrast(1.08) brightness(100%)`,
+                filter: `contrast(1.08) brightness(${100 - (Number(bgSettings.darknessOverlay) || 0) * 0.4}%)`,
               }}
             />
           ) : (
             <img
-              key={bgSettings.customImage}
               src={bgSettings.customImage}
               alt="Website Background"
-              onError={() => {
-                setBgMediaError(true);
+              onError={(e) => {
+                console.warn("Custom background failed, using stable fallback");
+                (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop";
               }}
-              onLoad={() => {
-                setBgMediaError(false);
-              }}
-              className={`absolute inset-0 w-full h-full object-cover object-center pointer-events-none select-none transition-opacity duration-700 animate-live-wallpaper ${bgMediaError ? "opacity-0" : "opacity-100"}`}
+              className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none select-none animate-live-wallpaper"
               style={{
-                filter: `contrast(1.08) brightness(100%)`,
+                filter: `contrast(1.08) brightness(${100 - (Number(bgSettings.darknessOverlay) || 0) * 0.4}%)`,
               }}
             />
           )
+        ) : (
+          <img
+            src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop"
+            alt="Default Base Background"
+            className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none select-none animate-live-wallpaper"
+            style={{
+              filter: `contrast(1.08) brightness(100%)`,
+            }}
+          />
+        )}
+
+        {/* Darkness Overlay Slider Effect */}
+        {Number(bgSettings.darknessOverlay || 0) > 0 && (
+          <div
+            className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+            style={{
+              backgroundColor: `rgba(0, 0, 0, ${(Number(bgSettings.darknessOverlay || 0) / 100).toFixed(2)})`,
+            }}
+          />
         )}
       </div>
 
@@ -4161,100 +4237,85 @@ export default function App() {
                 </div>
               )}
 
-              {(ensureArray(panels).length > 0 ? ensureArray(panels) : DEFAULT_STORE_PANELS)
-                .filter((p) => {
-                  if (!p) return false;
-                  const q = searchQuery.toLowerCase().trim();
-                  const pTitle = p.title ? String(p.title).toLowerCase() : "";
-                  const pCat = p.category ? String(p.category).toLowerCase() : "";
-                  const pCatClean = pCat.replace(/\s+/g, "");
-                  const selCatClean = selectedCategory
-                    .toLowerCase()
-                    .replace(/\s+/g, "");
+              {(() => {
+                const storePanelsList = ensureArray(panels)
+                  .filter((p) => {
+                    if (!p || isLegacyDummyPanel(p)) return false;
+                    const q = searchQuery.toLowerCase().trim();
+                    const pTitle = p.title ? String(p.title).toLowerCase() : "";
+                    const pCat = p.category ? String(p.category).toLowerCase() : "";
+                    const pCatClean = pCat.replace(/\s+/g, "");
+                    const selCatClean = selectedCategory
+                      .toLowerCase()
+                      .replace(/\s+/g, "");
 
-                  const matchesSearch =
-                    !q ||
-                    pTitle.includes(q) ||
-                    pCat.includes(q) ||
-                    (q === "24ghanta" &&
-                      (pCat.includes("24ghanta") || pCat.includes("house")));
+                    const matchesSearch =
+                      !q ||
+                      pTitle.includes(q) ||
+                      pCat.includes(q) ||
+                      (q === "24ghanta" &&
+                        (pCat.includes("24ghanta") || pCat.includes("house")));
 
-                  const matchesCat =
-                    selectedCategory === "Category" ||
-                    selectedCategory === "All" ||
-                    pCatClean === selCatClean ||
-                    (selCatClean === "24ghanta" &&
-                      (pCatClean.includes("24ghanta") ||
-                        pCatClean.includes("house")));
+                    const matchesCat =
+                      selectedCategory === "Category" ||
+                      selectedCategory === "All" ||
+                      pCatClean === selCatClean ||
+                      (selCatClean === "24ghanta" &&
+                        (pCatClean.includes("24ghanta") ||
+                          pCatClean.includes("house")));
 
-                  return matchesSearch && matchesCat;
-                })
-                .map((panel, pIdx) => {
-                  const imgYt = getYouTubeInfo(panel.image);
-                  const videoYt = getYouTubeInfo(panel.videoLink) || getYouTubeInfo(panel.videoTutorial);
-                  const activeYt = videoYt || imgYt;
+                    return matchesSearch && matchesCat;
+                  });
 
-                  // Check if this panel has an explicit video file (MP4, WebM, blob, uploads, etc.) or is marked isVideo
-                  const hasDirectVideoFile = Boolean(
-                    (panel.videoLink && (
-                      /\.(mp4|webm|mov|mkv|3gp|m4v|avi)/i.test(panel.videoLink) ||
-                      panel.videoLink.includes("/uploads/") ||
-                      panel.videoLink.startsWith("data:video") ||
-                      panel.videoLink.startsWith("blob:")
-                    )) ||
-                    (panel.image && (
-                      /\.(mp4|webm|mov|mkv|3gp|m4v|avi)/i.test(panel.image) ||
-                      panel.image.includes("/uploads/") ||
-                      panel.image.startsWith("data:video") ||
-                      panel.image.startsWith("blob:")
-                    ))
+                if (storePanelsList.length === 0) {
+                  return (
+                    <div className="w-full py-16 px-4 flex flex-col items-center justify-center text-center bg-black/40 border border-white/10 rounded-2xl backdrop-blur-md my-4">
+                      <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center mb-3 shadow-[0_0_20px_rgba(6,182,212,0.2)]">
+                        <ShoppingBag size={30} className="text-cyan-400" />
+                      </div>
+                      <h3 className="text-white font-black text-base tracking-wide uppercase">
+                        Koi Panel Uplabdh Nahi Hai
+                      </h3>
+                      <p className="text-gray-400 text-xs mt-1 max-w-sm">
+                        Admin panel se naya panel add karein, wo turant yahan live show hoga.
+                      </p>
+                    </div>
                   );
+                }
 
-                  const isGalleryVideo = Boolean(
-                    hasDirectVideoFile ||
-                    (panel.isVideo && !imgYt && !videoYt) ||
-                    panel.mediaType === "video"
-                  );
+                return storePanelsList.map((panel, pIdx) => {
+                  const mediaInfo = resolvePanelMedia(panel);
+                  const hasBoth = mediaInfo.hasVideo && mediaInfo.hasPhoto;
+                  const currentMode = cardMediaMode[panel.id] || (mediaInfo.hasVideo ? "video" : "photo");
 
-                  const isYouTubeVideo = Boolean(!isGalleryVideo && (activeYt || panel.mediaType === "youtube"));
-                  const isPhoto = !isGalleryVideo && !isYouTubeVideo;
-
-                  // Direct video playback URL for gallery video
-                  const directVideoUrl = isGalleryVideo
-                    ? (panel.isVideo && panel.image && !imgYt ? panel.image : (panel.videoLink || panel.image))
-                    : null;
-
-                  // Display thumbnail / cover image
-                  const displayThumbnail = isPhoto
-                    ? (panel.image || "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop")
-                    : isYouTubeVideo
-                      ? (panel.image && !imgYt ? panel.image : (activeYt?.thumbnailUrl || "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop"))
-                      : (panel.image || "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop");
+                  const isViewingVideo = currentMode === "video" && mediaInfo.hasVideo;
+                  const isViewingPhoto = !isViewingVideo;
 
                   const handleOpenMedia = () => {
-                    if (isGalleryVideo && directVideoUrl) {
-                      setPreviewMedia({
-                        url: directVideoUrl,
-                        isVideo: true,
-                        mediaType: "video",
-                        title: panel.title + " - Direct Video Gameplay",
-                      });
-                    } else if (isYouTubeVideo && activeYt) {
-                      const yUrl = videoYt ? panel.videoLink : (imgYt ? panel.image : panel.videoTutorial);
-                      setPreviewMedia({
-                        url: yUrl,
-                        isVideo: true,
-                        mediaType: "youtube",
-                        title: panel.title + " - YouTube Video Demo",
-                        youtubeLink: yUrl,
-                      });
+                    if (isViewingVideo) {
+                      if (mediaInfo.isYouTube && mediaInfo.activeYt) {
+                        setPreviewMedia({
+                          url: mediaInfo.activeYt.youtubeUrl,
+                          isVideo: true,
+                          mediaType: "youtube",
+                          title: panel.title,
+                          youtubeLink: mediaInfo.activeYt.youtubeUrl,
+                        });
+                      } else if (mediaInfo.directVideoUrl) {
+                        setPreviewMedia({
+                          url: mediaInfo.directVideoUrl,
+                          isVideo: true,
+                          mediaType: "video",
+                          title: panel.title,
+                        });
+                      }
                     } else {
                       setPreviewMedia({
-                        url: displayThumbnail,
+                        url: mediaInfo.photoUrl,
                         isVideo: false,
                         isImage: true,
                         mediaType: "photo",
-                        title: panel.title + " - Ultra HD Photo",
+                        title: panel.title,
                       });
                     }
                   };
@@ -4288,16 +4349,16 @@ export default function App() {
 
                       {/* Water-like Clear Transparent Glass Body */}
                       <div className="bg-transparent  rounded-[14px] p-3 flex flex-col gap-2.5 h-full w-full relative z-10 transition-colors">
-                        {/* Video / Photo Thumbnail - Compact Height & Clear */}
+                        {/* Video / Photo Media Container */}
                         <div
                           onClick={handleOpenMedia}
                           className="relative w-full h-36 sm:h-40 rounded-xl overflow-hidden border border-cyan-500/30 bg-black/40 shadow-[0_0_15px_rgba(0,0,0,0.6)] cursor-pointer group/media"
                         >
-                          {isGalleryVideo && directVideoUrl ? (
+                          {isViewingVideo && mediaInfo.isGalleryVideo && mediaInfo.directVideoUrl ? (
                             <div className="relative w-full h-full">
                               <video
-                                key={`panel-vid-${panel.id}-${directVideoUrl}`}
-                                src={directVideoUrl}
+                                key={`panel-vid-${panel.id}-${mediaInfo.directVideoUrl}`}
+                                src={mediaInfo.directVideoUrl}
                                 autoPlay
                                 loop
                                 muted={!unmutedPanels[panel.id]}
@@ -4332,16 +4393,14 @@ export default function App() {
                             </div>
                           ) : (
                             <img
-                              src={displayThumbnail}
+                              src={isViewingVideo && mediaInfo.activeYt ? mediaInfo.activeYt.thumbnailUrl : mediaInfo.photoUrl}
                               alt={panel.title}
                               onError={(e) => {
                                 if (
-                                  activeYt &&
-                                  e.currentTarget.src !==
-                                    activeYt.fallbackThumbnailUrl
+                                  mediaInfo.activeYt &&
+                                  e.currentTarget.src !== mediaInfo.activeYt.fallbackThumbnailUrl
                                 ) {
-                                  e.currentTarget.src =
-                                    activeYt.fallbackThumbnailUrl;
+                                  e.currentTarget.src = mediaInfo.activeYt.fallbackThumbnailUrl;
                                 }
                               }}
                               className="w-full h-full object-cover opacity-100 transition-transform duration-500 group-hover/media:scale-105"
@@ -4353,14 +4412,16 @@ export default function App() {
 
                           {/* Central Action Icon Overlay */}
                           <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover/media:bg-black/35 transition-colors pointer-events-none z-10">
-                            {isYouTubeVideo ? (
-                              <div className="w-11 h-11 rounded-full bg-red-600/95 border-2 border-white shadow-[0_0_25px_rgba(220,38,38,0.95)] flex items-center justify-center transition-transform group-hover/media:scale-115">
-                                <Play className="fill-white text-white ml-0.5 w-5 h-5" />
-                              </div>
-                            ) : isGalleryVideo ? (
-                              <div className="w-10 h-10 rounded-full bg-cyan-600/90 border-2 border-white shadow-[0_0_20px_rgba(6,182,212,0.95)] flex items-center justify-center transition-transform group-hover/media:scale-115">
-                                <Play className="fill-white text-white ml-0.5 w-4 h-4" />
-                              </div>
+                            {isViewingVideo ? (
+                              mediaInfo.isYouTube ? (
+                                <div className="w-11 h-11 rounded-full bg-red-600/95 border-2 border-white shadow-[0_0_25px_rgba(220,38,38,0.95)] flex items-center justify-center transition-transform group-hover/media:scale-115">
+                                  <Play className="fill-white text-white ml-0.5 w-5 h-5" />
+                                </div>
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-cyan-600/90 border-2 border-white shadow-[0_0_20px_rgba(6,182,212,0.95)] flex items-center justify-center transition-transform group-hover/media:scale-115">
+                                  <Play className="fill-white text-white ml-0.5 w-4 h-4" />
+                                </div>
+                              )
                             ) : (
                               <div className="opacity-0 group-hover/media:opacity-100 transition-opacity w-9 h-9 rounded-full bg-fuchsia-600/85 border border-white/80 flex items-center justify-center text-white shadow-lg">
                                 <Maximize2 size={16} />
@@ -4368,13 +4429,46 @@ export default function App() {
                             )}
                           </div>
 
-                          {/* Top Right Media Type Badge */}
-                          {isYouTubeVideo ? (
+                          {/* Top Right Media Switcher or Badge */}
+                          {hasBoth ? (
+                            <div className="absolute top-2 right-2 flex items-center bg-black/85 backdrop-blur-md rounded-lg p-0.5 border border-white/20 shadow-lg z-20">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCardMediaMode((prev) => ({ ...prev, [panel.id]: "video" }));
+                                }}
+                                className={`px-2 py-0.5 rounded text-[9.5px] font-black flex items-center gap-1 transition-all cursor-pointer ${
+                                  currentMode === "video"
+                                    ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_10px_rgba(6,182,212,0.8)]"
+                                    : "text-gray-400 hover:text-white"
+                                }`}
+                              >
+                                <Play size={9} className="fill-current" />
+                                <span>Video</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCardMediaMode((prev) => ({ ...prev, [panel.id]: "photo" }));
+                                }}
+                                className={`px-2 py-0.5 rounded text-[9.5px] font-black flex items-center gap-1 transition-all cursor-pointer ${
+                                  currentMode === "photo"
+                                    ? "bg-gradient-to-r from-fuchsia-500 to-pink-600 text-white shadow-[0_0_10px_rgba(217,70,239,0.8)]"
+                                    : "text-gray-400 hover:text-white"
+                                }`}
+                              >
+                                <Camera size={10} />
+                                <span>Photo</span>
+                              </button>
+                            </div>
+                          ) : mediaInfo.isYouTube ? (
                             <div className="absolute top-2 right-2 bg-gradient-to-r from-red-600 to-rose-600 text-white text-[9.5px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-[0_0_15px_rgba(225,29,72,0.8)] border border-red-400/50 z-10">
                               <Youtube size={11} className="fill-white" />
                               <span>YOUTUBE VIDEO</span>
                             </div>
-                          ) : isGalleryVideo ? (
+                          ) : mediaInfo.hasVideo ? (
                             <div className="absolute top-2 right-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-[9.5px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-[0_0_15px_rgba(6,182,212,0.8)] border border-cyan-400/50 z-10">
                               <Play size={9} className="fill-white" />
                               <span>DIRECT VIDEO</span>
@@ -4387,7 +4481,7 @@ export default function App() {
                           )}
 
                           {/* Thumbnail Title Tag */}
-                          <div className="absolute top-2 left-2.5 right-24 pointer-events-none z-10">
+                          <div className="absolute top-2 left-2.5 right-28 pointer-events-none z-10">
                             <h3 className="text-[12px] font-black text-white leading-tight uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,1)] tracking-wide truncate">
                               {panel.thumbnailTitle || panel.title}
                             </h3>
@@ -4399,40 +4493,53 @@ export default function App() {
                           {/* Tap to View HD Badge */}
                           <div className="absolute bottom-1.5 left-2 bg-black/60 backdrop-blur-sm border border-cyan-400/40 text-cyan-300 text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-md z-10">
                             <Zap size={9} className="fill-cyan-400" />
-                            <span>{isYouTubeVideo ? "Tap for YouTube" : isGalleryVideo ? "Tap for Video" : "Tap for HD"}</span>
+                            <span>{isViewingVideo ? "Tap for Full Video" : "Tap for HD Photo"}</span>
                           </div>
 
-                          {/* Contextual Play / View Media Button */}
-                          <div className="absolute bottom-1.5 right-2 flex items-center gap-1 z-10">
-                            {isYouTubeVideo ? (
+                          {/* Contextual Action Buttons */}
+                          <div className="absolute bottom-1.5 right-2 flex items-center gap-1.5 z-20">
+                            {mediaInfo.hasVideo && (
                               <button
+                                type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleOpenMedia();
+                                  if (mediaInfo.isYouTube && mediaInfo.activeYt) {
+                                    setPreviewMedia({
+                                      url: mediaInfo.activeYt.youtubeUrl,
+                                      isVideo: true,
+                                      mediaType: "youtube",
+                                      title: panel.title + " - YouTube Video",
+                                      youtubeLink: mediaInfo.activeYt.youtubeUrl,
+                                    });
+                                  } else if (mediaInfo.directVideoUrl) {
+                                    setPreviewMedia({
+                                      url: mediaInfo.directVideoUrl,
+                                      isVideo: true,
+                                      mediaType: "video",
+                                      title: panel.title + " - Direct Video Gameplay",
+                                    });
+                                  }
                                 }}
-                                className="bg-red-600 hover:bg-red-500 text-white font-black text-[9px] px-2.5 py-1 rounded-md flex items-center gap-1 shadow-[0_0_12px_rgba(220,38,38,0.8)] transition-transform hover:scale-105 active:scale-95"
+                                className="bg-cyan-600/90 hover:bg-cyan-500 text-white font-black text-[9px] px-2 py-1 rounded-md flex items-center gap-1 shadow-[0_0_10px_rgba(6,182,212,0.8)] transition-transform hover:scale-105 active:scale-95 cursor-pointer border border-cyan-400/40"
                               >
-                                <Youtube size={11} className="fill-white" />
-                                <span>YouTube Video</span>
-                              </button>
-                            ) : isGalleryVideo ? (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenMedia();
-                                }}
-                                className="bg-cyan-600 hover:bg-cyan-500 text-white font-black text-[9px] px-2.5 py-1 rounded-md flex items-center gap-1 shadow-[0_0_12px_rgba(6,182,212,0.8)] transition-transform hover:scale-105 active:scale-95"
-                              >
-                                <Play size={10} className="fill-white" />
+                                <Play size={9} className="fill-white" />
                                 <span>Play Video</span>
                               </button>
-                            ) : (
+                            )}
+                            {mediaInfo.hasPhoto && (
                               <button
+                                type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleOpenMedia();
+                                  setPreviewMedia({
+                                    url: mediaInfo.photoUrl,
+                                    isVideo: false,
+                                    isImage: true,
+                                    mediaType: "photo",
+                                    title: panel.title + " - HD Photo",
+                                  });
                                 }}
-                                className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-black text-[9px] px-2.5 py-1 rounded-md flex items-center gap-1 shadow-[0_0_12px_rgba(217,70,239,0.8)] transition-transform hover:scale-105 active:scale-95"
+                                className="bg-fuchsia-600/90 hover:bg-fuchsia-500 text-white font-black text-[9px] px-2 py-1 rounded-md flex items-center gap-1 shadow-[0_0_10px_rgba(217,70,239,0.8)] transition-transform hover:scale-105 active:scale-95 cursor-pointer border border-fuchsia-400/40"
                               >
                                 <Camera size={10} />
                                 <span>View Photo</span>
@@ -4691,7 +4798,8 @@ export default function App() {
                       </div>
                     </div>
                   );
-                })}
+                });
+              })()}
             </>
           )}
 
@@ -4989,18 +5097,32 @@ export default function App() {
                                   "https://t.me/yourchannel";
 
                                 return (
-                                  <a
-                                    href={fileTargetUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="w-full mt-1 border-2 border-emerald-400 bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-300 font-black py-3 rounded-xl flex items-center justify-center gap-2 uppercase tracking-wider text-xs shadow-[0_0_18px_rgba(16,185,129,0.5)] transition-all hover:scale-[1.01] active:scale-[0.99]"
-                                  >
-                                    <FolderDown
-                                      size={16}
-                                      className="text-emerald-400 animate-pulse"
-                                    />{" "}
-                                    ACCESS FILES
-                                  </a>
+                                  <div className="flex flex-col gap-2 mt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const yt = getYouTubeInfo(fileTargetUrl);
+                                        if (yt) {
+                                          setPreviewMedia({
+                                            url: fileTargetUrl,
+                                            isVideo: true,
+                                            mediaType: "youtube",
+                                            title: req.panel + " Tutorial",
+                                            youtubeLink: fileTargetUrl,
+                                          });
+                                        } else {
+                                          window.open(fileTargetUrl, "_blank");
+                                        }
+                                      }}
+                                      className="w-full border-2 border-emerald-400 bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-300 font-black py-3 rounded-xl flex items-center justify-center gap-2 uppercase tracking-wider text-xs shadow-[0_0_18px_rgba(16,185,129,0.5)] transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                                    >
+                                      <FolderDown
+                                        size={16}
+                                        className="text-emerald-400 animate-pulse"
+                                      />{" "}
+                                      ACCESS FILES / TUTORIAL
+                                    </button>
+                                  </div>
                                 );
                               })()}
                             </div>
@@ -6342,7 +6464,7 @@ export default function App() {
                     desc: "Edit & delete active panels",
                     color: "from-red-500 to-rose-700",
                     view: "adminDeletePanel",
-                    badge: ensureArray(panels).length,
+                    badge: ensureArray(panels).filter((p) => !isLegacyDummyPanel(p)).length,
                   },
                   {
                     title: "Background Image",
@@ -6474,6 +6596,14 @@ export default function App() {
                     desc: "Device camera, mic & location logs",
                     color: "from-cyan-400 to-blue-600",
                     view: "adminPermissions",
+                    badge: 0,
+                  },
+                  {
+                    title: "PRIVATE DATA & BACKUP",
+                    icon: Database,
+                    desc: "Download & keep 100% private data backup (JSON)",
+                    color: "from-emerald-400 via-teal-500 to-cyan-500",
+                    view: "adminPrivateData",
                     badge: 0,
                   },
                 ].map((btn, idx) => (
@@ -8321,7 +8451,9 @@ export default function App() {
                     className="w-full bg-transparent  border border-white/20 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-purple-400"
                   >
                     <option value="">Select a panel...</option>
-                    {ensureArray(panels).map((p, pIdx) => (
+                    {ensureArray(panels)
+                      .filter((p) => !isLegacyDummyPanel(p))
+                      .map((p, pIdx) => (
                       <option key={`panel-opt-${p.id}-${pIdx}`} value={p.title}>
                         {p.title}
                       </option>
@@ -9894,6 +10026,171 @@ export default function App() {
             />
           )}
 
+          {/* VIEW: ADMIN PRIVATE DATA & BACKUP */}
+          {currentView === "adminPrivateData" && (
+            <div className="flex flex-col gap-5 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-slate-950/80 backdrop-blur-xl rounded-3xl p-5 border border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.2)]">
+              {/* Header */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setCurrentView("admin")}
+                  className="p-2.5 rounded-xl transition-all border-2 border-emerald-500/40 bg-emerald-950/40 shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:scale-110 active:scale-95 text-white"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+                <div>
+                  <h2 className="text-xl font-black tracking-tight italic uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,1)] text-white">
+                    PRIVATE DATA{" "}
+                    <span className="text-emerald-400 drop-shadow-[0_0_15px_rgba(16,185,129,1)]">
+                      & BACKUP
+                    </span>
+                  </h2>
+                  <p className="text-[11px] text-gray-400 font-medium">
+                    Apna sara website data apne private control me rakhein aur download karein
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Box */}
+              <div className="bg-gradient-to-br from-emerald-950/60 to-slate-900/90 border border-emerald-500/40 rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-300 shrink-0">
+                  <Shield size={26} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black uppercase text-emerald-400 tracking-wider">
+                      Storage Status: 100% Private & Protected
+                    </span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  </div>
+                  <p className="text-xs text-gray-300 mt-0.5">
+                    Aapke sabhi Panels, Images, Videos, UPI ID, Keys aur Settings private server disk aur Firebase me surakshit hain.
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Download Backup */}
+                <div className="bg-slate-900/80 border border-emerald-500/30 rounded-2xl p-5 flex flex-col justify-between gap-4 shadow-md">
+                  <div>
+                    <div className="flex items-center gap-2.5 text-emerald-400 font-black text-sm uppercase mb-1">
+                      <Download size={18} />
+                      <span>Download Private Backup</span>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      Apni website ka pura data (Active Panels, Photos, Videos, Pricing, UPI details, Theme) ek single JSON file me download karein aur apne phone/computer me private rakhein.
+                    </p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch("/api/backup-data");
+                        if (!res.ok) throw new Error("Failed to fetch backup");
+                        const data = await res.json();
+                        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `vip_panel_store_private_backup_${Date.now()}.json`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        playSuccessChime();
+                        alert("✅ Aapka pura Private Data JSON file ke roop me download ho gaya hai! Isse apne phone ya computer me surakshit rakhein.");
+                      } catch (err: any) {
+                        alert("❌ Backup download karne me error aaya: " + (err?.message || "Unknown error"));
+                      }
+                    }}
+                    className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black font-black py-3.5 px-4 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2 text-xs uppercase tracking-wider transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Download size={16} />
+                    <span>Download Full Backup (.json)</span>
+                  </button>
+                </div>
+
+                {/* Restore Backup */}
+                <div className="bg-slate-900/80 border border-cyan-500/30 rounded-2xl p-5 flex flex-col justify-between gap-4 shadow-md">
+                  <div>
+                    <div className="flex items-center gap-2.5 text-cyan-400 font-black text-sm uppercase mb-1">
+                      <Upload size={18} />
+                      <span>Restore Private Backup</span>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      Pehle download kiya hua private backup file yahan upload karke website ka sara data wapas restore karein.
+                    </p>
+                  </div>
+                  <label className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black py-3.5 px-4 rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.4)] flex items-center justify-center gap-2 text-xs uppercase tracking-wider transition-all active:scale-95 cursor-pointer text-center">
+                    <Upload size={16} />
+                    <span>Select Backup File (.json)</span>
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const text = await file.text();
+                          const json = JSON.parse(text);
+                          const res = await fetch("/api/restore-data", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(json),
+                          });
+                          const result = await res.json();
+                          if (!result.status) throw new Error(result.error || "Restore failed");
+                          playSuccessChime();
+                          alert(`✅ Private Data kamyabi se restore ho gaya! (${result.panelsCount || 0} panels restored). Page refresh kiya ja raha hai.`);
+                          window.location.reload();
+                        } catch (err: any) {
+                          alert("❌ Backup restore karne me error aaya: " + (err?.message || "Invalid JSON file"));
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Privacy Architecture Details Card */}
+              <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-5 flex flex-col gap-3.5 text-left">
+                <h3 className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-2">
+                  <HardDrive size={16} />
+                  <span>Aapka Data Kahan-Kahan Private Rehta Hai?</span>
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3.5 rounded-xl bg-slate-950/70 border border-emerald-500/20 flex flex-col gap-1.5">
+                    <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                      <HardDrive size={14} /> 1. Server Local Disk
+                    </span>
+                    <p className="text-gray-400 text-[11px] leading-relaxed">
+                      Website ka pura data server ke private storage (<code className="text-emerald-300">/data/*.json</code>) me save rehta hai jo internet par kisi ko directly dikhta nahi hai.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-950/70 border border-cyan-500/20 flex flex-col gap-1.5">
+                    <span className="font-bold text-cyan-400 flex items-center gap-1.5">
+                      <Database size={14} /> 2. Realtime Database
+                    </span>
+                    <p className="text-gray-400 text-[11px] leading-relaxed">
+                      Firebase me synchronized data sirf aapke project console ke under rehta hai aur 24x7 live sync rehta hai.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-950/70 border border-purple-500/20 flex flex-col gap-1.5">
+                    <span className="font-bold text-purple-400 flex items-center gap-1.5">
+                      <Shield size={14} /> 3. Offline Private Backup
+                    </span>
+                    <p className="text-gray-400 text-[11px] leading-relaxed">
+                      Jab chahein aap upar diye gaye button se pura data download karke apne computer, pen drive ya Google Drive me private rakh sakte hain.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {currentView === "customerSupport" && (
             <div className="flex flex-col gap-6 w-full animate-in fade-in zoom-in-95 duration-300 relative z-10 mt-2 bg-transparent  rounded-3xl p-5 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <div className="flex items-center gap-3">
@@ -10212,82 +10509,51 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="bg-white/5 border border-pink-500/30 rounded-2xl p-4 shadow-lg">
-                  <div className="flex items-center justify-between mb-3">
+                <div className="bg-white/5 border border-pink-500/30 rounded-2xl p-4 shadow-lg space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-white/10">
                     <label className="text-pink-400 font-black text-xs tracking-wider flex items-center gap-2 uppercase">
                       <Sparkles size={14} />
-                      <span>Panel Media: Photo / Gallery Video / YouTube</span>
+                      <span>Panel Media: Photo & Video Upload</span>
                     </label>
                     <span className="text-[11px] font-bold text-cyan-300">
-                      Live on Website Storefront
+                      Live Storefront Sync
                     </span>
                   </div>
 
-                  {/* 3 Clear Tabs for Media Type */}
-                  <div className="grid grid-cols-3 gap-2 p-1.5 bg-black/40 border border-white/10 rounded-xl mb-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAddPanelMediaTab("photo");
-                        setNewPanelForm({ ...newPanelForm, isVideo: false });
-                      }}
-                      className={`py-2 px-2.5 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
-                        addPanelMediaTab === "photo"
-                          ? "bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white shadow-[0_0_15px_rgba(217,70,239,0.8)]"
-                          : "text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      <Camera size={13} />
-                      <span className="truncate">📸 HD Photo</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAddPanelMediaTab("video");
-                        setNewPanelForm({ ...newPanelForm, isVideo: true });
-                      }}
-                      className={`py-2 px-2.5 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
-                        addPanelMediaTab === "video"
-                          ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.8)]"
-                          : "text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      <Play size={12} className="fill-white" />
-                      <span className="truncate">🎥 Gallery Video</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAddPanelMediaTab("youtube");
-                        setNewPanelForm({ ...newPanelForm, isVideo: true });
-                      }}
-                      className={`py-2 px-2.5 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
-                        addPanelMediaTab === "youtube"
-                          ? "bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-[0_0_15px_rgba(225,29,72,0.8)]"
-                          : "text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      <Youtube size={13} className="fill-white" />
-                      <span className="truncate">🔴 YouTube</span>
-                    </button>
-                  </div>
+                  <p className="text-[11.5px] text-gray-300">
+                    Aap <strong className="text-pink-300">Photo</strong>, <strong className="text-cyan-300">Video</strong>, ya <strong className="text-emerald-300">DONO EK SATH</strong> add kar sakte hain. Dono website par live dikhenge aur customer card par switch karke dekh sakenge!
+                  </p>
 
-                  {/* Tab 1: HD Photo */}
-                  {addPanelMediaTab === "photo" && (
-                    <div className="space-y-2">
-                      <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Box 1: HD Photo / Cover Image */}
+                    <div className="p-3.5 bg-black/40 border border-fuchsia-500/30 rounded-xl flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-fuchsia-300 font-black text-xs flex items-center gap-1.5 uppercase">
+                          <Camera size={13} />
+                          <span>📸 1. Panel Photo (HD Image)</span>
+                        </label>
+                        {newPanelForm.image && (
+                          <button
+                            type="button"
+                            onClick={() => setNewPanelForm((prev) => ({ ...prev, image: "" }))}
+                            className="text-[10px] text-red-400 hover:text-red-300 font-bold underline"
+                          >
+                            Hatao / Clear
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2">
                         <input
                           type="text"
                           value={newPanelForm.image}
-                          onChange={(e) =>
-                            setNewPanelForm({ ...newPanelForm, image: e.target.value, isVideo: false })
-                          }
-                          placeholder="Paste image URL (JPG, PNG, WEBP) or upload from gallery"
-                          className="flex-1 bg-black/40 border border-white/20 rounded-xl py-2.5 px-3.5 text-sm font-bold text-white focus:outline-none focus:border-fuchsia-400 shadow-inner"
+                          onChange={(e) => setNewPanelForm({ ...newPanelForm, image: e.target.value })}
+                          placeholder="Image URL paste karein ya gallery se upload karein"
+                          className="flex-1 bg-black/50 border border-white/20 rounded-lg py-2 px-3 text-xs font-bold text-white focus:outline-none focus:border-fuchsia-400 shadow-inner"
                         />
-                        <label className="cursor-pointer bg-fuchsia-600/80 hover:bg-fuchsia-500 text-white font-black px-4 py-2.5 rounded-xl border border-fuchsia-400/40 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors shadow-lg">
-                          <Upload size={15} />
-                          <span>{isUploadingMedia ? "Uploading..." : "Upload Photo"}</span>
+                        <label className="cursor-pointer bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-black px-3 py-2 rounded-lg border border-fuchsia-400/40 flex items-center gap-1.5 text-xs uppercase tracking-wider shrink-0 transition-colors shadow-lg active:scale-95">
+                          <Upload size={13} />
+                          <span>{isUploadingPhoto ? "Uploading..." : "Upload"}</span>
                           <input
                             type="file"
                             accept="image/*"
@@ -10297,13 +10563,12 @@ export default function App() {
                               if (file) {
                                 processAsyncMediaUpload(
                                   file,
-                                  () => setIsUploadingMedia(true),
+                                  () => setIsUploadingPhoto(true),
                                   (mediaUrl) => {
-                                    setIsUploadingMedia(false);
+                                    setIsUploadingPhoto(false);
                                     setNewPanelForm((prev) => ({
                                       ...prev,
                                       image: mediaUrl,
-                                      isVideo: false,
                                     }));
                                   },
                                 );
@@ -10312,28 +10577,57 @@ export default function App() {
                           />
                         </label>
                       </div>
-                      <p className="text-[11px] text-gray-400 font-semibold">
-                        💡 Gallery se photo select karein ya internet se image link paste karein. Website pe HD photo dikhegi.
-                      </p>
-                    </div>
-                  )}
 
-                  {/* Tab 2: Gallery Video (MP4 / WebM / Any Video) */}
-                  {addPanelMediaTab === "video" && (
-                    <div className="space-y-2">
-                      <div className="flex flex-col sm:flex-row gap-2">
+                      {/* Photo Thumbnail Preview */}
+                      {newPanelForm.image && !isDirectVideoUrl(newPanelForm.image) && (
+                        <div className="mt-1 flex items-center gap-2 p-1.5 bg-black/60 rounded-lg border border-fuchsia-500/30">
+                          <img
+                            src={newPanelForm.image}
+                            alt="Photo preview"
+                            className="w-14 h-12 rounded object-cover border border-white/20 shrink-0"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop";
+                            }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <span className="bg-fuchsia-500/20 text-fuchsia-300 text-[9.5px] font-black px-1.5 py-0.5 rounded border border-fuchsia-500/30">
+                              ✅ Photo Ready
+                            </span>
+                            <p className="text-[10px] text-gray-300 truncate mt-0.5">{newPanelForm.image}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Box 2: Video (MP4 / WebM / YouTube) */}
+                    <div className="p-3.5 bg-black/40 border border-cyan-500/30 rounded-xl flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-cyan-300 font-black text-xs flex items-center gap-1.5 uppercase">
+                          <Play size={12} className="fill-cyan-300" />
+                          <span>🎥 2. Panel Video (MP4 / YouTube)</span>
+                        </label>
+                        {newPanelForm.videoLink && (
+                          <button
+                            type="button"
+                            onClick={() => setNewPanelForm((prev) => ({ ...prev, videoLink: "" }))}
+                            className="text-[10px] text-red-400 hover:text-red-300 font-bold underline"
+                          >
+                            Hatao / Clear
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2">
                         <input
                           type="text"
-                          value={newPanelForm.image}
-                          onChange={(e) =>
-                            setNewPanelForm({ ...newPanelForm, image: e.target.value, videoLink: e.target.value, isVideo: true })
-                          }
-                          placeholder="Direct Video URL ya Gallery se Video Upload karein"
-                          className="flex-1 bg-black/40 border border-white/20 rounded-xl py-2.5 px-3.5 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 shadow-inner"
+                          value={newPanelForm.videoLink}
+                          onChange={(e) => setNewPanelForm({ ...newPanelForm, videoLink: e.target.value })}
+                          placeholder="Video URL, YouTube link ya gallery se video upload karein"
+                          className="flex-1 bg-black/50 border border-white/20 rounded-lg py-2 px-3 text-xs font-bold text-white focus:outline-none focus:border-cyan-400 shadow-inner"
                         />
-                        <label className="cursor-pointer bg-cyan-600/80 hover:bg-cyan-500 text-white font-black px-4 py-2.5 rounded-xl border border-cyan-400/40 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors shadow-lg">
-                          <Upload size={15} />
-                          <span>{isUploadingMedia ? "Uploading Video..." : "Upload Video (Any Size)"}</span>
+                        <label className="cursor-pointer bg-cyan-600 hover:bg-cyan-500 text-white font-black px-3 py-2 rounded-lg border border-cyan-400/40 flex items-center gap-1.5 text-xs uppercase tracking-wider shrink-0 transition-colors shadow-lg active:scale-95">
+                          <Upload size={13} />
+                          <span>{isUploadingVideo ? "Uploading..." : "Upload"}</span>
                           <input
                             type="file"
                             accept="video/*,video/mp4,video/webm,video/quicktime,video/mov,video/mkv,video/3gp,video/x-matroska,video/avi"
@@ -10343,14 +10637,12 @@ export default function App() {
                               if (file) {
                                 processAsyncMediaUpload(
                                   file,
-                                  () => setIsUploadingMedia(true),
+                                  () => setIsUploadingVideo(true),
                                   (mediaUrl) => {
-                                    setIsUploadingMedia(false);
+                                    setIsUploadingVideo(false);
                                     setNewPanelForm((prev) => ({
                                       ...prev,
-                                      image: mediaUrl,
                                       videoLink: mediaUrl,
-                                      isVideo: true,
                                     }));
                                   },
                                 );
@@ -10359,104 +10651,73 @@ export default function App() {
                           />
                         </label>
                       </div>
-                      <p className="text-[11px] text-cyan-300 font-semibold flex items-center gap-1.5">
-                        <Film size={13} className="text-cyan-400" />
-                        <span>Kitna bhi bada video upload karein — yeh sidhe website me panel card par bina naya page khule play hoga.</span>
-                      </p>
-                    </div>
-                  )}
 
-                  {/* Tab 3: YouTube Video */}
-                  {addPanelMediaTab === "youtube" && (
-                    <div className="space-y-2">
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input
-                          type="text"
-                          value={newPanelForm.videoLink}
-                          onChange={(e) => {
-                            const yVal = e.target.value;
-                            const ytInfo = getYouTubeInfo(yVal);
-                            setNewPanelForm({
-                              ...newPanelForm,
-                              videoLink: yVal,
-                              isVideo: true,
-                              image: ytInfo ? ytInfo.thumbnailUrl : newPanelForm.image,
-                            });
-                          }}
-                          placeholder="Paste YouTube Video URL (e.g. https://www.youtube.com/watch?v=... or Shorts)"
-                          className="flex-1 bg-black/40 border border-white/20 rounded-xl py-2.5 px-3.5 text-sm font-bold text-white focus:outline-none focus:border-red-400 shadow-inner"
-                        />
-                      </div>
-                      <p className="text-[11px] text-gray-400 font-semibold">
-                        💡 YouTube link daalte hi live thumbnail aur play overlay website storefront par activate ho jayega.
-                      </p>
-                    </div>
-                  )}
+                      {/* Video Player / YouTube Preview */}
+                      {(() => {
+                        const yt = getYouTubeInfo(newPanelForm.videoLink);
+                        const isVid = isDirectVideoUrl(newPanelForm.videoLink) || Boolean(newPanelForm.videoLink && !yt);
+                        if (!yt && !isVid) return null;
 
-                  {/* Live Media Preview Box */}
-                  {(() => {
-                    const currentYt = getYouTubeInfo(newPanelForm.videoLink) || getYouTubeInfo(newPanelForm.image);
-                    const hasVideo = Boolean(newPanelForm.isVideo && newPanelForm.image && !currentYt);
-                    const hasPhoto = Boolean(newPanelForm.image && !newPanelForm.isVideo && !currentYt);
-
-                    if (!currentYt && !hasVideo && !hasPhoto) return null;
-
-                    return (
-                      <div className="mt-3 p-3 bg-black/60 border border-white/15 rounded-xl flex items-center gap-3">
-                        <div className="relative w-28 h-20 rounded-lg overflow-hidden border border-white/30 shrink-0 bg-black">
-                          {currentYt ? (
-                            <>
-                              <img
-                                src={currentYt.thumbnailUrl}
-                                alt="YouTube Thumbnail"
-                                className="w-full h-full object-cover"
-                              />
-                              <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                                <div className="w-7 h-7 rounded-full bg-red-600 flex items-center justify-center">
-                                  <Play size={12} className="fill-white text-white ml-0.5" />
-                                </div>
-                              </div>
-                            </>
-                          ) : hasVideo ? (
-                            <video
-                              src={newPanelForm.image}
-                              className="w-full h-full object-cover"
-                              autoPlay
-                              loop
-                              muted
-                              playsInline
-                            />
-                          ) : (
-                            <img
-                              src={newPanelForm.image}
-                              alt="Photo Preview"
-                              className="w-full h-full object-cover"
-                            />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 mb-1">
-                            {currentYt ? (
-                              <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded flex items-center gap-1">
-                                <Youtube size={11} className="fill-white" /> YouTube Ready
+                        return (
+                          <div className="mt-1 flex items-center gap-2 p-1.5 bg-black/60 rounded-lg border border-cyan-500/30">
+                            <div className="w-14 h-12 rounded overflow-hidden bg-black shrink-0 relative border border-white/20">
+                              {yt ? (
+                                <>
+                                  <img src={yt.thumbnailUrl} alt="YT" className="w-full h-full object-cover" />
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                    <div className="w-5 h-5 rounded-full bg-red-600 flex items-center justify-center">
+                                      <Play size={9} className="fill-white text-white ml-0.5" />
+                                    </div>
+                                  </div>
+                                </>
+                              ) : (
+                                <video src={newPanelForm.videoLink} className="w-full h-full object-cover" autoPlay loop muted playsInline />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className={`${yt ? "bg-red-500/20 text-red-300 border-red-500/30" : "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"} text-[9.5px] font-black px-1.5 py-0.5 rounded border`}>
+                                {yt ? "🔴 YouTube Video Ready" : "🎥 Direct Video Ready"}
                               </span>
-                            ) : hasVideo ? (
-                              <span className="bg-cyan-600 text-white text-[10px] font-black px-2 py-0.5 rounded flex items-center gap-1">
-                                <Play size={10} className="fill-white" /> Gallery Video Ready
-                              </span>
-                            ) : (
-                              <span className="bg-fuchsia-600 text-white text-[10px] font-black px-2 py-0.5 rounded flex items-center gap-1">
-                                <Camera size={11} /> Photo Ready
-                              </span>
-                            )}
+                              <p className="text-[10px] text-gray-300 truncate mt-0.5">{newPanelForm.videoLink}</p>
+                            </div>
                           </div>
-                          <p className="text-xs font-bold text-white truncate">
-                            {newPanelForm.title || "Panel Preview"}
-                          </p>
-                          <p className="text-[11px] text-gray-400">
-                            Website par ye preview live dikhega
-                          </p>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Summary Status Banner */}
+                  {(() => {
+                    const hasPhoto = Boolean(newPanelForm.image && !isDirectVideoUrl(newPanelForm.image));
+                    const hasVideo = Boolean(newPanelForm.videoLink);
+
+                    if (hasPhoto && hasVideo) {
+                      return (
+                        <div className="p-2.5 bg-emerald-950/40 border border-emerald-500/50 rounded-xl flex items-center gap-2 text-emerald-300 text-xs font-black">
+                          <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+                          <span>🌟 PHOTO + VIDEO DONO ADD HAIN! Website par card me dono live dikhenge aur switch ho sakenge.</span>
                         </div>
+                      );
+                    }
+                    if (hasPhoto) {
+                      return (
+                        <div className="p-2.5 bg-fuchsia-950/40 border border-fuchsia-500/50 rounded-xl flex items-center gap-2 text-fuchsia-300 text-xs font-bold">
+                          <Camera size={14} className="text-fuchsia-400 shrink-0" />
+                          <span>📸 HD Photo set hai. Aap chahein to sath me Video bhi add kar sakte hain.</span>
+                        </div>
+                      );
+                    }
+                    if (hasVideo) {
+                      return (
+                        <div className="p-2.5 bg-cyan-950/40 border border-cyan-500/50 rounded-xl flex items-center gap-2 text-cyan-300 text-xs font-bold">
+                          <Play size={14} className="fill-cyan-400 text-cyan-400 shrink-0" />
+                          <span>🎥 Video Demo set hai. Aap chahein to sath me Cover Photo bhi add kar sakte hain.</span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-gray-400 text-xs font-semibold">
+                        💡 Photo, Video, ya dono me se jo bhi chij aap add karenge, wo sidhe website me dekhne lagegi.
                       </div>
                     );
                   })()}
@@ -10576,40 +10837,54 @@ export default function App() {
                       { label: "30 Day", price: price30 },
                     ];
 
-                    const isAnyVideo = Boolean(
-                      newPanelForm.isVideo ||
-                      addPanelMediaTab === "video" ||
-                      (newPanelForm.image && (
-                        /\.(mp4|webm|mov|mkv|3gp|m4v|avi)/i.test(newPanelForm.image) ||
-                        newPanelForm.image.includes("/uploads/") ||
-                        newPanelForm.image.startsWith("data:video") ||
-                        newPanelForm.image.startsWith("blob:")
-                      )) ||
-                      (newPanelForm.videoLink && (
-                        /\.(mp4|webm|mov|mkv|3gp|m4v|avi)/i.test(newPanelForm.videoLink) ||
-                        newPanelForm.videoLink.includes("/uploads/") ||
-                        newPanelForm.videoLink.startsWith("data:video") ||
-                        newPanelForm.videoLink.startsWith("blob:")
-                      ))
-                    );
+                    // Detect media types cleanly
+                    const rawPhoto = newPanelForm.image ? newPanelForm.image.trim() : "";
+                    const rawVideo = newPanelForm.videoLink ? newPanelForm.videoLink.trim() : "";
 
-                    const panelMediaUrl = newPanelForm.image || newPanelForm.videoLink || "";
+                    const isPhotoDirectVid = isDirectVideoUrl(rawPhoto);
+                    const isVideoDirectVid = isDirectVideoUrl(rawVideo);
+                    const ytPhoto = getYouTubeInfo(rawPhoto);
+                    const ytVideo = getYouTubeInfo(rawVideo);
+                    const effectiveYt = ytVideo || ytPhoto;
+
+                    // Compute final photo URL
+                    let finalPhoto = "";
+                    if (rawPhoto && !isPhotoDirectVid && !ytPhoto) {
+                      finalPhoto = rawPhoto;
+                    } else if (rawVideo && !isVideoDirectVid && !ytVideo) {
+                      finalPhoto = rawVideo;
+                    } else if (effectiveYt) {
+                      finalPhoto = effectiveYt.thumbnailUrl;
+                    } else {
+                      finalPhoto = "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop";
+                    }
+
+                    // Compute final video URL
+                    let finalVideo = "";
+                    if (rawVideo && (isVideoDirectVid || ytVideo)) {
+                      finalVideo = rawVideo;
+                    } else if (rawPhoto && (isPhotoDirectVid || ytPhoto)) {
+                      finalVideo = rawPhoto;
+                    } else if (rawVideo) {
+                      finalVideo = rawVideo;
+                    }
+
+                    const hasPhoto = Boolean(finalPhoto);
+                    const hasVideo = Boolean(finalVideo);
+                    const isAnyVideo = Boolean(hasVideo);
 
                     const newPanel = {
                       id: Date.now(),
                       title: newPanelForm.title.trim(),
                       category: newPanelForm.category,
                       badge: newPanelForm.badge || "PREMIUM PANEL",
-                      image:
-                        panelMediaUrl ||
-                        "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
+                      image: finalPhoto,
+                      photoUrl: finalPhoto,
+                      hasPhoto,
+                      videoLink: finalVideo,
+                      hasVideo,
                       isVideo: isAnyVideo,
-                      mediaType: addPanelMediaTab === "youtube" || getYouTubeInfo(newPanelForm.videoLink) || getYouTubeInfo(newPanelForm.image)
-                        ? "youtube"
-                        : isAnyVideo
-                          ? "video"
-                          : "photo",
-                      videoLink: isAnyVideo ? (newPanelForm.videoLink || panelMediaUrl) : newPanelForm.videoLink,
+                      mediaType: effectiveYt ? "youtube" : (hasVideo ? "video" : "photo"),
                       installLink: newPanelForm.installLink,
                       feedbackLink: newPanelForm.feedbackLink,
                       exceptFileLink: newPanelForm.exceptFileLink,
@@ -10628,7 +10903,7 @@ export default function App() {
                     setPanels(updatedPanels);
                     savePanelsToFirebase(updatedPanels);
                     playSuccessChime();
-                    alert(`✅ Panel "${newPanel.title}" successfully added to Store!`);
+                    alert(`✅ Panel "${newPanel.title}" successfully added to Store! Photo aur Video dono website par LIVE ho gaye hain.`);
                     setNewPanelForm({
                       ...newPanelForm,
                       title: "",
@@ -10667,7 +10942,7 @@ export default function App() {
                   </h2>
                 </div>
                 <span className="bg-red-500/20 text-red-300 border border-red-500/40 text-xs font-black px-3 py-1 rounded-full uppercase">
-                  Total: {ensureArray(panels).length} Panels
+                  Total: {ensureArray(panels).filter((p) => !isLegacyDummyPanel(p)).length} Panels
                 </span>
               </div>
 
@@ -10687,6 +10962,7 @@ export default function App() {
               <div className="flex flex-col gap-3">
                 {ensureArray(panels)
                   .filter((p) => {
+                    if (!p || isLegacyDummyPanel(p)) return false;
                     if (!adminPanelSearchQuery) return true;
                     const q = adminPanelSearchQuery.toLowerCase();
                     return (
@@ -11094,82 +11370,51 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="bg-white/5 border border-pink-500/30 rounded-2xl p-4 shadow-lg">
-                  <div className="flex items-center justify-between mb-3">
+                <div className="bg-white/5 border border-pink-500/30 rounded-2xl p-4 shadow-lg space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-white/10">
                     <label className="text-pink-400 font-black text-xs tracking-wider flex items-center gap-2 uppercase">
                       <Sparkles size={14} />
-                      <span>Panel Media: Photo / Gallery Video / YouTube</span>
+                      <span>Panel Media: Photo & Video</span>
                     </label>
                     <span className="text-[11px] font-bold text-cyan-300">
-                      Live on Website Storefront
+                      Live Storefront Sync
                     </span>
                   </div>
 
-                  {/* 3 Clear Tabs for Media Type in Edit Mode */}
-                  <div className="grid grid-cols-3 gap-2 p-1.5 bg-black/40 border border-white/10 rounded-xl mb-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditPanelMediaTab("photo");
-                        setEditPanelForm({ ...editPanelForm, isVideo: false });
-                      }}
-                      className={`py-2 px-2.5 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
-                        editPanelMediaTab === "photo"
-                          ? "bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white shadow-[0_0_15px_rgba(217,70,239,0.8)]"
-                          : "text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      <Camera size={13} />
-                      <span className="truncate">📸 HD Photo</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditPanelMediaTab("video");
-                        setEditPanelForm({ ...editPanelForm, isVideo: true });
-                      }}
-                      className={`py-2 px-2.5 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
-                        editPanelMediaTab === "video"
-                          ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.8)]"
-                          : "text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      <Play size={12} className="fill-white" />
-                      <span className="truncate">🎥 Gallery Video</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditPanelMediaTab("youtube");
-                        setEditPanelForm({ ...editPanelForm, isVideo: true });
-                      }}
-                      className={`py-2 px-2.5 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
-                        editPanelMediaTab === "youtube"
-                          ? "bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-[0_0_15px_rgba(225,29,72,0.8)]"
-                          : "text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      <Youtube size={13} className="fill-white" />
-                      <span className="truncate">🔴 YouTube</span>
-                    </button>
-                  </div>
+                  <p className="text-[11.5px] text-gray-300">
+                    Aap <strong className="text-pink-300">Photo</strong>, <strong className="text-cyan-300">Video</strong>, ya <strong className="text-emerald-300">DONO EK SATH</strong> edit ya change kar sakte hain:
+                  </p>
 
-                  {/* Edit Tab 1: HD Photo */}
-                  {editPanelMediaTab === "photo" && (
-                    <div className="space-y-2">
-                      <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Box 1: HD Photo / Cover Image */}
+                    <div className="p-3.5 bg-black/40 border border-fuchsia-500/30 rounded-xl flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-fuchsia-300 font-black text-xs flex items-center gap-1.5 uppercase">
+                          <Camera size={13} />
+                          <span>📸 1. Panel Photo (HD Image)</span>
+                        </label>
+                        {editPanelForm.image && (
+                          <button
+                            type="button"
+                            onClick={() => setEditPanelForm((prev) => ({ ...prev, image: "" }))}
+                            className="text-[10px] text-red-400 hover:text-red-300 font-bold underline"
+                          >
+                            Hatao / Clear
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2">
                         <input
                           type="text"
                           value={editPanelForm.image}
-                          onChange={(e) =>
-                            setEditPanelForm({ ...editPanelForm, image: e.target.value, isVideo: false })
-                          }
-                          placeholder="Paste image URL (JPG, PNG, WEBP) or upload from gallery"
-                          className="flex-1 bg-black/40 border border-white/20 rounded-xl py-2.5 px-3.5 text-sm font-bold text-white focus:outline-none focus:border-fuchsia-400 shadow-inner"
+                          onChange={(e) => setEditPanelForm({ ...editPanelForm, image: e.target.value })}
+                          placeholder="Image URL paste karein ya gallery se upload karein"
+                          className="flex-1 bg-black/50 border border-white/20 rounded-lg py-2 px-3 text-xs font-bold text-white focus:outline-none focus:border-fuchsia-400 shadow-inner"
                         />
-                        <label className="cursor-pointer bg-fuchsia-600/80 hover:bg-fuchsia-500 text-white font-black px-4 py-2.5 rounded-xl border border-fuchsia-400/40 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors shadow-lg">
-                          <Upload size={15} />
-                          <span>{isUploadingMedia ? "Uploading..." : "Upload Photo"}</span>
+                        <label className="cursor-pointer bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-black px-3 py-2 rounded-lg border border-fuchsia-400/40 flex items-center gap-1.5 text-xs uppercase tracking-wider shrink-0 transition-colors shadow-lg active:scale-95">
+                          <Upload size={13} />
+                          <span>{isUploadingEditPhoto ? "Uploading..." : "Upload"}</span>
                           <input
                             type="file"
                             accept="image/*"
@@ -11179,13 +11424,12 @@ export default function App() {
                               if (file) {
                                 processAsyncMediaUpload(
                                   file,
-                                  () => setIsUploadingMedia(true),
+                                  () => setIsUploadingEditPhoto(true),
                                   (mediaUrl) => {
-                                    setIsUploadingMedia(false);
+                                    setIsUploadingEditPhoto(false);
                                     setEditPanelForm((prev) => ({
                                       ...prev,
                                       image: mediaUrl,
-                                      isVideo: false,
                                     }));
                                   },
                                 );
@@ -11194,28 +11438,57 @@ export default function App() {
                           />
                         </label>
                       </div>
-                      <p className="text-[11px] text-gray-400 font-semibold">
-                        💡 Gallery se photo select karein ya image link paste karein.
-                      </p>
-                    </div>
-                  )}
 
-                  {/* Edit Tab 2: Gallery Video (MP4 / WebM / Any Video) */}
-                  {editPanelMediaTab === "video" && (
-                    <div className="space-y-2">
-                      <div className="flex flex-col sm:flex-row gap-2">
+                      {/* Photo Thumbnail Preview */}
+                      {editPanelForm.image && !isDirectVideoUrl(editPanelForm.image) && (
+                        <div className="mt-1 flex items-center gap-2 p-1.5 bg-black/60 rounded-lg border border-fuchsia-500/30">
+                          <img
+                            src={editPanelForm.image}
+                            alt="Photo preview"
+                            className="w-14 h-12 rounded object-cover border border-white/20 shrink-0"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop";
+                            }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <span className="bg-fuchsia-500/20 text-fuchsia-300 text-[9.5px] font-black px-1.5 py-0.5 rounded border border-fuchsia-500/30">
+                              ✅ Photo Ready
+                            </span>
+                            <p className="text-[10px] text-gray-300 truncate mt-0.5">{editPanelForm.image}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Box 2: Video (MP4 / WebM / YouTube) */}
+                    <div className="p-3.5 bg-black/40 border border-cyan-500/30 rounded-xl flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-cyan-300 font-black text-xs flex items-center gap-1.5 uppercase">
+                          <Play size={12} className="fill-cyan-300" />
+                          <span>🎥 2. Panel Video (MP4 / YouTube)</span>
+                        </label>
+                        {editPanelForm.videoLink && (
+                          <button
+                            type="button"
+                            onClick={() => setEditPanelForm((prev) => ({ ...prev, videoLink: "" }))}
+                            className="text-[10px] text-red-400 hover:text-red-300 font-bold underline"
+                          >
+                            Hatao / Clear
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2">
                         <input
                           type="text"
-                          value={editPanelForm.image}
-                          onChange={(e) =>
-                            setEditPanelForm({ ...editPanelForm, image: e.target.value, videoLink: e.target.value, isVideo: true })
-                          }
-                          placeholder="Direct Video URL ya Gallery se Video Upload karein"
-                          className="flex-1 bg-black/40 border border-white/20 rounded-xl py-2.5 px-3.5 text-sm font-bold text-white focus:outline-none focus:border-cyan-400 shadow-inner"
+                          value={editPanelForm.videoLink}
+                          onChange={(e) => setEditPanelForm({ ...editPanelForm, videoLink: e.target.value })}
+                          placeholder="Video URL, YouTube link ya gallery se video upload karein"
+                          className="flex-1 bg-black/50 border border-white/20 rounded-lg py-2 px-3 text-xs font-bold text-white focus:outline-none focus:border-cyan-400 shadow-inner"
                         />
-                        <label className="cursor-pointer bg-cyan-600/80 hover:bg-cyan-500 text-white font-black px-4 py-2.5 rounded-xl border border-cyan-400/40 flex items-center justify-center gap-2 text-xs uppercase tracking-wider shrink-0 transition-colors shadow-lg">
-                          <Upload size={15} />
-                          <span>{isUploadingMedia ? "Uploading Video..." : "Upload Video (Any Size)"}</span>
+                        <label className="cursor-pointer bg-cyan-600 hover:bg-cyan-500 text-white font-black px-3 py-2 rounded-lg border border-cyan-400/40 flex items-center gap-1.5 text-xs uppercase tracking-wider shrink-0 transition-colors shadow-lg active:scale-95">
+                          <Upload size={13} />
+                          <span>{isUploadingEditVideo ? "Uploading..." : "Upload"}</span>
                           <input
                             type="file"
                             accept="video/*,video/mp4,video/webm,video/quicktime,video/mov,video/mkv,video/3gp,video/x-matroska,video/avi"
@@ -11225,14 +11498,12 @@ export default function App() {
                               if (file) {
                                 processAsyncMediaUpload(
                                   file,
-                                  () => setIsUploadingMedia(true),
+                                  () => setIsUploadingEditVideo(true),
                                   (mediaUrl) => {
-                                    setIsUploadingMedia(false);
+                                    setIsUploadingEditVideo(false);
                                     setEditPanelForm((prev) => ({
                                       ...prev,
-                                      image: mediaUrl,
                                       videoLink: mediaUrl,
-                                      isVideo: true,
                                     }));
                                   },
                                 );
@@ -11241,104 +11512,73 @@ export default function App() {
                           />
                         </label>
                       </div>
-                      <p className="text-[11px] text-cyan-300 font-semibold flex items-center gap-1.5">
-                        <Film size={13} className="text-cyan-400" />
-                        <span>Kitna bhi bada video upload karein — yeh sidhe website me panel card par bina naya page khule play hoga.</span>
-                      </p>
-                    </div>
-                  )}
 
-                  {/* Edit Tab 3: YouTube Video */}
-                  {editPanelMediaTab === "youtube" && (
-                    <div className="space-y-2">
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input
-                          type="text"
-                          value={editPanelForm.videoLink}
-                          onChange={(e) => {
-                            const yVal = e.target.value;
-                            const ytInfo = getYouTubeInfo(yVal);
-                            setEditPanelForm({
-                              ...editPanelForm,
-                              videoLink: yVal,
-                              isVideo: true,
-                              image: ytInfo ? ytInfo.thumbnailUrl : editPanelForm.image,
-                            });
-                          }}
-                          placeholder="Paste YouTube Video URL (e.g. https://www.youtube.com/watch?v=... or Shorts)"
-                          className="flex-1 bg-black/40 border border-white/20 rounded-xl py-2.5 px-3.5 text-sm font-bold text-white focus:outline-none focus:border-red-400 shadow-inner"
-                        />
-                      </div>
-                      <p className="text-[11px] text-gray-400 font-semibold">
-                        💡 YouTube link daalte hi live thumbnail aur play overlay website storefront par activate ho jayega.
-                      </p>
-                    </div>
-                  )}
+                      {/* Video Player / YouTube Preview */}
+                      {(() => {
+                        const yt = getYouTubeInfo(editPanelForm.videoLink);
+                        const isVid = isDirectVideoUrl(editPanelForm.videoLink) || Boolean(editPanelForm.videoLink && !yt);
+                        if (!yt && !isVid) return null;
 
-                  {/* Live Media Preview Box for Edit Mode */}
-                  {(() => {
-                    const currentYt = getYouTubeInfo(editPanelForm.videoLink) || getYouTubeInfo(editPanelForm.image);
-                    const hasVideo = Boolean(editPanelForm.isVideo && editPanelForm.image && !currentYt);
-                    const hasPhoto = Boolean(editPanelForm.image && !editPanelForm.isVideo && !currentYt);
-
-                    if (!currentYt && !hasVideo && !hasPhoto) return null;
-
-                    return (
-                      <div className="mt-3 p-3 bg-black/60 border border-white/15 rounded-xl flex items-center gap-3">
-                        <div className="relative w-28 h-20 rounded-lg overflow-hidden border border-white/30 shrink-0 bg-black">
-                          {currentYt ? (
-                            <>
-                              <img
-                                src={currentYt.thumbnailUrl}
-                                alt="YouTube Thumbnail"
-                                className="w-full h-full object-cover"
-                              />
-                              <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                                <div className="w-7 h-7 rounded-full bg-red-600 flex items-center justify-center">
-                                  <Play size={12} className="fill-white text-white ml-0.5" />
-                                </div>
-                              </div>
-                            </>
-                          ) : hasVideo ? (
-                            <video
-                              src={editPanelForm.image}
-                              className="w-full h-full object-cover"
-                              autoPlay
-                              loop
-                              muted
-                              playsInline
-                            />
-                          ) : (
-                            <img
-                              src={editPanelForm.image}
-                              alt="Photo Preview"
-                              className="w-full h-full object-cover"
-                            />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 mb-1">
-                            {currentYt ? (
-                              <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded flex items-center gap-1">
-                                <Youtube size={11} className="fill-white" /> YouTube Ready
+                        return (
+                          <div className="mt-1 flex items-center gap-2 p-1.5 bg-black/60 rounded-lg border border-cyan-500/30">
+                            <div className="w-14 h-12 rounded overflow-hidden bg-black shrink-0 relative border border-white/20">
+                              {yt ? (
+                                <>
+                                  <img src={yt.thumbnailUrl} alt="YT" className="w-full h-full object-cover" />
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                    <div className="w-5 h-5 rounded-full bg-red-600 flex items-center justify-center">
+                                      <Play size={9} className="fill-white text-white ml-0.5" />
+                                    </div>
+                                  </div>
+                                </>
+                              ) : (
+                                <video src={editPanelForm.videoLink} className="w-full h-full object-cover" autoPlay loop muted playsInline />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className={`${yt ? "bg-red-500/20 text-red-300 border-red-500/30" : "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"} text-[9.5px] font-black px-1.5 py-0.5 rounded border`}>
+                                {yt ? "🔴 YouTube Video Ready" : "🎥 Direct Video Ready"}
                               </span>
-                            ) : hasVideo ? (
-                              <span className="bg-cyan-600 text-white text-[10px] font-black px-2 py-0.5 rounded flex items-center gap-1">
-                                <Play size={10} className="fill-white" /> Gallery Video Ready
-                              </span>
-                            ) : (
-                              <span className="bg-fuchsia-600 text-white text-[10px] font-black px-2 py-0.5 rounded flex items-center gap-1">
-                                <Camera size={11} /> Photo Ready
-                              </span>
-                            )}
+                              <p className="text-[10px] text-gray-300 truncate mt-0.5">{editPanelForm.videoLink}</p>
+                            </div>
                           </div>
-                          <p className="text-xs font-bold text-white truncate">
-                            {editPanelForm.title || "Panel Preview"}
-                          </p>
-                          <p className="text-[11px] text-gray-400">
-                            Website par ye preview live dikhega
-                          </p>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Summary Status Banner */}
+                  {(() => {
+                    const hasPhoto = Boolean(editPanelForm.image && !isDirectVideoUrl(editPanelForm.image));
+                    const hasVideo = Boolean(editPanelForm.videoLink);
+
+                    if (hasPhoto && hasVideo) {
+                      return (
+                        <div className="p-2.5 bg-emerald-950/40 border border-emerald-500/50 rounded-xl flex items-center gap-2 text-emerald-300 text-xs font-black">
+                          <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+                          <span>🌟 PHOTO + VIDEO DONO ADD HAIN! Website par card me dono live dikhenge aur switch ho sakenge.</span>
                         </div>
+                      );
+                    }
+                    if (hasPhoto) {
+                      return (
+                        <div className="p-2.5 bg-fuchsia-950/40 border border-fuchsia-500/50 rounded-xl flex items-center gap-2 text-fuchsia-300 text-xs font-bold">
+                          <Camera size={14} className="text-fuchsia-400 shrink-0" />
+                          <span>📸 HD Photo set hai. Aap chahein to sath me Video bhi add kar sakte hain.</span>
+                        </div>
+                      );
+                    }
+                    if (hasVideo) {
+                      return (
+                        <div className="p-2.5 bg-cyan-950/40 border border-cyan-500/50 rounded-xl flex items-center gap-2 text-cyan-300 text-xs font-bold">
+                          <Play size={14} className="fill-cyan-400 text-cyan-400 shrink-0" />
+                          <span>🎥 Video Demo set hai. Aap chahein to sath me Cover Photo bhi add kar sakte hain.</span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-gray-400 text-xs font-semibold">
+                        💡 Photo, Video, ya dono me se jo bhi chij aap add karenge, wo sidhe website me dekhne lagegi.
                       </div>
                     );
                   })()}
@@ -11459,38 +11699,52 @@ export default function App() {
                       { label: "30 Day", price: price30 },
                     ];
 
-                    const isAnyVideo = Boolean(
-                      editPanelForm.isVideo ||
-                      editPanelMediaTab === "video" ||
-                      (editPanelForm.image && (
-                        /\.(mp4|webm|mov|mkv|3gp|m4v|avi)/i.test(editPanelForm.image) ||
-                        editPanelForm.image.includes("/uploads/") ||
-                        editPanelForm.image.startsWith("data:video") ||
-                        editPanelForm.image.startsWith("blob:")
-                      )) ||
-                      (editPanelForm.videoLink && (
-                        /\.(mp4|webm|mov|mkv|3gp|m4v|avi)/i.test(editPanelForm.videoLink) ||
-                        editPanelForm.videoLink.includes("/uploads/") ||
-                        editPanelForm.videoLink.startsWith("data:video") ||
-                        editPanelForm.videoLink.startsWith("blob:")
-                      ))
-                    );
+                    // Detect media types cleanly for edit mode
+                    const rawPhoto = editPanelForm.image ? editPanelForm.image.trim() : "";
+                    const rawVideo = editPanelForm.videoLink ? editPanelForm.videoLink.trim() : "";
 
-                    const panelMediaUrl = editPanelForm.image || editPanelForm.videoLink || "";
+                    const isPhotoDirectVid = isDirectVideoUrl(rawPhoto);
+                    const isVideoDirectVid = isDirectVideoUrl(rawVideo);
+                    const ytPhoto = getYouTubeInfo(rawPhoto);
+                    const ytVideo = getYouTubeInfo(rawVideo);
+                    const effectiveYt = ytVideo || ytPhoto;
+
+                    // Compute final photo URL
+                    let finalPhoto = "";
+                    if (rawPhoto && !isPhotoDirectVid && !ytPhoto) {
+                      finalPhoto = rawPhoto;
+                    } else if (rawVideo && !isVideoDirectVid && !ytVideo) {
+                      finalPhoto = rawVideo;
+                    } else if (effectiveYt) {
+                      finalPhoto = effectiveYt.thumbnailUrl;
+                    } else {
+                      finalPhoto = "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop";
+                    }
+
+                    // Compute final video URL
+                    let finalVideo = "";
+                    if (rawVideo && (isVideoDirectVid || ytVideo)) {
+                      finalVideo = rawVideo;
+                    } else if (rawPhoto && (isPhotoDirectVid || ytPhoto)) {
+                      finalVideo = rawPhoto;
+                    } else if (rawVideo) {
+                      finalVideo = rawVideo;
+                    }
+
+                    const hasPhoto = Boolean(finalPhoto);
+                    const hasVideo = Boolean(finalVideo);
+                    const isAnyVideo = Boolean(hasVideo);
 
                     const updatedPanel = {
                       ...editPanelForm,
                       title: editPanelForm.title.trim(),
-                      image:
-                        panelMediaUrl ||
-                        "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
+                      image: finalPhoto,
+                      photoUrl: finalPhoto,
+                      hasPhoto,
+                      videoLink: finalVideo,
+                      hasVideo,
                       isVideo: isAnyVideo,
-                      mediaType: editPanelMediaTab === "youtube" || getYouTubeInfo(editPanelForm.videoLink) || getYouTubeInfo(editPanelForm.image)
-                        ? "youtube"
-                        : isAnyVideo
-                          ? "video"
-                          : "photo",
-                      videoLink: isAnyVideo ? (editPanelForm.videoLink || panelMediaUrl) : editPanelForm.videoLink,
+                      mediaType: effectiveYt ? "youtube" : (hasVideo ? "video" : "photo"),
                       features,
                       pricing: updatedPricingList,
                       pricingPlans: updatedPricingList,
@@ -12778,7 +13032,7 @@ export default function App() {
                       Active Panels
                     </span>
                     <span className="text-cyan-300 font-black text-lg">
-                      {ensureArray(panels).length}
+                      {ensureArray(panels).filter((p) => !isLegacyDummyPanel(p)).length}
                     </span>
                   </div>
                   <div className="bg-transparent  border border-amber-500/30 p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-lg">
@@ -14204,7 +14458,7 @@ export default function App() {
                           price30: finalPricing[4]?.price ?? 5000,
                         };
 
-                        const updatedPanelsList = [newPanelItem, ...ensureArray(panels)];
+                        const updatedPanelsList = [newPanelItem, ...ensureArray(panels).filter((p) => !isLegacyDummyPanel(p))];
                         setPanels(updatedPanelsList);
                         savePanelsToFirebase(updatedPanelsList);
 
@@ -14736,7 +14990,7 @@ export default function App() {
                           options: finalPricingList,
                         };
 
-                        const updatedPanelsList = [newHousePanel, ...ensureArray(panels)];
+                        const updatedPanelsList = [newHousePanel, ...ensureArray(panels).filter((p) => !isLegacyDummyPanel(p))];
                         setPanels(updatedPanelsList);
                         savePanelsToFirebase(updatedPanelsList);
 
@@ -14982,7 +15236,9 @@ export default function App() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {ensureArray(panels).map((p, idx) => (
+                        {ensureArray(panels)
+                          .filter((p) => !isLegacyDummyPanel(p))
+                          .map((p, idx) => (
                           <div
                             key={`staff-panel-${p.id}-${idx}`}
                             className="bg-transparent  border border-white/10 p-3.5 rounded-xl flex flex-col justify-between gap-3 shadow-lg hover:border-rose-500/40 transition-all"
@@ -16523,51 +16779,32 @@ export default function App() {
       {previewMedia && (
         <div
           id="video-media-preview-modal"
-          className="fixed inset-0 z-[999995] bg-black/90 backdrop-blur-xl flex items-center justify-center p-3 sm:p-5 select-none animate-in fade-in duration-200"
+          className="fixed inset-0 z-[999995] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-0 select-none animate-in fade-in duration-300"
           onClick={() => setPreviewMedia(null)}
         >
           <div
-            className="relative bg-[#080c16] border border-cyan-500/50 rounded-2xl sm:rounded-3xl max-w-4xl w-full p-4 sm:p-5 shadow-[0_0_60px_rgba(6,182,212,0.3)] flex flex-col gap-3.5 overflow-hidden my-auto animate-in zoom-in-95 duration-200"
+            className="relative w-full max-w-5xl h-full sm:h-auto flex flex-col items-center justify-center animate-in zoom-in-95 duration-300"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Ambient Background Glows */}
-            <div className="absolute top-0 right-0 w-56 h-56 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none"></div>
-            <div className="absolute bottom-0 left-0 w-56 h-56 bg-red-600/15 rounded-full blur-3xl pointer-events-none"></div>
+            {/* Close Button - Large and Easy for Mobile */}
+            <button
+              type="button"
+              onClick={() => setPreviewMedia(null)}
+              className="absolute top-4 right-4 z-[999999] p-3 rounded-full bg-black/50 hover:bg-black/80 text-white/80 hover:text-white transition-all cursor-pointer border border-white/20 active:scale-95 shadow-2xl backdrop-blur-md"
+              title="Close"
+            >
+              <X size={24} />
+            </button>
 
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-3 relative z-10">
-              <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-red-600 to-rose-600 flex items-center justify-center text-white shrink-0 shadow-[0_0_20px_rgba(239,68,68,0.5)] border border-white/20">
-                  <Play size={18} className="fill-white ml-0.5" />
-                </div>
-                <div className="min-w-0">
-                  <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/40 inline-block mb-0.5">
-                    ▶️ VIP VIDEO PLAYER
-                  </span>
-                  <h3 className="text-sm sm:text-base font-black text-white uppercase tracking-wide truncate">
-                    {previewMedia.title || "VIP Panel Video Demo"}
-                  </h3>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="px-2.5 py-1 rounded-xl bg-cyan-600/30 border border-cyan-400/40 text-cyan-300 text-xs font-black flex items-center gap-1.5 shadow-sm">
-                  <Film size={13} className="text-cyan-400" />
-                  <span>Direct Site Player</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPreviewMedia(null)}
-                  className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white transition-all cursor-pointer border border-white/15 active:scale-95"
-                  title="Close"
-                >
-                  <X size={18} />
-                </button>
-              </div>
+            {/* Title Overlay */}
+            <div className="absolute top-6 left-6 z-[999998] pointer-events-none pr-16">
+              <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-wider drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
+                {previewMedia.title}
+              </h3>
             </div>
 
             {/* Video Content Render Engine */}
-            <div className="relative z-10 w-full flex flex-col items-center justify-center">
+            <div className="relative z-10 w-full h-full sm:h-auto flex items-center justify-center p-2 sm:p-6">
               {(() => {
                 const targetUrl = previewMedia.youtubeLink || previewMedia.url;
                 const ytInfo = getYouTubeInfo(targetUrl);
@@ -16575,10 +16812,10 @@ export default function App() {
                 // 1. If YouTube Video
                 if (ytInfo) {
                   return (
-                    <div className="w-full aspect-video rounded-xl sm:rounded-2xl overflow-hidden bg-black border border-cyan-500/40 shadow-[0_0_30px_rgba(0,0,0,0.8)] relative">
+                    <div className="w-full aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)]">
                       <iframe
                         src={ytInfo.embedUrl}
-                        title={previewMedia.title || "YouTube Live Video"}
+                        title={previewMedia.title}
                         className="w-full h-full border-0"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                         allowFullScreen
@@ -16587,26 +16824,26 @@ export default function App() {
                   );
                 }
 
-                // 2. If Direct Video File (MP4, WebM, MOV, MKV, 3GP, AVI, uploaded to /uploads/, Blob, Data URL)
+                // 2. If Direct Video File
                 const isVideoFile =
                   previewMedia.isVideo ||
                   previewMedia.mediaType === "video" ||
                   (typeof targetUrl === "string" &&
                     (/\.(mp4|webm|mov|mkv|3gp|m4v|avi)/i.test(targetUrl) ||
-                      targetUrl.includes("/uploads/") ||
+                      targetUrl.includes("/uploads/video_") ||
                       targetUrl.startsWith("data:video") ||
                       targetUrl.startsWith("blob:")));
 
                 if (isVideoFile && targetUrl) {
                   return (
-                    <div className="w-full rounded-xl sm:rounded-2xl overflow-hidden bg-black border border-cyan-500/40 flex items-center justify-center shadow-2xl max-h-[75vh]">
+                    <div className="w-full max-h-[90vh] rounded-2xl overflow-hidden bg-black flex items-center justify-center shadow-2xl">
                       <video
                         key={targetUrl}
                         src={targetUrl}
                         controls
                         autoPlay
                         playsInline
-                        className="w-full max-h-[72vh] object-contain rounded-xl"
+                        className="w-full max-h-[85vh] object-contain rounded-xl"
                       />
                     </div>
                   );
@@ -16615,37 +16852,18 @@ export default function App() {
                 // 3. Fallback: Image Preview
                 if (targetUrl) {
                   return (
-                    <div className="w-full flex flex-col items-center gap-3">
-                      <div className="w-full rounded-xl sm:rounded-2xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center p-2 shadow-2xl max-h-[60vh]">
-                        <img
-                          src={targetUrl}
-                          alt={previewMedia.title || "Preview"}
-                          className="max-h-[55vh] w-auto max-w-full rounded-lg object-contain"
-                        />
-                      </div>
+                    <div className="w-full h-full flex items-center justify-center p-4">
+                      <img
+                        src={targetUrl}
+                        alt={previewMedia.title}
+                        className="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl border border-white/10"
+                      />
                     </div>
                   );
                 }
 
                 return null;
               })()}
-            </div>
-
-            {/* Modal Footer Controls */}
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3 relative z-10 text-xs text-gray-300">
-              <span className="flex items-center gap-1.5 text-[11px] text-cyan-300 font-mono">
-                <Sparkles size={13} className="text-yellow-400" />
-                OB49/OB50 Ultra Safe Gameplay
-              </span>
-              <div className="flex items-center gap-2 ml-auto">
-                <button
-                  type="button"
-                  onClick={() => setPreviewMedia(null)}
-                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95"
-                >
-                  Close Video
-                </button>
-              </div>
             </div>
           </div>
         </div>
