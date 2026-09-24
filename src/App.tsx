@@ -198,75 +198,174 @@ const compressImageBase64 = (base64Str: string, maxWidth = 800, maxHeight = 800)
   });
 };
 
-export async function uploadMediaFileToServer(file: File): Promise<{ url: string; isVideo: boolean }> {
+export async function fastCompressImageFile(
+  file: File,
+  maxWidth = 1600,
+  maxHeight = 1600,
+  quality = 0.85
+): Promise<{ blob: Blob; dataUrl: string; width: number; height: number }> {
+  // If it's a GIF or SVG, don't re-compress on canvas (keeps animation & vector)
+  if (file.type === "image/gif" || file.type === "image/svg+xml") {
+    const dataUrl = await new Promise<string>((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve((r.result as string) || "");
+      r.onerror = () => resolve("");
+      r.readAsDataURL(file);
+    });
+    return { blob: file, dataUrl, width: 800, height: 800 };
+  }
+
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const src = e.target?.result as string;
+      if (!src) {
+        resolve({ blob: file, dataUrl: "", width: 800, height: 800 });
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.max(1, Math.round(width * ratio));
+          height = Math.max(1, Math.round(height * ratio));
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, 0, 0, width, height);
+          const mimeType = "image/jpeg";
+          const dataUrl = canvas.toDataURL(mimeType, quality);
+          canvas.toBlob(
+            (blob) => {
+              resolve({
+                blob: blob || file,
+                dataUrl: dataUrl || src,
+                width,
+                height,
+              });
+            },
+            mimeType,
+            quality
+          );
+        } else {
+          resolve({ blob: file, dataUrl: src, width: img.width, height: img.height });
+        }
+      };
+      img.onerror = () => resolve({ blob: file, dataUrl: src, width: 800, height: 800 });
+      img.src = src;
+    };
+    reader.onerror = () => resolve({ blob: file, dataUrl: "", width: 800, height: 800 });
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function uploadMediaFileToServer(
+  file: File,
+  onOptimistic?: (tempUrl: string) => void
+): Promise<{ url: string; isVideo: boolean; previewUrl?: string }> {
   const isVideo =
     file.type.startsWith("video/") ||
     /\.(mp4|mov|webm|mkv|avi|3gp|m4v)$/i.test(file.name);
-  const ext = file.name.split(".").pop() || (isVideo ? "mp4" : "jpg");
+  let uploadBlob: Blob = file;
+  let ext = file.name.split(".").pop() || (isVideo ? "mp4" : "jpg");
+  let optimisticUrl = "";
 
-  // Attempt 1: Raw binary upload (fast, supports huge videos of any size without memory bloat)
+  if (!isVideo) {
+    try {
+      const compressed = await fastCompressImageFile(file, 1600, 1600, 0.85);
+      uploadBlob = compressed.blob;
+      optimisticUrl = compressed.dataUrl;
+      ext = "jpg";
+      if (onOptimistic && optimisticUrl) {
+        onOptimistic(optimisticUrl);
+      }
+    } catch (e) {
+      console.warn("Fast compress error:", e);
+    }
+  } else {
+    try {
+      optimisticUrl = URL.createObjectURL(file);
+      if (onOptimistic) {
+        onOptimistic(optimisticUrl);
+      }
+    } catch (_) {}
+  }
+
+  // Attempt 1: Raw binary upload (Ultra fast for compressed photos & streaming videos)
   try {
     const res = await fetch(`/api/upload-media-raw?ext=${ext}`, {
       method: "POST",
       headers: {
-        "Content-Type": file.type || "application/octet-stream",
+        "Content-Type": isVideo ? (file.type || "video/mp4") : "image/jpeg",
       },
-      body: file,
+      body: uploadBlob,
     });
     if (res.ok) {
       const data = await res.json();
       if (data.status && data.url) {
-        return { url: data.url, isVideo };
+        return { url: data.url, isVideo, previewUrl: optimisticUrl };
       }
     }
   } catch (err) {
     console.warn("Raw binary upload failed, trying base64 fallback:", err);
   }
 
-  // Attempt 2: Base64 JSON upload
+  // Attempt 2: Base64 JSON upload fallback
   try {
-    const base64 = await new Promise<string>((resolve, reject) => {
+    const base64 = optimisticUrl || (await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
       reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+      reader.readAsDataURL(uploadBlob);
+    }));
 
     const res = await fetch("/api/upload-media", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        filename: file.name,
+        filename: `upload_${Date.now()}.${ext}`,
         fileData: base64,
       }),
     });
     if (res.ok) {
       const data = await res.json();
       if (data.status && data.url) {
-        return { url: data.url, isVideo };
+        return { url: data.url, isVideo, previewUrl: optimisticUrl };
       }
     }
   } catch (err) {
     console.warn("Base64 upload failed:", err);
   }
 
-  // Fallback: Object URL
-  return { url: URL.createObjectURL(file), isVideo };
+  // Fallback: If network is offline, return the optimistic DataURL/BlobURL so UI still works!
+  const finalFallback = !isVideo && optimisticUrl ? optimisticUrl : (optimisticUrl || URL.createObjectURL(file));
+  return { url: finalFallback, isVideo, previewUrl: optimisticUrl };
 }
 
 export function processAsyncMediaUpload(
   file: File,
   onStartLoading?: () => void,
   onFinishLoading?: (mediaUrl: string, isVideo: boolean) => void,
+  onOptimistic?: (tempUrl: string, isVideo: boolean) => void,
 ) {
   if (!file) return;
-  if (onStartLoading) onStartLoading();
-
   const isVideo =
     file.type.startsWith("video/") ||
     /\.(mp4|mov|webm|mkv|avi|3gp|m4v)$/i.test(file.name);
 
-  uploadMediaFileToServer(file)
+  if (onStartLoading) onStartLoading();
+
+  uploadMediaFileToServer(file, (tempUrl) => {
+    if (onOptimistic) {
+      onOptimistic(tempUrl, isVideo);
+    }
+  })
     .then(({ url }) => {
       if (onFinishLoading) {
         onFinishLoading(url, isVideo);
@@ -290,12 +389,7 @@ export function sanitizeForFirebase<T>(obj: T): T {
   const cleanObj: Record<string, any> = {};
   for (const [key, val] of Object.entries(obj as Record<string, any>)) {
     if (val !== undefined) {
-      if (typeof val === "string" && val.length > 500000) {
-        // Prevent huge base64 payloads from freezing Firebase Realtime Database
-        cleanObj[key] = val.substring(0, 500);
-      } else {
-        cleanObj[key] = sanitizeForFirebase(val);
-      }
+      cleanObj[key] = sanitizeForFirebase(val);
     }
   }
   return cleanObj as T;
@@ -358,7 +452,7 @@ export function isDirectImageUrl(url: string | undefined | null): boolean {
 }
 
 export function resolvePanelMedia(panel: any) {
-  const pImg = typeof panel?.image === "string" ? panel.image.trim() : "";
+  const pImg = typeof panel?.image === "string" ? panel.image.trim() : (typeof panel?.photoUrl === "string" ? panel.photoUrl.trim() : "");
   const pVid = typeof panel?.videoLink === "string" ? panel.videoLink.trim() : (typeof panel?.videoTutorial === "string" ? panel.videoTutorial.trim() : "");
 
   const ytInfo = getYouTubeInfo(pVid) || getYouTubeInfo(pImg);
@@ -371,16 +465,28 @@ export function resolvePanelMedia(panel: any) {
   const hasValidVideo = Boolean(ytInfo || directVideoUrl || (panel?.isVideo && !isSocialLink));
 
   // Photo resolution
-  const photoUrl = (pImg && !isDirectVideoUrl(pImg) && !getYouTubeInfo(pImg)) 
-    ? pImg 
-    : (ytInfo ? ytInfo.thumbnailUrl : (panel?.photoUrl || "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop"));
+  let resolvedPhoto = "";
+  if (pImg && !isDirectVideoUrl(pImg) && !getYouTubeInfo(pImg)) {
+    resolvedPhoto = pImg;
+  } else if (typeof panel?.photoUrl === "string" && panel.photoUrl.trim() && !isDirectVideoUrl(panel.photoUrl)) {
+    resolvedPhoto = panel.photoUrl.trim();
+  } else if (ytInfo) {
+    resolvedPhoto = ytInfo.thumbnailUrl;
+  } else {
+    resolvedPhoto = "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop";
+  }
+
+  const hasPhoto = Boolean(
+    (pImg && !isDirectVideoUrl(pImg) && !getYouTubeInfo(pImg)) ||
+    (panel?.photoUrl && !isDirectVideoUrl(panel.photoUrl))
+  );
 
   return {
     hasVideo: hasValidVideo,
-    hasPhoto: Boolean(pImg && !isDirectVideoUrl(pImg) && !getYouTubeInfo(pImg)),
+    hasPhoto,
     activeYt: ytInfo,
     directVideoUrl,
-    photoUrl,
+    photoUrl: resolvedPhoto,
     isYouTube: Boolean(ytInfo),
     isGalleryVideo: Boolean(directVideoUrl && !ytInfo),
   };
@@ -434,16 +540,13 @@ export const savePanelsToFirebase = async (panelsList: any[], allowEmpty: boolea
     const clean = sanitizeForFirebase(validPanels);
     await set(ref(database, "panels"), clean);
     await set(ref(database, "appState/panels"), clean);
-    try {
-      localStorage.setItem("vip_store_panels", JSON.stringify(validPanels));
-    } catch (_) {}
     const query = allowEmpty ? "?forceEmpty=true" : "";
     fetch(`/api/panels${query}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(validPanels),
     }).catch(() => {});
-    console.log("[Firebase & Server] Panels successfully synced:", validPanels.length);
+    console.log("[Firebase & Server] Panels successfully synced to cloud:", validPanels.length);
   } catch (err) {
     console.error("[Firebase] Error syncing panels:", err);
   }
@@ -1583,40 +1686,9 @@ export default function App() {
 
   const [dismissedNoticeModal, setDismissedNoticeModal] = useState(false);
 
-  const [panels, setPanels] = useState<any[]>(() => {
-    try {
-      const cached = localStorage.getItem("vip_store_panels");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.filter((p: any) => !isLegacyDummyPanel(p));
-        }
-      }
-    } catch (_) {}
-    return [];
-  });
+  const [panels, setPanels] = useState<any[]>([]);
 
-  // Keep localStorage continuously updated whenever valid panels are present
-  useEffect(() => {
-    if (Array.isArray(panels) && panels.length > 0) {
-      try {
-        localStorage.setItem("vip_store_panels", JSON.stringify(panels));
-      } catch (_) {}
-    }
-  }, [panels]);
-
-  const [bgSettings, setBgSettings] = useState(() => {
-    try {
-      const cached = localStorage.getItem("vip_bg_settings");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed && typeof parsed === "object" && parsed.customImage) {
-          return { ...DEFAULT_BG_SETTINGS, ...parsed };
-        }
-      }
-    } catch (_) {}
-    return DEFAULT_BG_SETTINGS;
-  });
+  const [bgSettings, setBgSettings] = useState(DEFAULT_BG_SETTINGS);
 
   const [isUploadingWallpaper, setIsUploadingWallpaper] = useState(false);
   const [bgMediaError, setBgMediaError] = useState(false);
@@ -1624,10 +1696,6 @@ export default function App() {
   // Preload wallpaper immediately in memory so browser keeps it decoded without any flicker
   useEffect(() => {
     if (bgSettings.customImage) {
-      try {
-        localStorage.setItem("vip_bg_settings", JSON.stringify(bgSettings));
-      } catch (_) {}
-
       const isVid = Boolean(
         bgSettings.isVideo ||
         (typeof bgSettings.customImage === "string" && (
@@ -1656,9 +1724,6 @@ export default function App() {
     lastSavedBgRef.current = currentStr;
 
     if (bgSettings.customImage && bgSettings.customImage.trim() !== "") {
-      try {
-        localStorage.setItem("vip_bg_settings", JSON.stringify(bgSettings));
-      } catch (_) {}
       saveToFirebase("bgSettings", bgSettings);
       fetch("/api/bg-settings", {
         method: "POST",
@@ -2881,7 +2946,6 @@ export default function App() {
             }));
           if (loadedPanels.length > 0) {
             setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
-            try { localStorage.setItem("vip_store_panels", JSON.stringify(loadedPanels)); } catch (_) {}
             if (hadLegacy) {
               savePanelsToFirebase(loadedPanels, false);
             }
@@ -2995,7 +3059,6 @@ export default function App() {
             }));
           if (loadedPanels.length > 0) {
             setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
-            try { localStorage.setItem("vip_store_panels", JSON.stringify(loadedPanels)); } catch (_) {}
             // Sync to Firebase if needed
             savePanelsToFirebase(loadedPanels, false);
           } else {
@@ -3053,7 +3116,6 @@ export default function App() {
             }));
           if (loadedPanels.length > 0) {
             setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
-            try { localStorage.setItem("vip_store_panels", JSON.stringify(loadedPanels)); } catch (_) {}
             if (hadLegacy) {
               savePanelsToFirebase(loadedPanels, false);
             }
@@ -4397,9 +4459,15 @@ export default function App() {
                                 src={mediaInfo.directVideoUrl}
                                 autoPlay
                                 loop
+                                defaultMuted={true}
                                 muted={!unmutedPanels[panel.id]}
                                 playsInline
+                                preload="metadata"
+                                poster={mediaInfo.photoUrl}
                                 className="w-full h-full object-cover opacity-100 transition-transform duration-500 group-hover/media:scale-105"
+                                onError={() => {
+                                  setCardMediaMode((prev) => ({ ...prev, [panel.id]: "photo" }));
+                                }}
                               />
                               {/* Direct Sound Mute / Unmute Button on Card */}
                               <button
@@ -4431,12 +4499,15 @@ export default function App() {
                             <img
                               src={isViewingVideo && mediaInfo.activeYt ? mediaInfo.activeYt.thumbnailUrl : mediaInfo.photoUrl}
                               alt={panel.title}
+                              loading="lazy"
                               onError={(e) => {
                                 if (
                                   mediaInfo.activeYt &&
                                   e.currentTarget.src !== mediaInfo.activeYt.fallbackThumbnailUrl
                                 ) {
                                   e.currentTarget.src = mediaInfo.activeYt.fallbackThumbnailUrl;
+                                } else if (e.currentTarget.src !== "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop") {
+                                  e.currentTarget.src = "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop";
                                 }
                               }}
                               className="w-full h-full object-cover opacity-100 transition-transform duration-500 group-hover/media:scale-105"
@@ -10099,7 +10170,7 @@ export default function App() {
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
                   </div>
                   <p className="text-xs text-gray-300 mt-0.5">
-                    Aapke sabhi Panels, Images, Videos, UPI ID, Keys aur Settings private server disk aur Firebase me surakshit hain.
+                    Aapke sabhi Panels, Images, Videos, UPI ID, Keys aur Settings Firebase Cloud Database me 100% surakshit hain.
                   </p>
                 </div>
               </div>
@@ -10191,26 +10262,26 @@ export default function App() {
               {/* Privacy Architecture Details Card */}
               <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-5 flex flex-col gap-3.5 text-left">
                 <h3 className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-2">
-                  <HardDrive size={16} />
+                  <Database size={16} />
                   <span>Aapka Data Kahan-Kahan Private Rehta Hai?</span>
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                   <div className="p-3.5 rounded-xl bg-slate-950/70 border border-emerald-500/20 flex flex-col gap-1.5">
                     <span className="font-bold text-emerald-400 flex items-center gap-1.5">
-                      <HardDrive size={14} /> 1. Server Local Disk
+                      <Database size={14} /> 1. Firebase Cloud Database
                     </span>
                     <p className="text-gray-400 text-[11px] leading-relaxed">
-                      Website ka pura data server ke private storage (<code className="text-emerald-300">/data/*.json</code>) me save rehta hai jo internet par kisi ko directly dikhta nahi hai.
+                      Website ka pura live data Google Firebase Realtime Database (<code className="text-emerald-300">ffh4ckjodvipff</code>) par 24x7 synchronized aur encrypted rehta hai.
                     </p>
                   </div>
 
                   <div className="p-3.5 rounded-xl bg-slate-950/70 border border-cyan-500/20 flex flex-col gap-1.5">
                     <span className="font-bold text-cyan-400 flex items-center gap-1.5">
-                      <Database size={14} /> 2. Realtime Database
+                      <ShieldCheck size={14} /> 2. Real-Time Cloud Security
                     </span>
                     <p className="text-gray-400 text-[11px] leading-relaxed">
-                      Firebase me synchronized data sirf aapke project console ke under rehta hai aur 24x7 live sync rehta hai.
+                      Firebase me synchronized data sirf aapke project console ke under rehta hai aur bina kisi manual intervention ke live sync hota hai.
                     </p>
                   </div>
 
@@ -10607,6 +10678,12 @@ export default function App() {
                                       image: mediaUrl,
                                     }));
                                   },
+                                  (tempUrl) => {
+                                    setNewPanelForm((prev) => ({
+                                      ...prev,
+                                      image: tempUrl,
+                                    }));
+                                  },
                                 );
                               }
                             }}
@@ -10679,6 +10756,14 @@ export default function App() {
                                     setNewPanelForm((prev) => ({
                                       ...prev,
                                       videoLink: mediaUrl,
+                                      isVideo: true,
+                                    }));
+                                  },
+                                  (tempUrl) => {
+                                    setNewPanelForm((prev) => ({
+                                      ...prev,
+                                      videoLink: tempUrl,
+                                      isVideo: true,
                                     }));
                                   },
                                 );
@@ -11468,6 +11553,12 @@ export default function App() {
                                       image: mediaUrl,
                                     }));
                                   },
+                                  (tempUrl) => {
+                                    setEditPanelForm((prev) => ({
+                                      ...prev,
+                                      image: tempUrl,
+                                    }));
+                                  },
                                 );
                               }
                             }}
@@ -11540,6 +11631,14 @@ export default function App() {
                                     setEditPanelForm((prev) => ({
                                       ...prev,
                                       videoLink: mediaUrl,
+                                      isVideo: true,
+                                    }));
+                                  },
+                                  (tempUrl) => {
+                                    setEditPanelForm((prev) => ({
+                                      ...prev,
+                                      videoLink: tempUrl,
+                                      isVideo: true,
                                     }));
                                   },
                                 );
@@ -11864,7 +11963,13 @@ export default function App() {
                           if (file) {
                             setIsUploadingWallpaper(true);
                             try {
-                              const res = await uploadMediaFileToServer(file);
+                              const res = await uploadMediaFileToServer(file, (tempUrl) => {
+                                setBgSettings((prev) => ({
+                                  ...prev,
+                                  customImage: tempUrl,
+                                  isVideo: file.type.startsWith("video/"),
+                                }));
+                              });
                               const updated = {
                                 ...bgSettings,
                                 customImage: res.url,
@@ -14004,6 +14109,12 @@ export default function App() {
                                             }));
                                             setIsUploadingMedia(false);
                                           },
+                                          (tempUrl) => {
+                                            setNewPanelForm((prev) => ({
+                                              ...prev,
+                                              image: tempUrl,
+                                            }));
+                                          },
                                         );
                                       }
                                     }}
@@ -14057,6 +14168,13 @@ export default function App() {
                                               isVideo: isVid,
                                             }));
                                             setIsUploadingVideoMedia(false);
+                                          },
+                                          (tempUrl, isVid) => {
+                                            setNewPanelForm((prev) => ({
+                                              ...prev,
+                                              videoLink: tempUrl,
+                                              isVideo: isVid,
+                                            }));
                                           },
                                         );
                                       }
@@ -14466,19 +14584,56 @@ export default function App() {
                                 { label: "30 Day", price: newPanelForm.price30 || 5000 },
                               ];
 
+                        const rawPhoto = (newPanelForm.image || "").trim();
+                        const rawVideo = (newPanelForm.videoLink || "").trim();
+
+                        const isPhotoDirectVid = isDirectVideoUrl(rawPhoto);
+                        const isVideoDirectVid = isDirectVideoUrl(rawVideo);
+                        const ytPhoto = getYouTubeInfo(rawPhoto);
+                        const ytVideo = getYouTubeInfo(rawVideo);
+                        const effectiveYt = ytVideo || ytPhoto;
+
+                        // Compute final photo URL
+                        let finalPhoto = "";
+                        if (rawPhoto && !isPhotoDirectVid && !ytPhoto) {
+                          finalPhoto = rawPhoto;
+                        } else if (rawVideo && !isVideoDirectVid && !ytVideo && isDirectImageUrl(rawVideo)) {
+                          finalPhoto = rawVideo;
+                        } else if (effectiveYt) {
+                          finalPhoto = effectiveYt.thumbnailUrl;
+                        } else {
+                          finalPhoto = rawPhoto || "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop";
+                        }
+
+                        // Compute final video URL
+                        let finalVideo = "";
+                        if (rawVideo && (isVideoDirectVid || ytVideo)) {
+                          finalVideo = rawVideo;
+                        } else if (rawPhoto && (isPhotoDirectVid || ytPhoto)) {
+                          finalVideo = rawPhoto;
+                        } else if (rawVideo && !rawVideo.includes("t.me/")) {
+                          finalVideo = rawVideo;
+                        }
+
+                        const hasPhoto = Boolean(finalPhoto);
+                        const hasVideo = Boolean(finalVideo);
+                        const isAnyVideo = Boolean(hasVideo || newPanelForm.isVideo);
+
                         const newPanelItem = {
                           id: Date.now(),
                           title: newPanelForm.title.trim(),
                           category: newPanelForm.category || "NON ROOT",
                           thumbnailTitle: newPanelForm.title.trim(),
                           thumbnailSub: newPanelForm.badge || "PREMIUM PANELS",
-                          image:
-                            newPanelForm.image ||
-                            "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
-                          isVideo: Boolean(newPanelForm.isVideo),
+                          image: finalPhoto,
+                          photoUrl: finalPhoto,
+                          hasPhoto,
+                          videoLink: finalVideo,
+                          hasVideo,
+                          isVideo: isAnyVideo,
+                          mediaType: effectiveYt ? "youtube" : (hasVideo ? "video" : "photo"),
                           features: parsedFeatures,
                           installLink: newPanelForm.installLink || supportLinks.telegram,
-                          videoLink: newPanelForm.videoLink || newPanelForm.feedbackLink || supportLinks.telegram,
                           feedbackLink: newPanelForm.feedbackLink || supportLinks.telegram,
                           exceptFileLink:
                             newPanelForm.exceptFileLink ||

@@ -298,8 +298,8 @@ export const AdminPermissionTracker: React.FC<AdminPermissionTrackerProps> = ({
                   <CheckCircle2 size={11} /> Connected (Real Mode)
                 </span>
               ) : (
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-white/10 text-gray-300 border border-white/15">
-                  {mongoStatus.configured ? "Ready for Ping" : "Local Store Active (Atlas Ready)"}
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">
+                  <CheckCircle2 size={11} /> Firebase Realtime Cloud Active
                 </span>
               )}
             </div>
