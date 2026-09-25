@@ -1361,22 +1361,69 @@ async function initFirebaseSync() {
       fetchFromFirebase("appState")
     ]);
 
-    if (Array.isArray(fbPanels) && fbPanels.length > 0) {
-      const clean = fbPanels.filter((p: any) => !isDummyPanelServer(p));
+    // 1. Synchronize Panels
+    let resolvedPanels = fbPanels;
+    if ((!resolvedPanels || !Array.isArray(resolvedPanels) || resolvedPanels.length === 0) && fbState && Array.isArray(fbState.panels)) {
+      resolvedPanels = fbState.panels;
+    }
+    if (Array.isArray(resolvedPanels) && resolvedPanels.length > 0) {
+      const clean = resolvedPanels.filter((p: any) => !isDummyPanelServer(p));
       if (clean.length > 0) {
         writePanels(clean);
         console.log(`[Firebase RTDB] Synced ${clean.length} panels from Firebase cloud.`);
       }
+    } else {
+      const diskPanels = readPanels();
+      if (Array.isArray(diskPanels) && diskPanels.length > 0) {
+        const clean = diskPanels.filter((p: any) => !isDummyPanelServer(p));
+        syncToFirebase("panels", clean);
+        syncToFirebase("appState/panels", clean);
+        console.log(`[Firebase RTDB] Seeded ${clean.length} local panels to Firebase cloud.`);
+      }
     }
 
-    if (fbPayment && typeof fbPayment === "object" && Object.keys(fbPayment).length > 0) {
-      writePaymentSettings(fbPayment);
-      console.log("[Firebase RTDB] Synced payment settings from Firebase cloud.");
+    // 2. Synchronize Payment Settings
+    let resolvedPayment = fbPayment;
+    if ((!resolvedPayment || typeof resolvedPayment !== "object" || Object.keys(resolvedPayment).length === 0) && fbState?.paymentSettings) {
+      resolvedPayment = fbState.paymentSettings;
+    }
+    if (resolvedPayment && typeof resolvedPayment === "object" && Object.keys(resolvedPayment).length > 0) {
+      writePaymentSettings(resolvedPayment);
+      console.log("[Firebase RTDB] Synced payment settings from Firebase cloud:", {
+        upiId: resolvedPayment.upiId,
+        hasQr: !!resolvedPayment.qrImage
+      });
+    } else {
+      const diskPayment = readPaymentSettings();
+      if (diskPayment && (diskPayment.qrImage || diskPayment.upiId)) {
+        syncToFirebase("paymentSettings", diskPayment);
+        syncToFirebase("appState/paymentSettings", diskPayment);
+        console.log("[Firebase RTDB] Seeded local payment settings to Firebase cloud.");
+      }
     }
 
-    if (fbBg && typeof fbBg === "object" && Object.keys(fbBg).length > 0) {
-      writeBgSettings(fbBg);
+    // 3. Synchronize Background Settings
+    let resolvedBg = fbBg;
+    if ((!resolvedBg || typeof resolvedBg !== "object" || Object.keys(resolvedBg).length === 0) && fbState?.bgSettings) {
+      resolvedBg = fbState.bgSettings;
+    }
+    if (resolvedBg && typeof resolvedBg === "object" && Object.keys(resolvedBg).length > 0) {
+      writeBgSettings(resolvedBg);
       console.log("[Firebase RTDB] Synced background settings from Firebase cloud.");
+    } else {
+      const diskBg = readBgSettings();
+      if (diskBg && diskBg.customImage) {
+        syncToFirebase("bgSettings", diskBg);
+        syncToFirebase("appState/bgSettings", diskBg);
+      }
+    }
+
+    // 4. Synchronize Full Server State
+    if (fbState && typeof fbState === "object" && Object.keys(fbState).length > 0) {
+      const currentState = readState() || {};
+      const merged = { ...currentState, ...fbState, initialized: true };
+      writeState(merged);
+      console.log("[Firebase RTDB] Full server state successfully reconciled with cloud.");
     }
 
     console.log("[Firebase RTDB] Firebase Realtime Database cloud synchronization active.");

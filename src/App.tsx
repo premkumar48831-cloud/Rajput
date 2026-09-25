@@ -2933,7 +2933,7 @@ export default function App() {
     const stateRef = ref(database, "appState");
     const unsubscribe = onValue(stateRef, (snapshot) => {
       const data = snapshot.val();
-      if (data && data.initialized) {
+      if (data && typeof data === "object") {
         isSyncingFromFirebase.current = true;
         if (data.panels !== undefined) {
           const rawPanels = ensureArray(data.panels);
@@ -3132,11 +3132,89 @@ export default function App() {
         }
       });
 
+      // 4. Realtime listeners for Payments, Users, Orders & Settings
+      const payHistRef = ref(database, "paymentHistory");
+      const unsubPayHist = onValue(payHistRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val) setPaymentHistory((prev) => JSON.stringify(prev) === JSON.stringify(val) ? prev : ensureArray(val));
+      });
+
+      const autoPayHistRef = ref(database, "autoPaymentHistory");
+      const unsubAutoPayHist = onValue(autoPayHistRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val) setAutoPaymentHistory((prev) => JSON.stringify(prev) === JSON.stringify(val) ? prev : ensureArray(val));
+      });
+
+      const keyReqRef = ref(database, "keyRequests");
+      const unsubKeyReq = onValue(keyReqRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val) setKeyRequests((prev) => JSON.stringify(prev) === JSON.stringify(val) ? prev : ensureArray(val));
+      });
+
+      const userWalletsRef = ref(database, "userWallets");
+      const unsubWallets = onValue(userWalletsRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val && typeof val === "object") setUserWallets((prev) => shallowEqual(prev, val) ? prev : val);
+      });
+
+      const regUsersRef = ref(database, "registeredUsers");
+      const unsubRegUsers = onValue(regUsersRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val) setRegisteredUsers((prev) => JSON.stringify(prev) === JSON.stringify(val) ? prev : ensureArray(val));
+      });
+
+      const spinReqRef = ref(database, "spinRequests");
+      const unsubSpinReq = onValue(spinReqRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val) setSpinRequests((prev) => JSON.stringify(prev) === JSON.stringify(val) ? prev : ensureArray(val));
+      });
+
+      const referReqRef = ref(database, "referRequests");
+      const unsubReferReq = onValue(referReqRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val) setReferRequests((prev) => JSON.stringify(prev) === JSON.stringify(val) ? prev : ensureArray(val));
+      });
+
+      const supportRef = ref(database, "supportLinks");
+      const unsubSupport = onValue(supportRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val && typeof val === "object") setSupportLinks((prev) => shallowEqual(prev, val) ? prev : val);
+      });
+
+      const bannerRef = ref(database, "bannerSettings");
+      const unsubBanner = onValue(bannerRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val && typeof val === "object") setBannerSettings((prev) => shallowEqual(prev, val) ? prev : val);
+      });
+
+      const stepsRef = ref(database, "accessFileSteps");
+      const unsubSteps = onValue(stepsRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val && typeof val === "object") setAccessFileSteps((prev) => shallowEqual(prev, val) ? prev : val);
+      });
+
+      const resellersRef = ref(database, "approvedResellers");
+      const unsubResellers = onValue(resellersRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val) setApprovedResellers((prev) => JSON.stringify(prev) === JSON.stringify(val) ? prev : ensureArray(val));
+      });
+
       return () => {
         unsubPay();
         unsubBg();
         unsubPanels();
         unsubLock();
+        unsubPayHist();
+        unsubAutoPayHist();
+        unsubKeyReq();
+        unsubWallets();
+        unsubRegUsers();
+        unsubSpinReq();
+        unsubReferReq();
+        unsubSupport();
+        unsubBanner();
+        unsubSteps();
+        unsubResellers();
       };
     } catch (e) {}
   }, []);
@@ -12411,10 +12489,15 @@ export default function App() {
 
                 <div className="flex items-center gap-3 mt-2">
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       const updated = { ...paymentSettings, activeGateway: "cashfree" };
                       setPaymentSettings(updated);
-                      saveToFirebase("paymentSettings", updated);
+                      await saveToFirebase("paymentSettings", updated);
+                      fetch("/api/payment-settings", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(updated),
+                      }).catch(() => {});
                       alert("✅ Cashfree Gateway Activated!");
                     }}
                     className={`flex-1 py-3.5 rounded-xl font-black text-xs uppercase transition-all shadow-md active:scale-95 border ${
@@ -12427,8 +12510,13 @@ export default function App() {
                   </button>
                   
                   <button
-                    onClick={() => {
-                      saveToFirebase("paymentSettings", paymentSettings);
+                    onClick={async () => {
+                      await saveToFirebase("paymentSettings", paymentSettings);
+                      fetch("/api/payment-settings", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(paymentSettings),
+                      }).catch(() => {});
                       setPaymentSettings({ ...paymentSettings });
                       alert("✅ Cashfree Gateway Settings successfully saved!");
                       setCurrentView("admin");
@@ -12510,10 +12598,15 @@ export default function App() {
 
                 <div className="flex items-center gap-3 mt-2">
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       const updated = { ...paymentSettings, activeGateway: "razorpay" };
                       setPaymentSettings(updated);
-                      saveToFirebase("paymentSettings", updated);
+                      await saveToFirebase("paymentSettings", updated);
+                      fetch("/api/payment-settings", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(updated),
+                      }).catch(() => {});
                       alert("✅ Razorpay Gateway Activated!");
                     }}
                     className={`flex-1 py-3.5 rounded-xl font-black text-xs uppercase transition-all shadow-md active:scale-95 border ${
@@ -12526,8 +12619,13 @@ export default function App() {
                   </button>
 
                   <button
-                    onClick={() => {
-                      saveToFirebase("paymentSettings", paymentSettings);
+                    onClick={async () => {
+                      await saveToFirebase("paymentSettings", paymentSettings);
+                      fetch("/api/payment-settings", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(paymentSettings),
+                      }).catch(() => {});
                       setPaymentSettings({ ...paymentSettings });
                       alert("✅ Razorpay Gateway Settings successfully saved!");
                       setCurrentView("admin");
