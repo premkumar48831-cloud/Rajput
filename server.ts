@@ -313,7 +313,7 @@ const BG_SETTINGS_FILE = path.join(process.cwd(), 'bg_settings.json');
 const PANELS_FILE = path.join(process.cwd(), 'panels.json');
 
 // Firebase Cloud Realtime Database Endpoint
-const FIREBASE_RTDB_URL = "https://ffh4ckjodvipff-default-rtdb.firebaseio.com";
+const FIREBASE_RTDB_URL = "https://ffh4ckjodvip-66569-default-rtdb.firebaseio.com";
 
 // Helper to push updates directly to Firebase Realtime Database
 async function syncToFirebase(nodePath: string, data: any) {
@@ -720,15 +720,81 @@ app.post("/api/bg-settings", (req, res) => {
 });
 
 const isDummyPanelServer = (p: any): boolean => {
-  if (!p) return true;
+  if (!p || typeof p !== "object") return true;
+  if (!p.title && !p.id) return true;
   const idStr = String(p.id || "");
-  const titleStr = String(p.title || "").toLowerCase();
-  if (idStr.startsWith("panel-default-")) return true;
-  if (titleStr.includes("ffh4ck vip aimbot")) return true;
-  if (titleStr.includes("apex vip headshot panel")) return true;
-  if (titleStr.includes("prem store ultra bypass")) return true;
+  if (idStr.startsWith("panel-default-") || p.isDemo === true) return true;
   return false;
 };
+
+// Dedicated Refer Settings Endpoints (Disk and Firebase persisted)
+app.get("/api/refer-settings", (req, res) => {
+  const state = readState() || {};
+  res.json({
+    status: true,
+    data: {
+      referWebsiteLink: state.referWebsiteLink || "https://website.com",
+      referBonusAmount: state.referBonusAmount !== undefined ? state.referBonusAmount : 50
+    }
+  });
+});
+
+app.post("/api/refer-settings", (req, res) => {
+  try {
+    const { referWebsiteLink, referBonusAmount } = req.body || {};
+    const state = readState() || {};
+    if (referWebsiteLink !== undefined) state.referWebsiteLink = String(referWebsiteLink).trim();
+    if (referBonusAmount !== undefined) state.referBonusAmount = Number(referBonusAmount);
+    writeState(state);
+    if (referWebsiteLink !== undefined) {
+      syncToFirebase("referWebsiteLink", state.referWebsiteLink);
+      syncToFirebase("appState/referWebsiteLink", state.referWebsiteLink);
+    }
+    if (referBonusAmount !== undefined) {
+      syncToFirebase("referBonusAmount", state.referBonusAmount);
+      syncToFirebase("appState/referBonusAmount", state.referBonusAmount);
+    }
+    return res.json({
+      status: true,
+      message: "Referral settings saved permanently",
+      data: { referWebsiteLink: state.referWebsiteLink, referBonusAmount: state.referBonusAmount }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ status: false, error: err?.message || "Failed to save refer settings" });
+  }
+});
+
+// Dedicated Spin Settings Endpoints (Disk and Firebase persisted)
+app.get("/api/spin-settings", (req, res) => {
+  const state = readState() || {};
+  res.json({
+    status: true,
+    data: {
+      spinRewards: Array.isArray(state.spinRewards) && state.spinRewards.length > 0 ? state.spinRewards : [5, 10, 20, 30, 50]
+    }
+  });
+});
+
+app.post("/api/spin-settings", (req, res) => {
+  try {
+    const { spinRewards } = req.body || {};
+    if (Array.isArray(spinRewards) && spinRewards.length > 0) {
+      const state = readState() || {};
+      state.spinRewards = spinRewards;
+      writeState(state);
+      syncToFirebase("spinRewards", spinRewards);
+      syncToFirebase("appState/spinRewards", spinRewards);
+      return res.json({
+        status: true,
+        message: "Spin rewards saved permanently",
+        data: { spinRewards }
+      });
+    }
+    return res.status(400).json({ status: false, error: "Invalid spinRewards array" });
+  } catch (err: any) {
+    return res.status(500).json({ status: false, error: err?.message || "Failed to save spin rewards" });
+  }
+});
 
 // Dedicated Panels Endpoints (Disk-persisted)
 app.get("/api/panels", (req, res) => {
@@ -962,7 +1028,7 @@ async function getMongoClient(forceRetry = false): Promise<MongoClient | null> {
     isMongoConnected = false;
     // Log friendly notice once without raw OpenSSL stack trace to keep system healthy
     if (!lastMongoErrorNotice) {
-      console.log("[Storage] Primary cloud storage active: Firebase Realtime Database (ffh4ckjodvipff).");
+      console.log("[Storage] Primary cloud storage active: Firebase Realtime Database (ffh4ckjodvip-66569).");
     }
     return null;
   }
@@ -1282,7 +1348,7 @@ app.get('/api/mongodb/status', (req, res) => {
       ? process.env.MONGODB_DB
       : "Cluster0",
     lastNotice: lastMongoErrorNotice,
-    activeStorage: "Firebase Cloud Realtime Database (ffh4ckjodvipff) [100% Operational & Live Synced]",
+    activeStorage: "Firebase Cloud Realtime Database (ffh4ckjodvip-66569) [100% Operational & Live Synced]",
     message: isMongoConnected
       ? "Pinged your deployment. You successfully connected to MongoDB Atlas!"
       : isConfigured
@@ -1353,33 +1419,28 @@ app.all('/api/mongodb/ping', async (req, res) => {
 
 async function initFirebaseSync() {
   try {
-    console.log("[Firebase RTDB] Initializing direct synchronization with ffh4ckjodvipff...");
-    const [fbPanels, fbPayment, fbBg, fbState] = await Promise.all([
+    console.log("[Firebase RTDB] Initializing direct synchronization with ffh4ckjodvip-66569...");
+    const [fbPanels, fbPayment, fbBg, fbState, fbSpin, fbReferLink, fbReferBonus] = await Promise.all([
       fetchFromFirebase("panels"),
       fetchFromFirebase("paymentSettings"),
       fetchFromFirebase("bgSettings"),
-      fetchFromFirebase("appState")
+      fetchFromFirebase("appState"),
+      fetchFromFirebase("spinRewards"),
+      fetchFromFirebase("referWebsiteLink"),
+      fetchFromFirebase("referBonusAmount")
     ]);
 
     // 1. Synchronize Panels
     let resolvedPanels = fbPanels;
-    if ((!resolvedPanels || !Array.isArray(resolvedPanels) || resolvedPanels.length === 0) && fbState && Array.isArray(fbState.panels)) {
+    if ((!resolvedPanels || !Array.isArray(resolvedPanels)) && fbState && Array.isArray(fbState.panels)) {
       resolvedPanels = fbState.panels;
     }
-    if (Array.isArray(resolvedPanels) && resolvedPanels.length > 0) {
+    if (Array.isArray(resolvedPanels)) {
       const clean = resolvedPanels.filter((p: any) => !isDummyPanelServer(p));
-      if (clean.length > 0) {
-        writePanels(clean);
-        console.log(`[Firebase RTDB] Synced ${clean.length} panels from Firebase cloud.`);
-      }
+      writePanels(clean);
+      console.log(`[Firebase RTDB] Synced ${clean.length} panels from Firebase cloud.`);
     } else {
-      const diskPanels = readPanels();
-      if (Array.isArray(diskPanels) && diskPanels.length > 0) {
-        const clean = diskPanels.filter((p: any) => !isDummyPanelServer(p));
-        syncToFirebase("panels", clean);
-        syncToFirebase("appState/panels", clean);
-        console.log(`[Firebase RTDB] Seeded ${clean.length} local panels to Firebase cloud.`);
-      }
+      writePanels([]);
     }
 
     // 2. Synchronize Payment Settings
@@ -1418,12 +1479,33 @@ async function initFirebaseSync() {
       }
     }
 
-    // 4. Synchronize Full Server State
+    // 4. Synchronize Spin and Referral Settings
+    const state = readState() || {};
+    if (Array.isArray(fbSpin) && fbSpin.length > 0) {
+      state.spinRewards = fbSpin;
+    } else if (Array.isArray(fbState?.spinRewards) && fbState.spinRewards.length > 0) {
+      state.spinRewards = fbState.spinRewards;
+    }
+
+    if (fbReferLink && typeof fbReferLink === "string" && fbReferLink.trim() !== "") {
+      state.referWebsiteLink = fbReferLink.trim();
+    } else if (fbState?.referWebsiteLink && typeof fbState.referWebsiteLink === "string") {
+      state.referWebsiteLink = fbState.referWebsiteLink.trim();
+    }
+
+    if (fbReferBonus !== undefined && fbReferBonus !== null && !isNaN(Number(fbReferBonus))) {
+      state.referBonusAmount = Number(fbReferBonus);
+    } else if (fbState?.referBonusAmount !== undefined) {
+      state.referBonusAmount = Number(fbState.referBonusAmount);
+    }
+
+    // 5. Synchronize Full Server State
     if (fbState && typeof fbState === "object" && Object.keys(fbState).length > 0) {
-      const currentState = readState() || {};
-      const merged = { ...currentState, ...fbState, initialized: true };
+      const merged = { ...state, ...fbState, initialized: true };
       writeState(merged);
       console.log("[Firebase RTDB] Full server state successfully reconciled with cloud.");
+    } else {
+      writeState(state);
     }
 
     console.log("[Firebase RTDB] Firebase Realtime Database cloud synchronization active.");

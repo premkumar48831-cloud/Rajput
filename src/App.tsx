@@ -10,6 +10,7 @@ import {
   getDatabase,
   ref,
   set,
+  update,
   onValue,
   push,
   onDisconnect,
@@ -492,16 +493,16 @@ export function resolvePanelMedia(panel: any) {
   };
 }
 
-// FIREBASE GOOGLE LOGIN & DATABASE CONFIG (ffh4ckjodvipff)
+// FIREBASE GOOGLE LOGIN & DATABASE CONFIG
 const firebaseConfig = {
-  apiKey: "AIzaSyDnylEQQKI-PbVCnBgNY9zx5Vx85yi3SCo",
-  authDomain: "ffh4ckjodvipff.firebaseapp.com",
-  databaseURL: "https://ffh4ckjodvipff-default-rtdb.firebaseio.com",
-  projectId: "ffh4ckjodvipff",
-  storageBucket: "ffh4ckjodvipff.firebasestorage.app",
-  messagingSenderId: "382512487880",
-  appId: "1:382512487880:web:c212a8b5386b5b5141b4fd",
-  measurementId: "G-VSY9CHJ412",
+  apiKey: "AIzaSyDKsGcwX4tC1Igiym9VoZy884lhcGMF1gM",
+  authDomain: "ffh4ckjodvip-66569.firebaseapp.com",
+  databaseURL: "https://ffh4ckjodvip-66569-default-rtdb.firebaseio.com",
+  projectId: "ffh4ckjodvip-66569",
+  storageBucket: "ffh4ckjodvip-66569.firebasestorage.app",
+  messagingSenderId: "874880193480",
+  appId: "1:874880193480:web:c125915780e4cc0797a6fd",
+  measurementId: "G-F3JNPMDDBG"
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
@@ -520,13 +521,10 @@ export const saveToFirebase = async (path: string, data: any) => {
 };
 
 export const isLegacyDummyPanel = (p: any): boolean => {
-  if (!p) return true;
+  if (!p || typeof p !== "object") return true;
+  if (!p.title && !p.id) return true;
   const idStr = String(p.id || "");
-  const titleStr = String(p.title || "").toLowerCase();
-  if (idStr.startsWith("panel-default-")) return true;
-  if (titleStr.includes("ffh4ck vip aimbot")) return true;
-  if (titleStr.includes("apex vip headshot panel")) return true;
-  if (titleStr.includes("prem store ultra bypass")) return true;
+  if (idStr.startsWith("panel-default-") || p.isDemo === true) return true;
   return false;
 };
 
@@ -819,15 +817,13 @@ export default function App() {
     },
   ]);
 
-  useEffect(() => {
-    saveToFirebase("approvedResellers", approvedResellers);
-  }, [approvedResellers]);
 
   const handleGoogleResellerSignIn = async () => {
     try {
       setIsSigningInGoogle(true);
       const auth = getAuth(firebaseApp);
       const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
       if (user && user.email) {
@@ -988,9 +984,6 @@ export default function App() {
     templateId: EMAILJS_TEMPLATE_ID,
   });
 
-  useEffect(() => {
-    saveToFirebase("emailJsConfig", emailJsConfig);
-  }, [emailJsConfig]);
 
   const [showEmailJsConfigSettings, setShowEmailJsConfigSettings] =
     useState(false);
@@ -1265,9 +1258,6 @@ export default function App() {
     5, 10, 20, 30, 50,
   ]);
 
-  useEffect(() => {
-    saveToFirebase("spinRewards", spinRewards);
-  }, [spinRewards]);
 
   const [wonCouponModal, setWonCouponModal] = useState<{
     code: string;
@@ -1518,25 +1508,13 @@ export default function App() {
     Record<string, number>
   >({});
 
-  useEffect(() => {
-    saveToFirebase("userSpinTimestamps", userSpinTimestamps);
-  }, [userSpinTimestamps]);
-
   const [userCouponUsedTimestamps, setUserCouponUsedTimestamps] = useState<
     Record<string, number>
   >({});
 
-  useEffect(() => {
-    saveToFirebase("userCouponUsedTimestamps", userCouponUsedTimestamps);
-  }, [userCouponUsedTimestamps]);
-
   const [userAccountCoupons, setUserAccountCoupons] = useState<
     Record<string, any[]>
   >({});
-
-  useEffect(() => {
-    saveToFirebase("userAccountCoupons", userAccountCoupons);
-  }, [userAccountCoupons]);
 
   const activeAccKey = getAccountKey(userProfile.email, userProfile.phone);
   const lastSpinTimestamp = userProfile.isLoggedIn
@@ -1550,10 +1528,6 @@ export default function App() {
     : [];
 
   const [userWallets, setUserWallets] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    saveToFirebase("userWallets", userWallets);
-  }, [userWallets]);
 
   const [userBalance, setUserBalance] = useState(0);
 
@@ -1845,10 +1819,6 @@ export default function App() {
     }[]
   >([]);
 
-  useEffect(() => {
-    saveToFirebase("spinRequests", spinRequests);
-  }, [spinRequests]);
-
   const [referRequests, setReferRequests] = useState<
     {
       id: number;
@@ -1863,24 +1833,12 @@ export default function App() {
     }[]
   >([]);
 
-  useEffect(() => {
-    saveToFirebase("referRequests", referRequests);
-  }, [referRequests]);
-
   // Admin Configurable Referral Website Link & Bonus Amount
   const [referWebsiteLink, setReferWebsiteLink] = useState<string>(
     "https://website.com",
   );
 
-  useEffect(() => {
-    saveToFirebase("referWebsiteLink", referWebsiteLink);
-  }, [referWebsiteLink]);
-
   const [referBonusAmount, setReferBonusAmount] = useState<number>(50);
-
-  useEffect(() => {
-    saveToFirebase("referBonusAmount", referBonusAmount);
-  }, [referBonusAmount]);
 
   const [referSettingsSavedMsg, setReferSettingsSavedMsg] = useState("");
 
@@ -1906,10 +1864,6 @@ export default function App() {
     }[]
   >([]);
 
-  useEffect(() => {
-    saveToFirebase("keyRequests", keyRequests);
-  }, [keyRequests]);
-
   const [manualKeyForm, setManualKeyForm] = useState({
     targetAccount: "",
     panelTitle: "",
@@ -1928,21 +1882,9 @@ export default function App() {
     }[]
   >([]);
 
-  useEffect(() => {
-    saveToFirebase("registeredUsers", registeredUsers);
-  }, [registeredUsers]);
-
   const [bannedUsers, setBannedUsers] = useState<string[]>([]);
 
-  useEffect(() => {
-    saveToFirebase("bannedUsers", bannedUsers);
-  }, [bannedUsers]);
-
   const [authStats, setAuthStats] = useState({ logins: 0, logouts: 0 });
-
-  useEffect(() => {
-    saveToFirebase("authStats", authStats);
-  }, [authStats]);
 
   const [editingAdminUser, setEditingAdminUser] = useState<{
     originalEmail: string;
@@ -2854,10 +2796,6 @@ export default function App() {
     }[]
   >([]);
 
-  useEffect(() => {
-    saveToFirebase("paymentHistory", paymentHistory);
-  }, [paymentHistory]);
-
   const [autoPaymentHistory, setAutoPaymentHistory] = useState<
     {
       id: number;
@@ -2880,10 +2818,6 @@ export default function App() {
       userAccountKey?: string;
     }[]
   >([]);
-
-  useEffect(() => {
-    saveToFirebase("autoPaymentHistory", autoPaymentHistory);
-  }, [autoPaymentHistory]);
 
   const [autoPaySearch, setAutoPaySearch] = useState("");
   const [autoPayFilter, setAutoPayFilter] = useState<
@@ -2937,19 +2871,13 @@ export default function App() {
         isSyncingFromFirebase.current = true;
         if (data.panels !== undefined) {
           const rawPanels = ensureArray(data.panels);
-          const hadLegacy = rawPanels.some((p: any) => isLegacyDummyPanel(p));
           const loadedPanels = rawPanels
             .filter((p: any) => !isLegacyDummyPanel(p))
             .map((p: any) => ({
               ...p,
               features: parseFeaturesList(p.features, p.description),
             }));
-          if (loadedPanels.length > 0) {
-            setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
-            if (hadLegacy) {
-              savePanelsToFirebase(loadedPanels, false);
-            }
-          }
+          setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
         }
         if (data.registeredUsers)
           setRegisteredUsers((prev) => JSON.stringify(prev) === JSON.stringify(data.registeredUsers) ? prev : ensureArray(data.registeredUsers));
@@ -3059,17 +2987,32 @@ export default function App() {
             }));
           if (loadedPanels.length > 0) {
             setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
-            // Sync to Firebase if needed
-            savePanelsToFirebase(loadedPanels, false);
           } else {
-            // Disk returned empty array, check if client already has panels in state/cache to recover
-            setPanels((prev) => {
-              if (prev.length > 0) {
-                savePanelsToFirebase(prev, false);
-              }
-              return prev;
-            });
+            setPanels([]);
           }
+        }
+      })
+      .catch(() => {});
+
+    // 1d. Fetch referral settings from server disk storage
+    fetch("/api/refer-settings")
+      .then((res) => res.json())
+      .then((resData) => {
+        const loaded = resData?.data;
+        if (loaded) {
+          if (loaded.referWebsiteLink) setReferWebsiteLink(loaded.referWebsiteLink);
+          if (loaded.referBonusAmount !== undefined) setReferBonusAmount(Number(loaded.referBonusAmount));
+        }
+      })
+      .catch(() => {});
+
+    // 1e. Fetch spin settings from server disk storage
+    fetch("/api/spin-settings")
+      .then((res) => res.json())
+      .then((resData) => {
+        const loaded = resData?.data;
+        if (loaded && Array.isArray(loaded.spinRewards) && loaded.spinRewards.length > 0) {
+          setSpinRewards(loaded.spinRewards);
         }
       })
       .catch(() => {});
@@ -3107,19 +3050,15 @@ export default function App() {
         const val = snapshot.val();
         if (val !== null && val !== undefined) {
           const rawPanels = ensureArray(val);
-          const hadLegacy = rawPanels.some((p: any) => isLegacyDummyPanel(p));
           const loadedPanels = rawPanels
             .filter((p: any) => !isLegacyDummyPanel(p))
             .map((p: any) => ({
               ...p,
               features: parseFeaturesList(p.features, p.description),
             }));
-          if (loadedPanels.length > 0) {
-            setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
-            if (hadLegacy) {
-              savePanelsToFirebase(loadedPanels, false);
-            }
-          }
+          setPanels((prev) => JSON.stringify(prev) === JSON.stringify(loadedPanels) ? prev : loadedPanels);
+        } else {
+          setPanels([]);
         }
       });
 
@@ -3199,6 +3138,30 @@ export default function App() {
         if (val) setApprovedResellers((prev) => JSON.stringify(prev) === JSON.stringify(val) ? prev : ensureArray(val));
       });
 
+      const spinRewardsRef = ref(database, "spinRewards");
+      const unsubSpinRewards = onValue(spinRewardsRef, (snapshot) => {
+        const val = snapshot.val();
+        if (Array.isArray(val) && val.length > 0) {
+          setSpinRewards((prev) => JSON.stringify(prev) === JSON.stringify(val) ? prev : val);
+        }
+      });
+
+      const referLinkRef = ref(database, "referWebsiteLink");
+      const unsubReferLink = onValue(referLinkRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val && typeof val === "string" && val.trim() !== "") {
+          setReferWebsiteLink(val.trim());
+        }
+      });
+
+      const referBonusRef = ref(database, "referBonusAmount");
+      const unsubReferBonus = onValue(referBonusRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val !== null && val !== undefined && !isNaN(Number(val))) {
+          setReferBonusAmount(Number(val));
+        }
+      });
+
       return () => {
         unsubPay();
         unsubBg();
@@ -3215,6 +3178,9 @@ export default function App() {
         unsubBanner();
         unsubSteps();
         unsubResellers();
+        unsubSpinRewards();
+        unsubReferLink();
+        unsubReferBonus();
       };
     } catch (e) {}
   }, []);
@@ -3282,7 +3248,7 @@ export default function App() {
       lastSavedAppStateHashRef.current = hash;
 
       payload.updatedAt = Date.now();
-      set(ref(database, "appState"), sanitizeForFirebase(payload)).catch(
+      update(ref(database, "appState"), sanitizeForFirebase(payload)).catch(
         (e) => {},
       );
     }, 800);
@@ -5621,6 +5587,21 @@ export default function App() {
                           alert("Kripya Amount aur UTR number dono bharein!");
                           return;
                         }
+                        const cleanUtr = utr.trim();
+                        if (cleanUtr.length < 8) {
+                          alert("❌ Kripya sahi 12-digit UTR / Transaction ID darj karein!");
+                          return;
+                        }
+
+                        // Anti-Spam: Check duplicate UTR submission
+                        const isDuplicate = ensureArray(paymentHistory).some(
+                          (p) => p.utr && p.utr.trim().toLowerCase() === cleanUtr.toLowerCase(),
+                        );
+                        if (isDuplicate) {
+                          alert("❌ Yeh UTR / Transaction ID pehle se darj hai! Duplicate request spam mat karein.");
+                          return;
+                        }
+
                         const curEmail = userProfile.email || "";
                         const curPhone = userProfile.phone || "";
                         const curPassword = userProfile.password || "";
@@ -5630,7 +5611,7 @@ export default function App() {
                         const newPayment = {
                           id: newTxId,
                           amount: Number(amount),
-                          utr: utr.trim(),
+                          utr: cleanUtr,
                           screenshot: paymentScreenshot || "",
                           status: "PENDING",
                           date: new Date().toLocaleString(),
@@ -5641,10 +5622,9 @@ export default function App() {
                         };
 
                         setCurrentTxId(newTxId);
-                        setPaymentHistory((prev) => [
-                          newPayment,
-                          ...ensureArray(prev),
-                        ]);
+                        const updatedHist = [newPayment, ...ensureArray(paymentHistory)];
+                        setPaymentHistory(updatedHist);
+                        saveToFirebase("paymentHistory", updatedHist);
                         setFundStep("checking");
                       }}
                       disabled={!amount || !utr}
@@ -7698,18 +7678,35 @@ export default function App() {
                   </h2>
                 </div>
 
-                <button
-                  onClick={() => setCurrentView("adminAutoPayment")}
-                  className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black text-xs font-black rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.5)] flex items-center gap-1.5 uppercase tracking-wider transition-all cursor-pointer active:scale-95"
-                >
-                  <Zap size={14} className="fill-black" /> Auto UPI History (
-                  {
-                    ensureArray(autoPaymentHistory).filter(
-                      (p) => p.status === "PENDING",
-                    ).length
-                  }
-                  )
-                </button>
+                <div className="flex items-center gap-2">
+                  {ensureArray(paymentHistory).filter((p) => p.status === "PENDING").length > 0 && (
+                    <button
+                      onClick={() => {
+                        if (confirm("Kya aap sabhi pending payment requests ko clear/delete karna chahte hain?")) {
+                          const updated = paymentHistory.filter((p) => p.status !== "PENDING");
+                          setPaymentHistory(updated);
+                          saveToFirebase("paymentHistory", updated);
+                          alert("Pending payment requests clear kar diye gaye!");
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-red-600/80 hover:bg-red-500 text-white text-xs font-black rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.5)] flex items-center gap-1 uppercase tracking-wider transition-all cursor-pointer active:scale-95"
+                    >
+                      <Trash2 size={13} /> Clear Spam
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setCurrentView("adminAutoPayment")}
+                    className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black text-xs font-black rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.5)] flex items-center gap-1.5 uppercase tracking-wider transition-all cursor-pointer active:scale-95"
+                  >
+                    <Zap size={14} className="fill-black" /> Auto UPI History (
+                    {
+                      ensureArray(autoPaymentHistory).filter(
+                        (p) => p.status === "PENDING",
+                      ).length
+                    }
+                    )
+                  </button>
+                </div>
               </div>
 
               {/* Pending Requests Section */}
@@ -7909,19 +7906,28 @@ export default function App() {
                           <div className="flex items-center gap-2 mt-1">
                             <button
                               onClick={() => {
-                                setPaymentHistory((prev) =>
-                                  prev.map((p) =>
-                                    p.id === req.id
-                                      ? { ...p, status: "REJECTED" }
-                                      : p,
-                                  ),
+                                if (confirm("Kya aap is payment request / spam entry ko delete karna chahte hain?")) {
+                                  const updated = paymentHistory.filter((p) => p.id !== req.id);
+                                  setPaymentHistory(updated);
+                                  saveToFirebase("paymentHistory", updated);
+                                  alert("Payment request / spam entry deleted!");
+                                }
+                              }}
+                              className="px-3 bg-red-600/30 hover:bg-red-600/60 text-red-300 border border-red-500/50 rounded-lg py-2 text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              <Trash2 size={13} /> Delete
+                            </button>
+                            <button
+                              onClick={() => {
+                                const updated = paymentHistory.map((p) =>
+                                  p.id === req.id ? { ...p, status: "REJECTED" } : p
                                 );
+                                setPaymentHistory(updated);
+                                saveToFirebase("paymentHistory", updated);
                                 setAutoPaymentHistory((prev) =>
                                   prev.map((p) =>
-                                    p.id === req.id
-                                      ? { ...p, status: "REJECTED" }
-                                      : p,
-                                  ),
+                                    p.id === req.id ? { ...p, status: "REJECTED" } : p
+                                  )
                                 );
                                 alert("Payment rejected!");
                               }}
@@ -7935,35 +7941,29 @@ export default function App() {
                                   req.userAccountKey ||
                                   getAccountKey(req.userEmail, req.userPhone);
 
-                                // 1. Update status
-                                setPaymentHistory((prev) =>
-                                  prev.map((p) =>
-                                    p.id === req.id
-                                      ? { ...p, status: "SUCCESS" }
-                                      : p,
-                                  ),
+                                const updatedHistory = paymentHistory.map((p) =>
+                                  p.id === req.id ? { ...p, status: "SUCCESS" } : p
                                 );
+                                setPaymentHistory(updatedHistory);
+                                saveToFirebase("paymentHistory", updatedHistory);
+
                                 setAutoPaymentHistory((prev) =>
                                   prev.map((p) =>
-                                    p.id === req.id
-                                      ? { ...p, status: "SUCCESS" }
-                                      : p,
-                                  ),
+                                    p.id === req.id ? { ...p, status: "SUCCESS" } : p
+                                  )
                                 );
 
-                                // 2. Add funds to userWallets
-                                setUserWallets((prev) => {
-                                  const cur = prev[targetKey] ?? 0;
-                                  return {
-                                    ...prev,
-                                    [targetKey]: cur + req.amount,
-                                  };
-                                });
+                                // Add funds to userWallets
+                                const newWallets = {
+                                  ...userWallets,
+                                  [targetKey]: (userWallets[targetKey] ?? 0) + req.amount,
+                                };
+                                setUserWallets(newWallets);
+                                saveToFirebase("userWallets", newWallets);
 
-                                // 3. Update current userBalance if matching active user
                                 const activeKey = getAccountKey(
                                   userProfile.email,
-                                  userProfile.phone,
+                                  userProfile.phone
                                 );
                                 if (
                                   !userProfile.isLoggedIn ||
@@ -7974,7 +7974,7 @@ export default function App() {
                                 }
 
                                 alert(
-                                  `Payment ₹${req.amount} ACCEPTED! Added to wallet of ${req.userName || req.userEmail || req.userPhone || "User"}.`,
+                                  `Payment ₹${req.amount} ACCEPTED! Added to wallet of ${req.userName || req.userEmail || req.userPhone || "User"}.`
                                 );
                               }}
                               className="flex-1 bg-green-500 hover:bg-green-400 text-black shadow-[0_0_15px_rgba(34,197,94,0.5)] rounded-lg py-2 text-xs font-black transition-all uppercase tracking-wider cursor-pointer"
@@ -8020,11 +8020,26 @@ export default function App() {
                             UTR: {req.utr} | Date: {req.date}
                           </span>
                         </div>
-                        <span
-                          className={`text-[10px] font-black px-2 py-0.5 rounded border ${req.status === "SUCCESS" || req.status === "APPROVED" ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-red-500/20 text-red-400 border-red-500/30"}`}
-                        >
-                          {req.status}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-[10px] font-black px-2 py-0.5 rounded border ${req.status === "SUCCESS" || req.status === "APPROVED" ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-red-500/20 text-red-400 border-red-500/30"}`}
+                          >
+                            {req.status}
+                          </span>
+                          <button
+                            onClick={() => {
+                              if (confirm("Is log entry ko delete karein?")) {
+                                const updated = paymentHistory.filter((p) => p.id !== req.id);
+                                setPaymentHistory(updated);
+                                saveToFirebase("paymentHistory", updated);
+                              }
+                            }}
+                            className="p-1 hover:bg-red-500/30 text-red-400 rounded transition-colors"
+                            title="Delete log"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                 </div>
@@ -8976,9 +8991,14 @@ export default function App() {
                             );
                             return;
                           }
-                          setSpinRewards((prev) =>
-                            prev.filter((_, i) => i !== idx),
-                          );
+                          const updated = spinRewards.filter((_, i) => i !== idx);
+                          setSpinRewards(updated);
+                          saveToFirebase("spinRewards", updated);
+                          fetch("/api/spin-settings", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ spinRewards: updated })
+                          }).catch(() => {});
                         }}
                         className="text-red-400 hover:text-red-300 text-xs font-bold"
                         title="Remove amount"
@@ -9005,11 +9025,16 @@ export default function App() {
                           alert("Yeh reward amount pehle se added hai.");
                           return;
                         }
-                        setSpinRewards((prev) =>
-                          [...prev, val].sort((a, b) => a - b),
-                        );
+                        const updated = [...spinRewards, val].sort((a, b) => a - b);
+                        setSpinRewards(updated);
+                        saveToFirebase("spinRewards", updated);
+                        fetch("/api/spin-settings", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ spinRewards: updated })
+                        }).catch(() => {});
                         setNewSpinRewardInput("");
-                        alert(`Reward ₹${val} added to spin wheel!`);
+                        alert(`Reward ₹${val} added to spin wheel permanently!`);
                       } else {
                         alert("Kripya valid reward amount daalein.");
                       }
@@ -9149,8 +9174,15 @@ export default function App() {
                     <div className="flex items-end">
                       <button
                         onClick={() => {
-                          saveToFirebase("referWebsiteLink", referWebsiteLink);
-                          saveToFirebase("referBonusAmount", referBonusAmount);
+                          const cleanLink = referWebsiteLink.trim();
+                          const cleanBonus = Number(referBonusAmount) || 0;
+                          saveToFirebase("referWebsiteLink", cleanLink);
+                          saveToFirebase("referBonusAmount", cleanBonus);
+                          fetch("/api/refer-settings", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ referWebsiteLink: cleanLink, referBonusAmount: cleanBonus })
+                          }).catch(() => {});
                           setReferSettingsSavedMsg(
                             "✓ Website Referral Link & Bonus Amount Updated Successfully!",
                           );
@@ -11923,25 +11955,19 @@ export default function App() {
                     const effectiveYt = ytVideo || ytPhoto;
 
                     // Compute final photo URL
-                    let finalPhoto = "";
-                    if (rawPhoto && !isPhotoDirectVid && !ytPhoto) {
-                      finalPhoto = rawPhoto;
-                    } else if (rawVideo && !isVideoDirectVid && !ytVideo) {
-                      finalPhoto = rawVideo;
-                    } else if (effectiveYt) {
+                    let finalPhoto = rawPhoto;
+                    if (!finalPhoto && effectiveYt) {
                       finalPhoto = effectiveYt.thumbnailUrl;
-                    } else {
-                      finalPhoto = "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop";
+                    } else if (!finalPhoto) {
+                      finalPhoto = editPanelForm.image || "";
                     }
 
                     // Compute final video URL
-                    let finalVideo = "";
-                    if (rawVideo && (isVideoDirectVid || ytVideo)) {
-                      finalVideo = rawVideo;
-                    } else if (rawPhoto && (isPhotoDirectVid || ytPhoto)) {
+                    let finalVideo = rawVideo;
+                    if (!finalVideo && isPhotoDirectVid) {
                       finalVideo = rawPhoto;
-                    } else if (rawVideo) {
-                      finalVideo = rawVideo;
+                    } else if (!finalVideo) {
+                      finalVideo = editPanelForm.videoLink || "";
                     }
 
                     const hasPhoto = Boolean(finalPhoto);
@@ -11951,6 +11977,7 @@ export default function App() {
                     const updatedPanel = {
                       ...editPanelForm,
                       title: editPanelForm.title.trim(),
+                      installLink: (editPanelForm.installLink || "").trim(),
                       image: finalPhoto,
                       photoUrl: finalPhoto,
                       hasPhoto,
@@ -14691,26 +14718,18 @@ export default function App() {
                         const ytVideo = getYouTubeInfo(rawVideo);
                         const effectiveYt = ytVideo || ytPhoto;
 
-                        // Compute final photo URL
-                        let finalPhoto = "";
-                        if (rawPhoto && !isPhotoDirectVid && !ytPhoto) {
-                          finalPhoto = rawPhoto;
-                        } else if (rawVideo && !isVideoDirectVid && !ytVideo && isDirectImageUrl(rawVideo)) {
-                          finalPhoto = rawVideo;
-                        } else if (effectiveYt) {
+                        // Compute final photo URL without replacing user's entered link
+                        let finalPhoto = rawPhoto;
+                        if (!finalPhoto && effectiveYt) {
                           finalPhoto = effectiveYt.thumbnailUrl;
-                        } else {
-                          finalPhoto = rawPhoto || "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop";
+                        } else if (!finalPhoto && rawVideo && isDirectImageUrl(rawVideo)) {
+                          finalPhoto = rawVideo;
                         }
 
-                        // Compute final video URL
-                        let finalVideo = "";
-                        if (rawVideo && (isVideoDirectVid || ytVideo)) {
-                          finalVideo = rawVideo;
-                        } else if (rawPhoto && (isPhotoDirectVid || ytPhoto)) {
+                        // Compute final video URL preserving exact user entered link
+                        let finalVideo = rawVideo;
+                        if (!finalVideo && isPhotoDirectVid) {
                           finalVideo = rawPhoto;
-                        } else if (rawVideo && !rawVideo.includes("t.me/")) {
-                          finalVideo = rawVideo;
                         }
 
                         const hasPhoto = Boolean(finalPhoto);
@@ -14731,12 +14750,9 @@ export default function App() {
                           isVideo: isAnyVideo,
                           mediaType: effectiveYt ? "youtube" : (hasVideo ? "video" : "photo"),
                           features: parsedFeatures,
-                          installLink: newPanelForm.installLink || supportLinks.telegram,
-                          feedbackLink: newPanelForm.feedbackLink || supportLinks.telegram,
-                          exceptFileLink:
-                            newPanelForm.exceptFileLink ||
-                            newPanelForm.installLink ||
-                            supportLinks.telegram,
+                          installLink: (newPanelForm.installLink || "").trim(),
+                          feedbackLink: (newPanelForm.feedbackLink || "").trim(),
+                          exceptFileLink: (newPanelForm.exceptFileLink || "").trim(),
                           pricing: finalPricing,
                           pricingPlans: finalPricing,
                           options: finalPricing,
