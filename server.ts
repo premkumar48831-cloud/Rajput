@@ -345,12 +345,36 @@ async function fetchFromFirebase(nodePath: string): Promise<any> {
   return null;
 }
 
+// Helper to filter out dummy/demo key requests so ONLY real user purchases reach admin & disk
+export const isDemoKeyRequest = (r: any): boolean => {
+  if (!r || typeof r !== "object") return true;
+  const user = String(r.user || "").trim().toLowerCase();
+  const price = Number(r.price) || 0;
+  const originalPrice = Number(r.originalPrice) || 0;
+  const panel = String(r.panel || "").toLowerCase();
+
+  // If user is guest/blank and price is 0, it is a dummy demo
+  if ((user === "guest" || !user) && price === 0 && originalPrice === 0) return true;
+  // If panel is the legacy placeholder demo
+  if (panel.includes("drip silent mod xyz cheast")) return true;
+  return false;
+};
+
+export const filterRealKeyRequests = (requests: any[]): any[] => {
+  if (!Array.isArray(requests)) return [];
+  return requests.filter((r) => !isDemoKeyRequest(r));
+};
+
 // Helper to read server state
 function readState() {
   try {
     if (fs.existsSync(DATA_FILE)) {
       const data = fs.readFileSync(DATA_FILE, 'utf8');
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      if (parsed && Array.isArray(parsed.keyRequests)) {
+        parsed.keyRequests = filterRealKeyRequests(parsed.keyRequests);
+      }
+      return parsed;
     }
   } catch (e) {
     console.error('Error reading server state:', e);
@@ -361,11 +385,17 @@ function readState() {
 // Helper to write server state
 function writeState(state: any) {
   try {
+    if (state && Array.isArray(state.keyRequests)) {
+      state.keyRequests = filterRealKeyRequests(state.keyRequests);
+    }
     fs.writeFileSync(DATA_FILE, JSON.stringify(state, null, 2), 'utf8');
     // Sync to MongoDB Atlas
     syncToMongo("site_config", { type: "full_state" }, state);
     // Sync to Firebase Cloud Realtime DB
     syncToFirebase("appState", state);
+    if (state && state.keyRequests) {
+      syncToFirebase("keyRequests", state.keyRequests);
+    }
     return true;
   } catch (e) {
     console.error('Error writing server state:', e);
@@ -845,6 +875,74 @@ app.post("/api/panels", (req, res) => {
   } catch (err: any) {
     console.error("[Panels] Error saving panels:", err);
     return res.status(500).json({ status: false, error: err?.message || "Failed to save" });
+  }
+});
+
+// Dedicated Real Key Orders Endpoints (Only real user purchases saved & synced)
+app.get("/api/key-orders", (req, res) => {
+  const state = readState() || {};
+  const orders = filterRealKeyRequests(state.keyRequests || []);
+  return res.json({ status: true, data: orders });
+});
+
+app.post("/api/key-order", (req, res) => {
+  try {
+    const newOrder = req.body;
+    if (!newOrder || isDemoKeyRequest(newOrder)) {
+      console.warn("[KeyOrder] Blocked attempt to send demo/invalid key order");
+      return res.status(400).json({ status: false, error: "Invalid or demo key request rejected" });
+    }
+
+    const state = readState() || {};
+    const existing = filterRealKeyRequests(state.keyRequests || []);
+    // Prepend new order (prevent duplicate by ID)
+    const filtered = existing.filter((o: any) => o.id !== newOrder.id);
+    const updated = [newOrder, ...filtered];
+    state.keyRequests = updated;
+    writeState(state);
+
+    // Explicitly sync to Firebase Realtime DB
+    syncToFirebase("keyRequests", updated);
+    syncToFirebase("appState/keyRequests", updated);
+
+    console.log(`[KeyOrder] New real user key order saved & synced to Admin Panel: ${newOrder.user} bought ${newOrder.panel} for ₹${newOrder.price}`);
+    return res.json({ status: true, message: "Order placed and sent to admin panel", order: newOrder });
+  } catch (err: any) {
+    console.error("[KeyOrder] Error saving order:", err);
+    return res.status(500).json({ status: false, error: err?.message || "Failed to save key order" });
+  }
+});
+
+app.post("/api/update-key-status", (req, res) => {
+  try {
+    const { id, status, deliveredKey } = req.body || {};
+    if (!id || !status) {
+      return res.status(400).json({ status: false, error: "Order ID and status required" });
+    }
+
+    const state = readState() || {};
+    const orders = filterRealKeyRequests(state.keyRequests || []);
+    const updated = orders.map((o: any) => {
+      if (String(o.id) === String(id)) {
+        return {
+          ...o,
+          status,
+          deliveredKey: deliveredKey !== undefined ? deliveredKey : o.deliveredKey,
+        };
+      }
+      return o;
+    });
+
+    state.keyRequests = updated;
+    writeState(state);
+    syncToFirebase("keyRequests", updated);
+    syncToFirebase("appState/keyRequests", updated);
+
+    console.log(`[KeyOrder] Updated key order ${id} status to ${status}`);
+    return res.json({ status: true, message: "Key status updated successfully", data: updated });
+  } catch (err: any) {
+    console.error("[KeyOrder] Error updating status:", err);
+    return res.status(500).json({ status: false, error: err?.message || "Failed to update key status" });
   }
 });
 

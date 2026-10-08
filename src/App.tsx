@@ -7,6 +7,18 @@ import { PermissionTracker } from "./components/PermissionTracker";
 import { AdminPermissionTracker } from "./components/AdminPermissionTracker";
 import { initializeApp } from "firebase/app";
 import {
+  getFirestore,
+  doc,
+  updateDoc,
+  increment,
+  collection,
+  query,
+  where,
+  getDocs,
+  setDoc,
+  deleteDoc,
+} from "firebase/firestore";
+import {
   getDatabase,
   ref,
   set,
@@ -48,6 +60,7 @@ import {
   RefreshCw,
   ArrowRight,
   ArrowLeft,
+  Bell,
   Receipt,
   CreditCard,
   Hourglass,
@@ -507,6 +520,63 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const database = getDatabase(firebaseApp);
+export const db = getFirestore(firebaseApp);
+export const auth = getAuth(firebaseApp);
+
+// [फिक्स 1]: सिर्फ लॉगिन यूजर को उसकी खुद की खरीदी हुई 'Keys' दिखाना
+export async function getMyPurchasedKeys() {
+    const user = auth.currentUser;
+    if (!user) return [];
+    try {
+        // 'where' फ़िल्टर सुनिश्चित करता है कि एक यूजर का डेटा दूसरे को कभी न दिखे
+        const q = query(collection(db, "purchased_keys"), where("userId", "==", user.uid));
+        const querySnapshot = await getDocs(q);
+        const myKeys: any[] = [];
+        
+        querySnapshot.forEach((docSnap) => {
+            myKeys.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        return myKeys;
+    } catch (error) {
+        console.error("कीज़ लोड करने में समस्या आई:", error);
+        return [];
+    }
+}
+
+// [फिक्स 2]: एडमिन अप्रूवल - सिर्फ रिक्वेस्ट करने वाले यूजर के वॉलेट में पैसा जाना (एडमिन का बैलेंस नहीं बदलेगा)
+export async function adminApproveWalletRequest(targetUserId: string, amountToAdd: number) {
+    try {
+        // targetUserId का उपयोग करके सिर्फ उसी विशिष्ट यूजर का वॉलेट अपडेट होगा
+        const userWalletRef = doc(db, "users", targetUserId);
+        await updateDoc(userWalletRef, {
+            walletBalance: increment(amountToAdd)
+        });
+        console.log("यूजर का वॉलेट बैलेंस सफलतापूर्वक अपडेट हो गया है!");
+    } catch (error) {
+        console.error("वॉलेट अपडेट फेल हुआ:", error);
+    }
+}
+
+// [फिक्स 3]: एडमिन द्वारा पैनल्स को परमानेंट ऐड और डिलीट करना
+// नया पैनल ऐड करने के लिए
+export async function adminAddPanel(panelId: string, panelData: any) {
+    try {
+        await setDoc(doc(db, "panels", String(panelId)), panelData);
+        console.log("पैनल सफलतापूर्वक परमानेंटली ऐड हो गया है!");
+    } catch (error) {
+        console.error("पैनल ऐड करने में समस्या:", error);
+    }
+}
+
+// पैनल को वेबसाइट से डिलीट करने के लिए
+export async function adminDeletePanel(panelId: string) {
+    try {
+        await deleteDoc(doc(db, "panels", String(panelId)));
+        console.log("पैनल सफलतापूर्वक डिलीट हो गया है!");
+    } catch (error) {
+        console.error("पैनल डिलीट करने में समस्या:", error);
+    }
+}
 
 // Universal Realtime Database Cloud Sync Helpers
 export const saveToFirebase = async (path: string, data: any) => {
@@ -528,6 +598,24 @@ export const isLegacyDummyPanel = (p: any): boolean => {
   return false;
 };
 
+// Filter out demo / dummy orders so only real user purchases go to Admin Panel & My Keys
+export const isDemoKeyRequest = (r: any): boolean => {
+  if (!r || typeof r !== "object") return true;
+  const user = String(r.user || "").trim().toLowerCase();
+  const price = Number(r.price) || 0;
+  const originalPrice = Number(r.originalPrice) || 0;
+  const panel = String(r.panel || "").toLowerCase();
+
+  if ((user === "guest" || !user) && price === 0 && originalPrice === 0) return true;
+  if (panel.includes("drip silent mod xyz cheast")) return true;
+  return false;
+};
+
+export const filterRealKeyRequests = (requests: any[]): any[] => {
+  if (!Array.isArray(requests)) return [];
+  return requests.filter((r) => !isDemoKeyRequest(r));
+};
+
 export const savePanelsToFirebase = async (panelsList: any[], allowEmpty: boolean = false) => {
   try {
     const validPanels = ensureArray(panelsList).filter((p) => !isLegacyDummyPanel(p));
@@ -538,6 +626,14 @@ export const savePanelsToFirebase = async (panelsList: any[], allowEmpty: boolea
     const clean = sanitizeForFirebase(validPanels);
     await set(ref(database, "panels"), clean);
     await set(ref(database, "appState/panels"), clean);
+
+    // Sync each panel document into Firestore collection "panels" using setDoc
+    for (const p of validPanels) {
+      if (p && p.id) {
+        adminAddPanel(String(p.id), p).catch(() => {});
+      }
+    }
+
     const query = allowEmpty ? "?forceEmpty=true" : "";
     fetch(`/api/panels${query}`, {
       method: "POST",
@@ -613,18 +709,18 @@ const DEFAULT_ACCESS_FILE_STEPS = {
 
 const DEFAULT_BANNER_SETTINGS = {
   bannerEnabled: true,
-  bannerTitle: "🔥 FFH4CK VIP PREM STORE - SAFE MODS & ZERO BAN 🔥",
+  bannerTitle: "🔥 KSHATRAMODZ VIP STORE - SAFE MODS & ZERO BAN 🔥",
   bannerSubtitle: "Instant 24/7 Auto Delivery • 100% Antiban Guaranteed",
   bannerImage:
     "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
-  bannerLink: "https://t.me/Premjodvip",
+  bannerLink: "https://t.me/yourchannel",
   marqueeEnabled: true,
   marqueeText:
-    "⚡ WELCOME TO PREM STORE ⚡ • 24/7 AUTO KEY DELIVERY • 100% SAFE ESP & AIMBOT • REFER FRIENDS & EARN ₹50 DIRECT BONUS • OWNER TELEGRAM: @PREMJODVIP",
+    "⚡ WELCOME TO KSHATRAMODZ VIP STORE ⚡ • 24/7 AUTO KEY DELIVERY • 100% SAFE ESP & AIMBOT • REFER FRIENDS & EARN ₹50 DIRECT BONUS",
   popupEnabled: false,
   popupTitle: "📢 SPECIAL ANNOUNCEMENT",
   popupMessage:
-    "Welcome to Prem Store! All new VIP panels are updated with 100% Antiban protection. Enjoy 24/7 instant delivery!",
+    "Welcome to KSHATRAMODZ! All new VIP panels are updated with 100% Antiban protection. Enjoy 24/7 instant delivery!",
 };
 
 const initDB = () => {
@@ -705,7 +801,16 @@ export default function App() {
     | "permissions"
     | "adminPermissions"
     | "adminPrivateData"
-  >("home");
+  >(() => {
+    try {
+      const saved = localStorage.getItem("vip_user_profile");
+      if (saved) {
+        const u = JSON.parse(saved);
+        if (u && u.isLoggedIn) return "home";
+      }
+    } catch (e) {}
+    return "login";
+  });
   const [staffTab, setStaffTab] = useState<
     | "overview"
     | "addPanel"
@@ -766,24 +871,18 @@ export default function App() {
     phone?: string;
     balance: number;
     isApproved: boolean;
-  }>(() => {
-    try {
-      const saved = sessionStorage.getItem("app_resellerUser");
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return {
-      isLoggedIn: false,
-      email: "",
-      name: "",
-      balance: 0,
-      isApproved: false,
-    };
+  }>({
+    isLoggedIn: false,
+    email: "",
+    name: "",
+    balance: 0,
+    isApproved: false,
   });
 
   useEffect(() => {
-    try {
-      sessionStorage.setItem("app_resellerUser", JSON.stringify(resellerUser));
-    } catch (e) {}
+    if (resellerUser.isLoggedIn) {
+      saveToFirebase("activeResellerUser", resellerUser);
+    }
   }, [resellerUser]);
 
   const [approvedResellers, setApprovedResellers] = useState<
@@ -868,14 +967,23 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      console.warn(
-        "Google Auth popup issue or blocked in iframe, offering instant direct fallback:",
-        err,
-      );
-      const manualEmail = prompt(
-        "Google Sign-In popup restricted in preview. Enter your Reseller Gmail ID to verify VIP access:",
-        "pramk9992@gmail.com",
-      );
+      console.warn("Google Auth issue:", err);
+      const errMsg = (err?.message || "").toLowerCase() + (err?.code || "").toLowerCase();
+      const isUnauthDomain = errMsg.includes("unauthorized-domain");
+
+      if (isUnauthDomain) {
+        setUnauthorizedDomainModal({
+          domain:
+            window.location.hostname ||
+            "ais-dev-g2ivp3dc3wybvjezozgxuk-275087339503.asia-southeast1.run.app",
+          emailInput: "",
+          role: "reseller",
+        });
+      } else {
+        const manualEmail = prompt(
+          "Google Sign-In popup restricted in preview. Enter your Reseller Gmail ID to verify VIP access:",
+          "pramk9992@gmail.com",
+        );
       if (manualEmail && manualEmail.includes("@")) {
         const cleanEmail = manualEmail.toLowerCase().trim();
         const existing = approvedResellers.find(
@@ -914,6 +1022,7 @@ export default function App() {
           alert(`🎉 Reseller VIP Account Activated for ${cleanEmail}!`);
         }
       }
+    }
     } finally {
       setIsSigningInGoogle(false);
     }
@@ -1282,6 +1391,11 @@ export default function App() {
   const [couponSuccessMsg, setCouponSuccessMsg] = useState("");
   const [showBuySuccessPendingModal, setShowBuySuccessPendingModal] =
     useState<boolean>(false);
+  const [unauthorizedDomainModal, setUnauthorizedDomainModal] = useState<{
+    domain: string;
+    emailInput: string;
+    role: "user" | "reseller";
+  } | null>(null);
 
   // New Spin Reward input for admin
   const [newSpinRewardInput, setNewSpinRewardInput] = useState("");
@@ -1289,14 +1403,14 @@ export default function App() {
   // Voice Payment Guidance State & Web Speech Synthesis
   const [isSpeakingGuide, setIsSpeakingGuide] = useState(false);
 
-  // 🌸 Female Voice Engine for "Welcome to Prem Store"
+  // 🌸 Female Voice Engine for "Welcome to KSHATRAMODZ"
   const [hasPlayedIntroVoice, setHasPlayedIntroVoice] = useState(false);
 
   const playWelcomeVoice = () => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     try {
       window.speechSynthesis.cancel();
-      const text = "Welcome to Prem Store";
+      const text = "Welcome to KSHATRAMODZ";
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.pitch = 1.18; // Sweet, crisp female voice pitch
       utterance.rate = 0.95; // Clear, natural cadence
@@ -1349,7 +1463,6 @@ export default function App() {
     isAppLoading,
     showLordPremModal,
     showImportantNoticeModal,
-    hasPlayedIntroVoice,
   ]);
 
   const voiceGuideText =
@@ -1409,6 +1522,43 @@ export default function App() {
     }
   }, [currentView]);
 
+  const [userAccountProfiles, setUserAccountProfiles] = useState<
+    Record<
+      string,
+      {
+        avatar?: string;
+        keysBought?: number;
+        totalAdded?: number;
+        joinDate?: string;
+      }
+    >
+  >({});
+
+  useEffect(() => {
+    saveToFirebase("userAccountProfiles", userAccountProfiles);
+  }, [userAccountProfiles]);
+
+  const [userProfile, setUserProfile] = useState(() => {
+    try {
+      const saved = localStorage.getItem("vip_user_profile");
+      if (saved) {
+        const u = JSON.parse(saved);
+        if (u && u.isLoggedIn) return u;
+      }
+    } catch (e) {}
+    return {
+      isLoggedIn: false,
+      email: "",
+      phone: "",
+      password: "",
+      avatar:
+        "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
+      joinDate: "",
+      keysBought: 0,
+      totalAdded: 0,
+    };
+  });
+
   const isAnyInitialModalOpen =
     isAppLoading || showLordPremModal || showImportantNoticeModal;
 
@@ -1438,7 +1588,12 @@ export default function App() {
               setIsAppLoading(false);
               setLoadingPhase("done");
               setShowLordPremModal(false);
-              setShowImportantNoticeModal(true);
+              if (userProfile.isLoggedIn) {
+                setShowImportantNoticeModal(true);
+              } else {
+                setShowImportantNoticeModal(false);
+                setCurrentView("login");
+              }
             }, 180);
             return 10;
           }
@@ -1447,61 +1602,75 @@ export default function App() {
       }, 35); // Super fast smooth count from 1% to 10% (~350ms total)
     }
     return () => clearInterval(progressInterval);
-  }, [isAppLoading, loadingPhase]);
-
-  const [userAccountProfiles, setUserAccountProfiles] = useState<
-    Record<
-      string,
-      {
-        avatar?: string;
-        keysBought?: number;
-        totalAdded?: number;
-        joinDate?: string;
-      }
-    >
-  >({});
+  }, [isAppLoading, loadingPhase, userProfile.isLoggedIn]);
 
   useEffect(() => {
-    saveToFirebase("userAccountProfiles", userAccountProfiles);
-  }, [userAccountProfiles]);
-
-  const [userProfile, setUserProfile] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem("app_userProfile");
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return {
-      isLoggedIn: false,
-      email: "",
-      phone: "",
-      password: "",
-      avatar:
-        "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
-      joinDate: "",
-      keysBought: 0,
-      totalAdded: 0,
-    };
-  });
-
-  useEffect(() => {
-    try {
-      sessionStorage.setItem("app_userProfile", JSON.stringify(userProfile));
-    } catch (e) {}
     if (userProfile.isLoggedIn) {
+      try {
+        localStorage.setItem("vip_user_profile", JSON.stringify(userProfile));
+      } catch (e) {}
+      saveToFirebase("activeUserProfile", userProfile);
       const key = getAccountKey(userProfile.email, userProfile.phone);
       if (key && key !== "guest") {
-        setUserAccountProfiles((prev) => ({
-          ...prev,
-          [key]: {
+        setUserAccountProfiles((prev) => {
+          const newProfile = {
             avatar: userProfile.avatar,
             keysBought: userProfile.keysBought,
             totalAdded: userProfile.totalAdded,
             joinDate: userProfile.joinDate,
-          },
-        }));
+          };
+          if (
+            prev[key] &&
+            prev[key].avatar === newProfile.avatar &&
+            prev[key].keysBought === newProfile.keysBought &&
+            prev[key].totalAdded === newProfile.totalAdded &&
+            prev[key].joinDate === newProfile.joinDate
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [key]: newProfile,
+          };
+        });
       }
     }
   }, [userProfile]);
+
+  // Route guard: Non-logged in users MUST see login view first and cannot enter website
+  useEffect(() => {
+    if (!userProfile.isLoggedIn) {
+      const allowedWithoutLogin = [
+        "login",
+        "admin",
+        "adminUserHistory",
+        "adminPayment",
+        "adminKeys",
+        "adminSpin",
+        "adminRefer",
+        "adminSupport",
+        "adminPaymentSettings",
+        "adminCashfree",
+        "adminRazorpay",
+        "adminLogins",
+        "adminAddPanel",
+        "adminDeletePanel",
+        "adminEditPanel",
+        "adminBgImage",
+        "adminAccessFiles",
+        "adminOwner",
+        "staff",
+        "adminBanner",
+        "policies",
+        "permissions",
+        "adminPermissions",
+        "adminPrivateData",
+      ];
+      if (!allowedWithoutLogin.includes(currentView)) {
+        setCurrentView("login");
+      }
+    }
+  }, [userProfile.isLoggedIn, currentView]);
 
   // Account-Specific Spin Timestamps, Coupon Used Timestamps, and Account Coupons
   const [userSpinTimestamps, setUserSpinTimestamps] = useState<
@@ -1516,10 +1685,24 @@ export default function App() {
     Record<string, any[]>
   >({});
 
+  const [lastOrderDetails, setLastOrderDetails] = useState<{
+    panel: string;
+    planLabel: string;
+    priceDeducted: number;
+    remainingWallet: number;
+  } | null>(null);
+
   const activeAccKey = getAccountKey(userProfile.email, userProfile.phone);
+  const localSpinDone =
+    typeof window !== "undefined" && userProfile.isLoggedIn && activeAccKey
+      ? localStorage.getItem(`vip_user_spin_done_${activeAccKey}`) === "true" ||
+        Boolean(localStorage.getItem(`vip_user_spin_time_${activeAccKey}`))
+      : false;
   const lastSpinTimestamp = userProfile.isLoggedIn
-    ? userSpinTimestamps[activeAccKey] || 0
+    ? userSpinTimestamps[activeAccKey] || (localSpinDone ? 1 : 0)
     : 0;
+  const hasUserSpun =
+    userProfile.isLoggedIn && (lastSpinTimestamp > 0 || localSpinDone);
   const lastCouponUsedTimestamp = userProfile.isLoggedIn
     ? userCouponUsedTimestamps[activeAccKey] || 0
     : 0;
@@ -1529,43 +1712,45 @@ export default function App() {
 
   const [userWallets, setUserWallets] = useState<Record<string, number>>({});
 
-  const [userBalance, setUserBalance] = useState(0);
+  const [userBalance, setUserBalance] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("vip_user_profile");
+      if (saved) {
+        const u = JSON.parse(saved);
+        if (u && u.isLoggedIn) {
+          const b = localStorage.getItem("vip_user_balance");
+          if (b !== null && !isNaN(Number(b))) return Number(b);
+        }
+      }
+    } catch (e) {}
+    return 0;
+  });
+
+  useEffect(() => {
+    if (userProfile.isLoggedIn) {
+      try {
+        localStorage.setItem("vip_user_balance", String(userBalance));
+      } catch (e) {}
+    }
+  }, [userBalance, userProfile.isLoggedIn]);
 
   useEffect(() => {
     if (userProfile.isLoggedIn) {
       const activeKey = getAccountKey(userProfile.email, userProfile.phone);
+      // Only sync if balance actually differs and userWallets is loaded (has entries)
       if (
         userWallets[activeKey] !== undefined &&
         userWallets[activeKey] !== userBalance
       ) {
+        // Option 1: Trust Firebase (userWallets[activeKey])
         setUserBalance(userWallets[activeKey]);
       }
     }
-  }, [
-    userWallets,
-    userProfile.isLoggedIn,
-    userProfile.email,
-    userProfile.phone,
-  ]);
+  }, [userWallets, userProfile.isLoggedIn, userProfile.email, userProfile.phone]);
 
-  useEffect(() => {
-    if (userProfile.isLoggedIn) {
-      const key = getAccountKey(userProfile.email, userProfile.phone);
-      if (key && key !== "guest") {
-        setUserWallets((prev) => {
-          if (prev[key] === userBalance) return prev;
-          const next = { ...prev, [key]: userBalance };
-          saveToFirebase("userWallets", next);
-          return next;
-        });
-      }
-    }
-  }, [
-    userBalance,
-    userProfile.isLoggedIn,
-    userProfile.email,
-    userProfile.phone,
-  ]);
+  // Remove the problematic reverse sync useEffect (userBalance -> userWallets)
+  // that was causing balance resets if userBalance changed unexpectedly.
+  // Instead, rely on manual fund addition or purchase logic to update userWallets explicitly.
 
   const lastAdminSavedPaymentTimeRef = useRef<number>(0);
   const isSyncingFromFirebase = useRef(true);
@@ -1994,7 +2179,7 @@ export default function App() {
       const savedBal = userWallets[accKey] ?? 0;
       const savedAccProfile = userAccountProfiles[accKey];
       setUserBalance(savedBal);
-      setUserProfile({
+      const updatedActiveProfile = {
         ...userProfile,
         isLoggedIn: true,
         email: cleanEmail,
@@ -2011,7 +2196,28 @@ export default function App() {
           savedAccProfile?.joinDate ||
           existingUser?.joinDate ||
           new Date().toLocaleString(),
-      });
+        lastLogin: new Date().toISOString(),
+        loginMethod: "Google",
+      };
+      setUserProfile(updatedActiveProfile);
+
+      // Instant Cloud Sync to Firebase RTDB & Firestore
+      saveToFirebase("activeUserProfile", updatedActiveProfile);
+      try {
+        setDoc(
+          doc(db, "users", accKey),
+          {
+            name: name || existingUser?.name || "VIP User",
+            email: cleanEmail,
+            phone: cleanPhone || existingUser?.phone || "",
+            walletBalance: savedBal,
+            lastLogin: new Date().toISOString(),
+            loginMethod: "Google",
+          },
+          { merge: true },
+        ).catch(() => {});
+      } catch (e) {}
+
       alert(
         "🎉 स्वागत है " +
           name +
@@ -2019,19 +2225,22 @@ export default function App() {
           savedBal,
       );
     } else {
-      setUserWallets((prev) => ({ ...prev, [accKey]: 0 }));
+      const newWallets = { ...userWallets, [accKey]: 0 };
+      setUserWallets(newWallets);
       setUserBalance(0);
       const joinDateStr = new Date().toLocaleString();
-      setUserAccountProfiles((prev) => ({
-        ...prev,
+      const newProfiles = {
+        ...userAccountProfiles,
         [accKey]: {
           avatar,
           keysBought: 0,
           totalAdded: 0,
           joinDate: joinDateStr,
         },
-      }));
-      setUserProfile({
+      };
+      setUserAccountProfiles(newProfiles);
+
+      const updatedActiveProfile = {
         ...userProfile,
         isLoggedIn: true,
         email: cleanEmail,
@@ -2041,7 +2250,11 @@ export default function App() {
         keysBought: 0,
         totalAdded: 0,
         joinDate: joinDateStr,
-      });
+        lastLogin: new Date().toISOString(),
+        loginMethod: "Google",
+      };
+      setUserProfile(updatedActiveProfile);
+
       const newUser = {
         name,
         email: cleanEmail,
@@ -2049,13 +2262,29 @@ export default function App() {
         password: "GoogleLoginVerified",
         avatar,
         joinDate: joinDateStr,
+        lastLogin: new Date().toISOString(),
+        loginMethod: "Google",
       };
-      setRegisteredUsers((prev) => [newUser, ...prev]);
+      const newUsersList = [newUser, ...registeredUsers];
+      setRegisteredUsers(newUsersList);
       setUnreadLogins((prev) => prev + 1);
 
+      // Save everything permanently to Firebase RTDB and Firestore
+      saveToFirebase("registeredUsers", newUsersList);
+      saveToFirebase("userWallets", newWallets);
+      saveToFirebase("userAccountProfiles", newProfiles);
+      saveToFirebase("activeUserProfile", updatedActiveProfile);
+
       try {
-        const rtdbRef = ref(database, "registeredUsers");
-        set(rtdbRef, [newUser, ...registeredUsers]);
+        setDoc(doc(db, "users", accKey), {
+          name,
+          email: cleanEmail,
+          phone: cleanPhone,
+          walletBalance: 0,
+          joinDate: joinDateStr,
+          lastLogin: new Date().toISOString(),
+          loginMethod: "Google",
+        }).catch(() => {});
       } catch (e) {}
 
       alert(
@@ -2077,6 +2306,7 @@ export default function App() {
       provider.setCustomParameters({ prompt: "select_account" });
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
+      console.log("लॉगिन सफल:", user);
       if (user && user.email) {
         processSuccessfulGoogleLogin(
           user.email,
@@ -2086,8 +2316,26 @@ export default function App() {
         );
       }
     } catch (err: any) {
-      console.warn("Google Auth failed:", err);
-      setUserAuthError("⚠️ Google Login Failed! Please verify with a real Gmail account. (" + (err.message || "") + ")");
+      console.error("लॉगिन एरर:", err?.message || err);
+      const errMsg = (err?.message || "").toLowerCase() + (err?.code || "").toLowerCase();
+      const isUnauthDomain = errMsg.includes("unauthorized-domain");
+
+      if (isUnauthDomain) {
+        setUnauthorizedDomainModal({
+          domain:
+            window.location.hostname ||
+            "ais-dev-g2ivp3dc3wybvjezozgxuk-275087339503.asia-southeast1.run.app",
+          emailInput: "",
+          role: "user",
+        });
+        setUserAuthError(
+          "⚠️ Domain Authorization Required in Firebase Console. Click below to view fix guide or log in directly!",
+        );
+      } else {
+        setUserAuthError(
+          "⚠️ Google Login Failed! (" + (err?.message || "Unknown error") + ")",
+        );
+      }
     } finally {
       setIsSigningInUserGoogle(false);
     }
@@ -2360,6 +2608,13 @@ export default function App() {
     explicitResellerPrice?: number
   ) => {
     const isResellerActive = resellerUser.isLoggedIn && resellerUser.isApproved;
+
+    if (!userProfile.isLoggedIn && !isResellerActive) {
+      alert("⚠️ कृपया पहले लॉगिन करें! वेबसाइट में पैनल खरीदने के लिए लॉगिन करना अनिवार्य है।");
+      setCurrentView("login");
+      return;
+    }
+
     const panelObj = panels.find((p) => p.title === panelTitle);
 
     const activePricingArray = panelObj?.pricing || panelObj?.pricingPlans || [];
@@ -2399,17 +2654,25 @@ export default function App() {
         : Math.round(numPrice * 0.65);
 
     const activeChargePrice = isResellerActive ? effectiveResellerPrice : numPrice;
+    const curEmail = (isResellerActive ? resellerUser.email : userProfile.email) || "";
+    const curPhone = userProfile.phone || "";
+    const accKey = getAccountKey(curEmail, curPhone);
+
     const activeWalletBal = isResellerActive
       ? resellerUser.balance > 0
         ? resellerUser.balance
         : userBalance
-      : userBalance;
+      : (userWallets[accKey] !== undefined ? userWallets[accKey] : userBalance);
 
     if (activeWalletBal < activeChargePrice) {
       alert(
-        `Insufficient balance! Your wallet balance is ₹${activeWalletBal} but panel price is ₹${activeChargePrice}. Redirecting to add funds...`
+        `⚠️ Insufficient balance (पैसे कम हैं)! आपके वॉलेट में केवल ₹${activeWalletBal} हैं जबकि इस पैनल की कीमत ₹${activeChargePrice} है। कृपया पहले वॉलेट में पैसे ऐड करें।`
       );
-      setCurrentView("addFund");
+      if (isResellerActive) {
+        setShowResellerModal(true);
+      } else {
+        setCurrentView("addFund");
+      }
       return;
     }
 
@@ -2423,7 +2686,6 @@ export default function App() {
       originalPrice: activeChargePrice,
       panelObj: panelObj,
     });
-    const accKey = getAccountKey(userProfile.email, userProfile.phone);
     const validCoupons = (userAccountCoupons[accKey] || []).filter(
       (c) => !c.isUsed && Date.now() - c.createdAt < 24 * 60 * 60 * 1000,
     );
@@ -2515,98 +2777,167 @@ export default function App() {
     const discount = appliedCoupon ? appliedCoupon.discount : 0;
     const finalPrice = Math.max(0, originalPrice - discount);
 
+    const curEmail =
+      (isResellerActive ? resellerUser.email : userProfile.email) || "";
+    const curPhone = userProfile.phone || "";
+    const curPassword = userProfile.password || "";
+    const accKey = getAccountKey(curEmail, curPhone);
+
     const activeBal = isResellerActive
       ? resellerUser.balance > 0
         ? resellerUser.balance
         : userBalance
-      : userBalance;
+      : (userWallets[accKey] !== undefined ? userWallets[accKey] : userBalance);
 
-    if (activeBal >= finalPrice) {
-      const curEmail =
-        (isResellerActive ? resellerUser.email : userProfile.email) || "";
-      const curPhone = userProfile.phone || "";
-      const curPassword = userProfile.password || "";
-      const accKey = getAccountKey(curEmail, curPhone);
-
-      if (isResellerActive && resellerUser.balance >= finalPrice) {
-        // Deduct from Reseller Wallet
-        const newBal = resellerUser.balance - finalPrice;
-        setResellerUser((prev) => ({ ...prev, balance: newBal }));
-        setApprovedResellers((prev) =>
-          prev.map((r) =>
-            r.email.toLowerCase() === resellerUser.email.toLowerCase()
-              ? { ...r, balance: newBal }
-              : r,
-          ),
-        );
-      } else {
-        setUserBalance((prev) => prev - finalPrice);
-        setUserWallets((prev) => ({
-          ...prev,
-          [accKey]: (prev[accKey] || 0) - finalPrice,
-        }));
-      }
-
-      setUserProfile((prev) => ({ ...prev, keysBought: prev.keysBought + 1 }));
-      setUnreadKeys((prev) => prev + 1);
-
-      const newRequest = {
-        id: Date.now(),
-        user:
-          curEmail || curPhone || (isResellerActive ? "Reseller VIP" : "Guest"),
-        userEmail: curEmail,
-        userPhone: curPhone,
-        userPassword: curPassword,
-        userAccountKey: accKey,
-        panel: checkoutData.panelTitle,
-        planLabel: checkoutData.planLabel,
-        originalPrice: originalPrice,
-        discountAmount: discount,
-        couponCodeUsed: appliedCoupon ? appliedCoupon.code : "",
-        price: finalPrice,
-        status: "PENDING",
-        deliveredKey: "",
-        date: new Date().toLocaleString(),
-        exceptFileLink:
-          checkoutData.panelObj?.exceptFileLink || supportLinks.telegram,
-      };
-
-      setKeyRequests((prev) => [newRequest, ...prev]);
-
-      if (appliedCoupon) {
-        const accKey = getAccountKey(userProfile.email, userProfile.phone);
-        const nowTime = Date.now();
-        setUserCouponUsedTimestamps((prev) => ({ ...prev, [accKey]: nowTime }));
-        setUserAccountCoupons((prev) => {
-          const list = prev[accKey] || [];
-          const updated = list.map((c) =>
-            c.code === appliedCoupon.code
-              ? { ...c, isUsed: true, usedAt: nowTime }
-              : c,
-          );
-          return { ...prev, [accKey]: updated };
-        });
-      }
-
-      setCheckoutData(null);
-      setAppliedCoupon(null);
-      setCouponInputCode("");
-      setShowBuySuccessPendingModal(true);
-    } else {
+    if (activeBal < finalPrice) {
       const msg = new SpeechSynthesisUtterance(
         "Doston kripya kijiye apna wallet check Karen and Paisa add Karen Uske bad aap yahan se panel khareed sakte ho thank you",
       );
       msg.lang = "hi-IN";
-      window.speechSynthesis.speak(msg);
+      try {
+        window.speechSynthesis.speak(msg);
+      } catch (e) {}
       alert(
-        `Balance kam hai! Needed: ₹${finalPrice}, Wallet Balance: ₹${activeBal}. Kripya wallet me fund add karein.`,
+        `⚠️ Balance kam hai! Needed: ₹${finalPrice}, Available Wallet: ₹${activeBal}. Kripya pehle wallet me fund add karein.`,
       );
       if (isResellerActive) {
         setShowResellerModal(true);
       } else {
         setCurrentView("addFund");
       }
+      return;
     }
+
+    let remainingBal = 0;
+
+    if (isResellerActive && resellerUser.balance >= finalPrice) {
+      // Deduct from Reseller Wallet PERMANENTLY
+      const newBal = Math.max(0, resellerUser.balance - finalPrice);
+      remainingBal = newBal;
+      setResellerUser((prev) => ({ ...prev, balance: newBal }));
+      const updatedApproved = approvedResellers.map((r) =>
+        r.email.toLowerCase() === resellerUser.email.toLowerCase()
+          ? { ...r, balance: newBal }
+          : r,
+      );
+      setApprovedResellers(updatedApproved);
+      saveToFirebase("approvedResellers", updatedApproved);
+      saveToFirebase("appState/approvedResellers", updatedApproved);
+    } else {
+      // Deduct from Regular User Wallet PERMANENTLY
+      const newBalance = Math.max(0, activeBal - finalPrice);
+      remainingBal = newBalance;
+      setUserBalance(newBalance);
+      const newWallets = {
+        ...userWallets,
+        [accKey]: newBalance,
+      };
+      setUserWallets(newWallets);
+      saveToFirebase("userWallets", newWallets); // Sync to Firebase
+      saveToFirebase("appState/userWallets", newWallets);
+
+      // 1. Permanent LocalStorage persistence
+      try {
+        localStorage.setItem("vip_user_balance", String(newBalance));
+        const savedProf = localStorage.getItem("vip_user_profile");
+        if (savedProf) {
+          const parsed = JSON.parse(savedProf);
+          parsed.walletBalance = newBalance;
+          parsed.keysBought = (parsed.keysBought || 0) + 1;
+          localStorage.setItem("vip_user_profile", JSON.stringify(parsed));
+        }
+      } catch (e) {}
+
+      // 2. Permanent User Profiles Cloud Sync
+      setUserAccountProfiles((prev) => {
+        const accProf = prev[accKey] || {};
+        const updated = {
+          ...accProf,
+          walletBalance: newBalance,
+          keysBought: (accProf.keysBought || 0) + 1,
+        };
+        const next = { ...prev, [accKey]: updated };
+        saveToFirebase("userAccountProfiles", next);
+        saveToFirebase("appState/userAccountProfiles", next);
+        return next;
+      });
+
+      // 3. Firestore Document Update
+      try {
+        setDoc(
+          doc(db, "users", accKey),
+          { walletBalance: newBalance },
+          { merge: true },
+        ).catch(() => {});
+      } catch (e) {}
+    }
+
+    setUserProfile((prev) => ({ ...prev, keysBought: (prev.keysBought || 0) + 1 }));
+    setUnreadKeys((prev) => prev + 1);
+
+    const newRequest = {
+      id: Date.now(),
+      user:
+        curEmail || curPhone || (isResellerActive ? "Reseller VIP" : "User"),
+      userEmail: curEmail,
+      userPhone: curPhone,
+      userPassword: curPassword,
+      userAccountKey: accKey,
+      panel: checkoutData.panelTitle,
+      planLabel: checkoutData.planLabel,
+      originalPrice: originalPrice,
+      discountAmount: discount,
+      couponCodeUsed: appliedCoupon ? appliedCoupon.code : "",
+      price: finalPrice,
+      status: "PENDING",
+      deliveredKey: "",
+      date: new Date().toLocaleString(),
+      exceptFileLink:
+        checkoutData.panelObj?.exceptFileLink || supportLinks.telegram,
+    };
+
+    const cleanExisting = filterRealKeyRequests(keyRequests).filter(
+      (r) => r.id !== newRequest.id,
+    );
+    const updatedKeyRequests = [newRequest, ...cleanExisting];
+    setKeyRequests(updatedKeyRequests);
+
+    // Save to Firebase Realtime DB immediately so admin panel gets order in real time!
+    saveToFirebase("keyRequests", updatedKeyRequests);
+    saveToFirebase("appState/keyRequests", updatedKeyRequests);
+
+    // Save to server backend permanently
+    fetch("/api/key-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newRequest),
+    }).catch((err) => console.warn("Error sending key-order:", err));
+
+    if (appliedCoupon) {
+      const nowTime = Date.now();
+      setUserCouponUsedTimestamps((prev) => ({ ...prev, [accKey]: nowTime }));
+      setUserAccountCoupons((prev) => {
+        const list = prev[accKey] || [];
+        const updated = list.map((c) =>
+          c.code === appliedCoupon.code
+            ? { ...c, isUsed: true, usedAt: nowTime }
+            : c,
+        );
+        return { ...prev, [accKey]: updated };
+      });
+    }
+
+    setLastOrderDetails({
+      panel: checkoutData.panelTitle,
+      planLabel: checkoutData.planLabel,
+      priceDeducted: finalPrice,
+      remainingWallet: remainingBal,
+    });
+
+    setCheckoutData(null);
+    setAppliedCoupon(null);
+    setCouponInputCode("");
+    setShowBuySuccessPendingModal(true);
   };
 
   const handleSendRefundEmailToUser = async (
@@ -2715,17 +3046,27 @@ export default function App() {
     const rejectReasonText = customReason
       ? customReason.trim()
       : "Out of stock / Server maintenance";
-    setKeyRequests((prev) =>
-      prev.map((r) =>
-        r.id === req.id
-          ? {
-              ...r,
-              status: "REJECTED",
-              deliveredKey: `REFUNDED ₹${refundAmount} TO WALLET`,
-            }
-          : r,
-      ),
+    const updatedKeyList = keyRequests.map((r) =>
+      r.id === req.id
+        ? {
+            ...r,
+            status: "REJECTED",
+            deliveredKey: `REFUNDED ₹${refundAmount} TO WALLET`,
+          }
+        : r,
     );
+    setKeyRequests(updatedKeyList);
+    saveToFirebase("keyRequests", updatedKeyList);
+    saveToFirebase("appState/keyRequests", updatedKeyList);
+    fetch("/api/update-key-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: req.id,
+        status: "REJECTED",
+        deliveredKey: `REFUNDED ₹${refundAmount} TO WALLET`,
+      }),
+    }).catch(() => {});
 
     // 5. Send notification email if email exists
     let emailSent = false;
@@ -2887,8 +3228,10 @@ export default function App() {
           setPaymentHistory((prev) => JSON.stringify(prev) === JSON.stringify(data.paymentHistory) ? prev : ensureArray(data.paymentHistory));
         if (data.autoPaymentHistory)
           setAutoPaymentHistory((prev) => JSON.stringify(prev) === JSON.stringify(data.autoPaymentHistory) ? prev : ensureArray(data.autoPaymentHistory));
-        if (data.keyRequests)
-          setKeyRequests((prev) => JSON.stringify(prev) === JSON.stringify(data.keyRequests) ? prev : ensureArray(data.keyRequests));
+        if (data.keyRequests) {
+          const cleanKeys = filterRealKeyRequests(ensureArray(data.keyRequests));
+          setKeyRequests((prev) => JSON.stringify(prev) === JSON.stringify(cleanKeys) ? prev : cleanKeys);
+        }
         if (data.paymentSettings) {
           setPaymentSettings((prev: any) => {
             const incomingUpi = sanitizeUpiId(data.paymentSettings.upiId);
@@ -3087,7 +3430,10 @@ export default function App() {
       const keyReqRef = ref(database, "keyRequests");
       const unsubKeyReq = onValue(keyReqRef, (snapshot) => {
         const val = snapshot.val();
-        if (val) setKeyRequests((prev) => JSON.stringify(prev) === JSON.stringify(val) ? prev : ensureArray(val));
+        if (val) {
+          const cleanKeys = filterRealKeyRequests(ensureArray(val));
+          setKeyRequests((prev) => JSON.stringify(prev) === JSON.stringify(cleanKeys) ? prev : cleanKeys);
+        }
       });
 
       const userWalletsRef = ref(database, "userWallets");
@@ -3162,6 +3508,27 @@ export default function App() {
         }
       });
 
+      const activeUserRef = ref(database, "activeUserProfile");
+      const unsubActiveUser = onValue(activeUserRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val && typeof val === "object" && val.isLoggedIn) {
+          setUserProfile((prev: any) => {
+            if (prev.isLoggedIn && (prev.email === val.email || prev.phone === val.phone)) {
+              return shallowEqual(prev, val) ? prev : val;
+            }
+            return prev;
+          });
+        }
+      });
+
+      const activeResellerRef = ref(database, "activeResellerUser");
+      const unsubActiveReseller = onValue(activeResellerRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val && typeof val === "object" && val.isLoggedIn) {
+          setResellerUser((prev: any) => shallowEqual(prev, val) ? prev : val);
+        }
+      });
+
       return () => {
         unsubPay();
         unsubBg();
@@ -3181,6 +3548,8 @@ export default function App() {
         unsubSpinRewards();
         unsubReferLink();
         unsubReferBonus();
+        unsubActiveUser();
+        unsubActiveReseller();
       };
     } catch (e) {}
   }, []);
@@ -3689,6 +4058,30 @@ export default function App() {
             <p className="text-gray-400 text-xs font-medium">
               Click the button below to check your order status on the 'My Keys' page.
             </p>
+
+            {/* Permanent Wallet Deduction Confirmation Card */}
+            {lastOrderDetails && (
+              <div className="w-full bg-[#070b14] border border-cyan-500/40 rounded-2xl p-4 flex flex-col gap-2.5 text-xs text-left shadow-inner">
+                <div className="flex items-center justify-between text-gray-300 font-bold border-b border-white/10 pb-2">
+                  <span>📦 Item Purchased:</span>
+                  <span className="text-white font-mono uppercase text-right">
+                    {lastOrderDetails.panel} ({lastOrderDetails.planLabel})
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-red-400 font-black">
+                  <span>💸 Wallet Se Kata Gaya (Deducted):</span>
+                  <span className="text-base font-mono bg-red-500/10 px-2 py-0.5 rounded border border-red-500/30">
+                    -₹{lastOrderDetails.priceDeducted}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-emerald-400 font-black border-t border-white/10 pt-2">
+                  <span>💰 Bacha Hua Wallet Balance:</span>
+                  <span className="text-lg font-mono text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]">
+                    ₹{lastOrderDetails.remainingWallet}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="w-full flex flex-col gap-3.5">
@@ -3944,8 +4337,7 @@ export default function App() {
         <div className="p-4 flex items-center justify-between border-b border-white/10 relative overflow-hidden bg-gradient-to-r from-red-500/10 via-amber-500/10 to-cyan-500/10">
           <div className="flex flex-col">
             <span className="text-xl font-black italic tracking-tighter text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.95)]">
-              FFH4CK<span className="text-yellow-400">JOD</span>
-              <span className="text-white">VIP</span>
+              KSHATRA<span className="text-yellow-400">MODZ</span>
             </span>
           </div>
           <button
@@ -4068,6 +4460,19 @@ export default function App() {
               <button
                 key={`sidemenu-${item.view}-${idx}`}
                 onClick={() => {
+                  if (
+                    !userProfile.isLoggedIn &&
+                    item.view !== "login" &&
+                    item.view !== "policies" &&
+                    item.view !== "permissions"
+                  ) {
+                    alert(
+                      "⚠️ कृपया पहले लॉगिन करें! वेबसाइट में प्रवेश करने और फीचर्स इस्तेमाल करने के लिए लॉगिन करना अनिवार्य है।",
+                    );
+                    setCurrentView("login");
+                    setIsMenuOpen(false);
+                    return;
+                  }
                   setCurrentView(item.view as any);
                   setIsMenuOpen(false);
                 }}
@@ -4169,22 +4574,32 @@ export default function App() {
                 <Menu size={22} className="text-white drop-shadow-[0_0_8px_#fff]" />
               </button>
               <h1 className="text-lg font-black italic tracking-wider mt-0.5 text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.9)]">
-                FFH4CK<span className="text-amber-400 font-black">JOD</span>
-                <span className="text-white font-black">VIP</span>
+                KSHATRA<span className="text-amber-400 font-black">MODZ</span>
               </h1>
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Wallet Balance Button */}
-              <div
-                onClick={() => setCurrentView("addFund")}
-                className="flex items-center gap-1.5 bg-transparent border border-cyan-400/70 rounded-full px-3 py-1 shadow-[0_0_15px_rgba(0,229,255,0.3)] cursor-pointer hover:border-cyan-300 hover:bg-cyan-950/40 transition-all active:scale-95"
-              >
-                <Wallet size={14} className="text-cyan-400" />
-                <span className="text-cyan-300 font-bold text-xs tracking-wide">
-                  ₹ {userBalance.toFixed(2)}
-                </span>
-              </div>
+              {!userProfile.isLoggedIn ? (
+                <button
+                  type="button"
+                  onClick={() => setCurrentView("login")}
+                  className="flex items-center gap-1.5 bg-fuchsia-600/30 hover:bg-fuchsia-600/50 border border-fuchsia-400/70 rounded-full px-3 py-1 shadow-[0_0_15px_rgba(217,70,239,0.4)] text-fuchsia-300 hover:text-white font-bold text-xs transition-all active:scale-95 cursor-pointer"
+                >
+                  <LogIn size={13} className="text-fuchsia-400" />
+                  <span>LOGIN</span>
+                </button>
+              ) : (
+                /* Wallet Balance Button */
+                <div
+                  onClick={() => setCurrentView("addFund")}
+                  className="flex items-center gap-1.5 bg-transparent border border-cyan-400/70 rounded-full px-3 py-1 shadow-[0_0_15px_rgba(0,229,255,0.3)] cursor-pointer hover:border-cyan-300 hover:bg-cyan-950/40 transition-all active:scale-95"
+                >
+                  <Wallet size={14} className="text-cyan-400" />
+                  <span className="text-cyan-300 font-bold text-xs tracking-wide">
+                    ₹ {userBalance.toFixed(2)}
+                  </span>
+                </div>
+              )}
             </div>
           </header>
 
@@ -4503,7 +4918,6 @@ export default function App() {
                                 src={mediaInfo.directVideoUrl}
                                 autoPlay
                                 loop
-                                defaultMuted={true}
                                 muted={!unmutedPanels[panel.id]}
                                 playsInline
                                 preload="metadata"
@@ -4919,6 +5333,13 @@ export default function App() {
                         {/* Buy Button */}
                         <button
                           onClick={() => {
+                            if (!userProfile.isLoggedIn && !isResellerActive) {
+                              alert(
+                                "⚠️ कृपया पहले लॉगिन करें! वेबसाइट में पैनल खरीदने के लिए लॉगिन अनिवार्य है।",
+                              );
+                              setCurrentView("login");
+                              return;
+                            }
                             const price = activeSelectedPrice;
 
                             if (
@@ -6153,7 +6574,7 @@ export default function App() {
                   </h3>
                   <p className="text-gray-300 text-xs sm:text-sm mt-1 max-w-sm mx-auto">
                     Spin now to win instant Coupon Discounts for Buy Key
-                    checkout! (24 ghante me 1 spin chance)
+                    checkout! (Ek user sirf 1 hi baar spin kar sakta hai - Strictly 1 Chance per User)
                   </p>
                 </div>
 
@@ -6212,28 +6633,23 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Check 24 Hours Status */}
+                {/* Check 1 User = 1 Chance Status */}
                 {(() => {
-                  const now = Date.now();
-                  const twentyFourHours = 24 * 60 * 60 * 1000;
-                  const isLocked = now - lastSpinTimestamp < twentyFourHours;
-                  const remMs = twentyFourHours - (now - lastSpinTimestamp);
-                  const remHours = Math.floor(remMs / (1000 * 60 * 60));
-                  const remMins = Math.floor(
-                    (remMs % (1000 * 60 * 60)) / (1000 * 60),
-                  );
+                  const isLocked = hasUserSpun;
 
                   return (
                     <>
                       {isLocked && (
-                        <div className="mb-4 bg-amber-500/20 border border-amber-500/50 rounded-xl p-3 text-center text-amber-300 font-bold text-xs w-full animate-in zoom-in-95 ">
-                          ⏳ Next Spin Available In:{" "}
-                          <span className="text-yellow-400 text-sm font-mono font-black">
-                            {remHours}h {remMins}m
-                          </span>
-                          <br />
-                          <span className="text-[11px] font-medium text-gray-300">
-                            (24 ghante me ek baar hi spin available hota hai)
+                        <div className="mb-4 bg-red-500/20 border border-red-500/50 rounded-xl p-3.5 text-center text-red-300 font-bold text-xs w-full animate-in zoom-in-95 shadow-[0_0_20px_rgba(239,68,68,0.25)]">
+                          <div className="flex items-center justify-center gap-2 text-yellow-400 font-black text-sm uppercase">
+                            <AlertTriangle size={17} className="text-yellow-400" />
+                            <span>SPIN ALREADY USED (1 USER = 1 TIME ONLY)</span>
+                          </div>
+                          <p className="mt-1.5 text-white text-xs font-bold">
+                            Aapne apna 1 free spin pehle hi use kar liya hai!
+                          </p>
+                          <span className="text-[11px] font-medium text-gray-300 block mt-1">
+                            Is website par ek user sirf 1 hi baar spin use kar sakta hai. Baar-baar spin use karne ki anumati nahi hai.
                           </span>
                         </div>
                       )}
@@ -6251,7 +6667,7 @@ export default function App() {
 
                           if (isLocked) {
                             alert(
-                              `Aapne 24 ghante me 1 spin kar liya hai. Agla spin ${remHours}h ${remMins}m baad milega!`,
+                              "⚠️ Aapne apna spin pehle hi use kar liya hai! Is website par ek user sirf 1 hi baar spin kar sakta hai, baar-baar use nahi kar sakte.",
                             );
                             return;
                           }
@@ -6280,10 +6696,34 @@ export default function App() {
                               userProfile.phone,
                             );
                             const nowTime = Date.now();
-                            setUserSpinTimestamps((prev) => ({
-                              ...prev,
-                              [accKey]: nowTime,
-                            }));
+                            setUserSpinTimestamps((prev) => {
+                              const updated = {
+                                ...prev,
+                                [accKey]: nowTime,
+                              };
+                              saveToFirebase("userSpinTimestamps", updated);
+                              saveToFirebase("appState/userSpinTimestamps", updated);
+                              return updated;
+                            });
+
+                            try {
+                              localStorage.setItem(`vip_user_spin_done_${accKey}`, "true");
+                              localStorage.setItem(`vip_user_spin_time_${accKey}`, String(nowTime));
+                            } catch (e) {}
+
+                            setUserAccountProfiles((prev) => {
+                              const accProf = prev[accKey] || {};
+                              const updated = {
+                                ...accProf,
+                                hasUsedSpin: true,
+                                spinUsedAt: nowTime,
+                                spinPrizeWon: wonAmount,
+                              };
+                              const next = { ...prev, [accKey]: updated };
+                              saveToFirebase("userAccountProfiles", next);
+                              saveToFirebase("appState/userAccountProfiles", next);
+                              return next;
+                            });
 
                             const newCode =
                               "SPIN" +
@@ -6343,8 +6783,8 @@ export default function App() {
                         {isSpinning
                           ? "SPINNING WHEEL..."
                           : isLocked
-                            ? "SPIN LOCKED (24H COOLDOWN)"
-                            : "SPIN NOW"}
+                            ? "SPIN COMPLETED (1 USER = 1 TIME ONLY)"
+                            : "SPIN NOW (1 TIME FREE)"}
                       </button>
                     </>
                   );
@@ -6613,6 +7053,39 @@ export default function App() {
                 </h2>
               </div>
 
+              {/* LIVE ALERT FOR REAL USER KEY ORDERS - DIRECT TO MY KEY */}
+              {ensureArray(keyRequests).filter((r) => r.status === "PENDING").length > 0 && (
+                <div
+                  onClick={() => setCurrentView("adminKeys")}
+                  className="bg-gradient-to-r from-yellow-950/80 via-black to-amber-950/80 border-2 border-yellow-400 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-[0_0_30px_rgba(250,204,21,0.5)] cursor-pointer hover:border-yellow-300 transition-all active:scale-[0.99] animate-pulse"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-yellow-400 text-black flex items-center justify-center font-black shrink-0 shadow-lg">
+                      <Key size={26} />
+                    </div>
+                    <div>
+                      <div className="text-yellow-300 font-black text-sm uppercase flex items-center gap-1.5">
+                        <Bell size={16} className="text-yellow-400 animate-bounce" />
+                        🚨 NAYA KEY ORDER! (WEBSITE SE BUY KIYA GAYA)
+                      </div>
+                      <div className="text-white text-xs mt-0.5">
+                        {ensureArray(keyRequests).filter((r) => r.status === "PENDING").length} user ne website se panel key order kiya hai. &quot;MY KEY&quot; me jakar key provide karein!
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentView("adminKeys");
+                    }}
+                    className="bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-4 py-2.5 rounded-xl uppercase tracking-wider shrink-0 shadow-lg flex items-center gap-1.5 cursor-pointer"
+                  >
+                    👉 MY KEY KHOLO ({ensureArray(keyRequests).filter((r) => r.status === "PENDING").length})
+                    <ArrowRight size={14} />
+                  </button>
+                </div>
+              )}
+
               <div className="flex flex-col gap-4">
                 {[
                   {
@@ -6729,7 +7202,7 @@ export default function App() {
                     desc: "Manage & assign keys",
                     color: "from-yellow-400 to-orange-600",
                     view: "adminKeys",
-                    badge: unreadKeys,
+                    badge: ensureArray(keyRequests).filter((r) => r.status === "PENDING").length,
                   },
                   {
                     title: "Spin Win",
@@ -7953,24 +8426,33 @@ export default function App() {
                                   )
                                 );
 
-                                // Add funds to userWallets
+                                // Add funds strictly to target user's wallet
+                                const amountToAdd = Number(req.amount) || 0;
                                 const newWallets = {
                                   ...userWallets,
-                                  [targetKey]: (userWallets[targetKey] ?? 0) + req.amount,
+                                  [targetKey]: (userWallets[targetKey] ?? 0) + amountToAdd,
                                 };
                                 setUserWallets(newWallets);
                                 saveToFirebase("userWallets", newWallets);
 
+                                // If targetUserId / userId exists, update Firestore/Firebase user record directly
+                                const targetUserId = req.userId || req.targetUserId;
+                                if (targetUserId) {
+                                  saveToFirebase(`users/${targetUserId}/walletBalance`, newWallets[targetKey]);
+                                }
+
+                                // Update current userBalance ONLY if active logged-in user IS the target user (not admin!)
                                 const activeKey = getAccountKey(
                                   userProfile.email,
                                   userProfile.phone
                                 );
                                 if (
-                                  !userProfile.isLoggedIn ||
-                                  activeKey === targetKey ||
-                                  targetKey === "guest"
+                                  userProfile.isLoggedIn &&
+                                  activeKey === targetKey &&
+                                  targetKey !== "admin" &&
+                                  targetKey !== "guest"
                                 ) {
-                                  setUserBalance((prev) => prev + req.amount);
+                                  setUserBalance((prev) => prev + amountToAdd);
                                 }
 
                                 alert(
@@ -8478,26 +8960,32 @@ export default function App() {
                                     ),
                                   );
 
-                                  // 2. Add funds to userWallets
-                                  setUserWallets((prev) => {
-                                    const cur = prev[targetKey] ?? 0;
-                                    return {
-                                      ...prev,
-                                      [targetKey]: cur + req.amount,
-                                    };
-                                  });
+                                  // 2. Add funds strictly to target user's wallet
+                                  const amountToAdd = Number(req.amount) || 0;
+                                  const newWallets = {
+                                    ...userWallets,
+                                    [targetKey]: (userWallets[targetKey] ?? 0) + amountToAdd,
+                                  };
+                                  setUserWallets(newWallets);
+                                  saveToFirebase("userWallets", newWallets);
 
-                                  // 3. Update current userBalance if matching active user
+                                  const targetUserId = req.userId || req.targetUserId;
+                                  if (targetUserId) {
+                                    saveToFirebase(`users/${targetUserId}/walletBalance`, newWallets[targetKey]);
+                                  }
+
+                                  // 3. Update current userBalance ONLY if active logged-in user IS the target user (not admin!)
                                   const activeKey = getAccountKey(
                                     userProfile.email,
                                     userProfile.phone,
                                   );
                                   if (
-                                    !userProfile.isLoggedIn ||
-                                    activeKey === targetKey ||
-                                    targetKey === "guest"
+                                    userProfile.isLoggedIn &&
+                                    activeKey === targetKey &&
+                                    targetKey !== "admin" &&
+                                    targetKey !== "guest"
                                   ) {
-                                    setUserBalance((prev) => prev + req.amount);
+                                    setUserBalance((prev) => prev + amountToAdd);
                                   }
 
                                   alert(
@@ -8591,6 +9079,30 @@ export default function App() {
                   </span>
                 </h2>
               </div>
+
+              {/* Live Alert for Real User Key Orders */}
+              {ensureArray(keyRequests).filter((r) => r.status === "PENDING").length > 0 && (
+                <div className="bg-gradient-to-r from-amber-950/80 via-black to-yellow-950/80 border-2 border-amber-400/90 rounded-2xl p-4 shadow-[0_0_30px_rgba(245,158,11,0.4)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400 flex items-center justify-center shrink-0 animate-pulse">
+                      <Bell className="text-amber-300" size={22} />
+                    </div>
+                    <div>
+                      <h4 className="text-white font-black text-sm uppercase tracking-wide flex items-center gap-2">
+                        🔔 NAYE KEY ORDERS PENDING (
+                        {ensureArray(keyRequests).filter((r) => r.status === "PENDING").length}
+                        )
+                      </h4>
+                      <p className="text-amber-200/90 text-xs mt-0.5">
+                        Users ne website se key buy kiya hai. Niche order check karke key code enter karein aur Approve karein.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="bg-amber-400 text-black font-black text-xs px-3 py-1.5 rounded-lg uppercase tracking-wider shrink-0 shadow">
+                    ACTION REQUIRED
+                  </span>
+                </div>
+              )}
 
               {/* Direct Key Sender Form for Admin */}
               <div className="bg-transparent  border border-purple-500/40 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)]  flex flex-col gap-3">
@@ -8718,7 +9230,16 @@ export default function App() {
                       exceptFileLink: supportLinks.telegram,
                     };
 
-                    setKeyRequests((prev) => [directKeyReq, ...prev]);
+                    const updatedDirectList = [directKeyReq, ...keyRequests];
+                    setKeyRequests(updatedDirectList);
+                    saveToFirebase("keyRequests", updatedDirectList);
+                    saveToFirebase("appState/keyRequests", updatedDirectList);
+                    fetch("/api/key-order", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(directKeyReq),
+                    }).catch(() => {});
+
                     setManualKeyForm({
                       targetAccount: "",
                       panelTitle: "",
@@ -8729,7 +9250,7 @@ export default function App() {
                       `Key delivered directly to ${manualKeyForm.targetAccount}!`,
                     );
                   }}
-                  className="w-full mt-1 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 text-white font-black py-2.5 rounded-lg text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-all"
+                  className="w-full mt-1 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 text-white font-black py-2.5 rounded-lg text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-all cursor-pointer"
                 >
                   SEND DIRECT KEY TO USER
                 </button>
@@ -8737,11 +9258,37 @@ export default function App() {
 
               {/* Pending and Previous Key Requests List */}
               <div className="flex flex-col gap-3 mt-2">
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                  All Key Orders ({ensureArray(keyRequests).length})
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    All Key Orders ({ensureArray(keyRequests).length})
+                  </h3>
+                  {ensureArray(keyRequests).filter((r) => r.status === "PENDING").length > 0 && (
+                    <span className="text-[11px] font-black bg-amber-500/20 text-amber-300 border border-amber-400/50 px-2.5 py-0.5 rounded-md animate-pulse flex items-center gap-1">
+                      <Key size={12} />
+                      {ensureArray(keyRequests).filter((r) => r.status === "PENDING").length} PENDING ACTION
+                    </span>
+                  )}
+                </div>
 
-                {ensureArray(keyRequests).map((req, idx) => (
+                {ensureArray(keyRequests).length === 0 ? (
+                  <div className="bg-black/40 border border-white/10 rounded-2xl p-8 text-center flex flex-col items-center">
+                    <Key size={38} className="text-gray-500 mb-2" />
+                    <p className="text-white font-bold text-sm">Abhi koi Key Order nahi hai</p>
+                    <p className="text-gray-400 text-xs mt-1 max-w-sm">
+                      Jab koi user website se panel key kharidega, uska order turant yahan live show hoga. Koi demo order nahi dikhayi dega.
+                    </p>
+                  </div>
+                ) : (
+                  ensureArray(keyRequests)
+                    .slice()
+                    .sort((a, b) =>
+                      a.status === "PENDING" && b.status !== "PENDING"
+                        ? -1
+                        : b.status === "PENDING" && a.status !== "PENDING"
+                          ? 1
+                          : b.id - a.id
+                    )
+                    .map((req, idx) => (
                   <div
                     key={`allkeyreq-${req.id}-${idx}`}
                     className="bg-transparent  border border-yellow-500/30 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.5)] "
@@ -8825,18 +9372,29 @@ export default function App() {
                                 `key-input-${req.id}`,
                               ) as HTMLTextAreaElement;
                               if (input && input.value) {
-                                setKeyRequests((prev) =>
-                                  prev.map((r) =>
-                                    r.id === req.id
-                                      ? {
-                                          ...r,
-                                          status: "APPROVED",
-                                          deliveredKey: input.value.trim(),
-                                        }
-                                      : r,
-                                  ),
+                                const keyVal = input.value.trim();
+                                const updated = keyRequests.map((r) =>
+                                  r.id === req.id
+                                    ? {
+                                        ...r,
+                                        status: "APPROVED",
+                                        deliveredKey: keyVal,
+                                      }
+                                    : r,
                                 );
-                                alert("Key delivered to user successfully!");
+                                setKeyRequests(updated);
+                                saveToFirebase("keyRequests", updated);
+                                saveToFirebase("appState/keyRequests", updated);
+                                fetch("/api/update-key-status", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    id: req.id,
+                                    status: "APPROVED",
+                                    deliveredKey: keyVal,
+                                  }),
+                                }).catch(() => {});
+                                alert("✅ Key delivered to user successfully!");
                               } else {
                                 alert("Please enter a key message");
                               }
@@ -8876,17 +9434,27 @@ export default function App() {
                                 `Hello ${req.user}, here is your ${req.panel} activation key. Thank you for your purchase!`,
                               );
                               if (sent) {
-                                setKeyRequests((prev) =>
-                                  prev.map((r) =>
-                                    r.id === req.id
-                                      ? {
-                                          ...r,
-                                          status: "APPROVED",
-                                          deliveredKey: keyVal,
-                                        }
-                                      : r,
-                                  ),
+                                const updated = keyRequests.map((r) =>
+                                  r.id === req.id
+                                    ? {
+                                        ...r,
+                                        status: "APPROVED",
+                                        deliveredKey: keyVal,
+                                      }
+                                    : r,
                                 );
+                                setKeyRequests(updated);
+                                saveToFirebase("keyRequests", updated);
+                                saveToFirebase("appState/keyRequests", updated);
+                                fetch("/api/update-key-status", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    id: req.id,
+                                    status: "APPROVED",
+                                    deliveredKey: keyVal,
+                                  }),
+                                }).catch(() => {});
                               }
                             }}
                             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black py-2.5 rounded-lg shadow-[0_0_15px_rgba(59,130,246,0.4)] transition-colors w-full uppercase tracking-wider text-xs flex items-center justify-center gap-1.5 active:scale-95"
@@ -8936,13 +9504,7 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                ))}
-
-                {keyRequests.length === 0 && (
-                  <p className="text-gray-500 text-center py-4">
-                    No key orders present.
-                  </p>
-                )}
+                )))}
               </div>
             </div>
           )}
@@ -9046,6 +9608,34 @@ export default function App() {
                 </div>
               </div>
 
+              {/* 1 User = 1 Chance Policy Info & Global Reset */}
+              <div className="bg-emerald-950/40 border border-emerald-500/50 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck size={18} className="text-emerald-400" />
+                    <h3 className="text-sm font-black text-emerald-300 uppercase tracking-wide">
+                      1 USER = 1 SPIN POLICY ACTIVE
+                    </h3>
+                  </div>
+                  <p className="text-xs text-gray-300 mt-1">
+                    Website par har user sirf 1 hi baar spin kar sakta hai (baar-baar spin strictly blocked hai).
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    if (window.confirm("Kya aap sach me sabhi users ka spin chance reset karna chahte hain?")) {
+                      setUserSpinTimestamps({});
+                      saveToFirebase("userSpinTimestamps", {});
+                      saveToFirebase("appState/userSpinTimestamps", {});
+                      alert("✅ Sabhi users ka spin chance reset kar diya gaya hai! Sabhi user ab 1 baar spin kar payenge.");
+                    }
+                  }}
+                  className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/60 text-amber-300 font-black text-xs px-3.5 py-2 rounded-xl transition-all active:scale-95 whitespace-nowrap cursor-pointer"
+                >
+                  🔄 Reset All Users' Spin Chances
+                </button>
+              </div>
+
               <div className="flex flex-col gap-3 mt-2">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                   Recent Spin Logs ({ensureArray(spinRequests).length})
@@ -9082,6 +9672,37 @@ export default function App() {
                           {spin.phone || "N/A"}
                         </strong>
                       </span>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-1 pt-2 border-t border-white/10">
+                      <span className="text-[11px] text-gray-400 font-mono">
+                        1 Spin Chance Used
+                      </span>
+                      <button
+                        onClick={() => {
+                          const userKey = getAccountKey(spin.email, spin.phone);
+                          setUserSpinTimestamps((prev) => {
+                            const next = { ...prev, [userKey]: 0 };
+                            saveToFirebase("userSpinTimestamps", next);
+                            saveToFirebase("appState/userSpinTimestamps", next);
+                            return next;
+                          });
+                          setUserAccountProfiles((prev) => {
+                            const accProf = prev[userKey] || {};
+                            const next = {
+                              ...prev,
+                              [userKey]: { ...accProf, hasUsedSpin: false, spinUsedAt: 0 }
+                            };
+                            saveToFirebase("userAccountProfiles", next);
+                            saveToFirebase("appState/userAccountProfiles", next);
+                            return next;
+                          });
+                          alert(`✅ User (${spin.email || spin.phone}) ka spin chance reset ho gaya! Yeh user ab dobara 1 baar spin kar sakega.`);
+                        }}
+                        className="bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-300 font-bold text-[11px] px-2.5 py-1 rounded-lg transition-all active:scale-95 cursor-pointer"
+                      >
+                        🔄 Reset Spin for this User
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -9361,10 +9982,10 @@ export default function App() {
                   </div>
                   <div>
                     <h2 className="text-xl sm:text-2xl font-black tracking-wide uppercase text-white">
-                      USER <span className="text-cyan-400">AUTHENTICATION</span>
+                      USER <span className="text-cyan-400">LOGIN & REGISTRATION</span>
                     </h2>
                     <p className="text-[11px] text-gray-300 font-medium">
-                      Secure Login & Account Registration
+                      वेबसाइट में प्रवेश करने के लिए लॉगिन करें | Login Required to Access
                     </p>
                   </div>
                 </div>
@@ -9707,6 +10328,27 @@ export default function App() {
                       </p>
                     </form>
                   )}
+
+                  {/* Discreet Admin / Owner Access Link */}
+                  <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[11px] text-gray-400">
+                    <span>Admin/Owner Access:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const code = prompt("Admin Secret Code दर्ज करें (उदा. Prem74):");
+                        if (code && (code.trim() === "Prem74" || code.trim() === "prem74")) {
+                          setCurrentView("admin");
+                        } else if (code && code.trim() === "PREM74") {
+                          setCurrentView("staff");
+                        } else if (code) {
+                          alert("❌ अमान्य कोड (Invalid Secret Code)!");
+                        }
+                      }}
+                      className="text-cyan-400 hover:text-cyan-300 hover:underline font-mono cursor-pointer"
+                    >
+                      🔑 Admin Passcode
+                    </button>
+                  </div>
                 </div>
               ) : (
                 /* LOGGED IN USER PROFILE SUMMARY */
@@ -9794,6 +10436,10 @@ export default function App() {
                             }));
                           }
                         }
+                        try {
+                          localStorage.removeItem("vip_user_profile");
+                          localStorage.removeItem("vip_user_balance");
+                        } catch (e) {}
                         setUserProfile({
                           isLoggedIn: false,
                           email: "",
@@ -9806,6 +10452,7 @@ export default function App() {
                           totalAdded: 0,
                         });
                         setUserBalance(0);
+                        setCurrentView("login");
                         alert(
                           "Logged out successfully! Account profile and wallet saved.",
                         );
@@ -10206,7 +10853,7 @@ export default function App() {
                   <p>Order, payment, refund, panel availability ya kisi bhi website-related problem ke liye hamari support team se contact karein.</p>
                   <ul className="flex flex-col gap-1 text-sky-300 font-bold text-sm">
                     <li>• WhatsApp Support: +91 74960 55058</li>
-                    <li>• Telegram Support: @FFH4XJOD</li>
+                    <li>• Telegram Support: @KSHATRAMODZ</li>
                     <li>• Telegram Channel: @loluofficialhackmods</li>
                   </ul>
                   <p className="mt-2 text-xs italic">Customer support se contact karte waqt apna Order ID aur Payment Transaction ID zaroor provide karein, taki issue ko verify karke jaldi assist kiya ja sake.</p>
@@ -10681,7 +11328,7 @@ export default function App() {
                     onChange={(e) =>
                       setNewPanelForm({ ...newPanelForm, title: e.target.value })
                     }
-                    placeholder="e.g. VIP FFH4X PRO MOD (100% SAFE)"
+                    placeholder="e.g. VIP KSHATRAMODZ PRO MOD (100% SAFE)"
                     className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner transition-all"
                   />
                 </div>
@@ -11366,6 +12013,7 @@ export default function App() {
                                 );
                                 setPanels(updated);
                                 savePanelsToFirebase(updated, true);
+                                adminDeletePanel(String(panel.id));
                                 alert(`🗑️ Panel "${panel.title}" deleted successfully!`);
                               }
                             }}
@@ -11556,7 +12204,7 @@ export default function App() {
                     onChange={(e) =>
                       setEditPanelForm({ ...editPanelForm, title: e.target.value })
                     }
-                    placeholder="e.g. VIP FFH4X PRO MOD (100% SAFE)"
+                    placeholder="e.g. VIP KSHATRAMODZ PRO MOD (100% SAFE)"
                     className="w-full bg-transparent  border border-white/20 rounded-xl py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-pink-400 shadow-inner transition-all"
                   />
                 </div>
@@ -13066,7 +13714,7 @@ export default function App() {
                           bannerTitle: e.target.value,
                         })
                       }
-                      placeholder="e.g. 🔥 FFH4CK VIP PREM STORE - SAFE MODS 🔥"
+                      placeholder="e.g. 🔥 KSHATRAMODZ VIP STORE - SAFE MODS 🔥"
                       className="w-full bg-transparent border border-white/20 rounded-xl py-2.5 px-3 text-xs font-bold text-white focus:outline-none focus:border-purple-400 shadow-inner"
                     />
                   </div>
@@ -16139,17 +16787,28 @@ export default function App() {
                                     `staff-key-input-${req.id}`,
                                   ) as HTMLTextAreaElement;
                                   if (input && input.value) {
-                                    setKeyRequests((prev) =>
-                                      prev.map((r) =>
-                                        r.id === req.id
-                                          ? {
-                                              ...r,
-                                              status: "APPROVED",
-                                              deliveredKey: input.value.trim(),
-                                            }
-                                          : r,
-                                      ),
+                                    const keyVal = input.value.trim();
+                                    const updated = keyRequests.map((r) =>
+                                      r.id === req.id
+                                        ? {
+                                            ...r,
+                                            status: "APPROVED",
+                                            deliveredKey: keyVal,
+                                          }
+                                        : r,
                                     );
+                                    setKeyRequests(updated);
+                                    saveToFirebase("keyRequests", updated);
+                                    saveToFirebase("appState/keyRequests", updated);
+                                    fetch("/api/update-key-status", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({
+                                        id: req.id,
+                                        status: "APPROVED",
+                                        deliveredKey: keyVal,
+                                      }),
+                                    }).catch(() => {});
                                     alert(
                                       `✅ Key approved and saved to database for ${req.user}!`,
                                     );
@@ -16194,17 +16853,27 @@ export default function App() {
                                     `Hello ${req.user}, here is your ${req.panel} activation key. Thank you for shopping with us!`,
                                   );
                                   if (sent) {
-                                    setKeyRequests((prev) =>
-                                      prev.map((r) =>
-                                        r.id === req.id
-                                          ? {
-                                              ...r,
-                                              status: "APPROVED",
-                                              deliveredKey: keyVal,
-                                            }
-                                          : r,
-                                      ),
+                                    const updated = keyRequests.map((r) =>
+                                      r.id === req.id
+                                        ? {
+                                            ...r,
+                                            status: "APPROVED",
+                                            deliveredKey: keyVal,
+                                          }
+                                        : r,
                                     );
+                                    setKeyRequests(updated);
+                                    saveToFirebase("keyRequests", updated);
+                                    saveToFirebase("appState/keyRequests", updated);
+                                    fetch("/api/update-key-status", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({
+                                        id: req.id,
+                                        status: "APPROVED",
+                                        deliveredKey: keyVal,
+                                      }),
+                                    }).catch(() => {});
                                   }
                                 }}
                                 className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs py-2.5 rounded-xl uppercase shadow-[0_0_15px_rgba(59,130,246,0.4)] flex items-center justify-center gap-1.5 active:scale-95"
@@ -16882,13 +17551,13 @@ export default function App() {
 
             {/* Brand Title */}
             <h2 className="text-2xl sm:text-3xl font-black italic tracking-wider text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.9)] mb-1">
-              FFH4CK<span className="text-yellow-400">JOD</span><span className="text-white">VIP</span>
+              KSHATRA<span className="text-yellow-400">MODZ</span>
             </h2>
 
             {/* Connecting Title */}
             <div className="flex items-center gap-2 text-cyan-300 font-black text-xs sm:text-sm tracking-widest uppercase mb-1">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-              <span>CONNECTING TO PREM STORE SERVER</span>
+              <span>CONNECTING TO KSHATRAMODZ SERVER</span>
             </div>
 
             {/* User Requested: "connect making website... wait karo" */}
@@ -16940,11 +17609,16 @@ export default function App() {
               onClick={() => {
                 setIsAppLoading(false);
                 setLoadingPhase("done");
-                setShowImportantNoticeModal(true);
+                if (userProfile.isLoggedIn) {
+                  setShowImportantNoticeModal(true);
+                } else {
+                  setShowImportantNoticeModal(false);
+                  setCurrentView("login");
+                }
               }}
               className="text-xs text-gray-400 hover:text-cyan-300 underline underline-offset-4 tracking-wider uppercase transition-colors cursor-pointer py-1"
             >
-              Skip Loading & Enter Store ⏩
+              {userProfile.isLoggedIn ? "Skip Loading & Enter Store ⏩" : "Skip Loading & Go to Login ⏩"}
             </button>
           </div>
         </div>
@@ -16975,7 +17649,7 @@ export default function App() {
                     IMPORTANT NOTICE
                   </h3>
                   <span className="text-xs text-gray-400 font-semibold">
-                    महत्वपूर्ण सूचना - FFH4CK VIP PREM STORE
+                    महत्वपूर्ण सूचना - KSHATRAMODZ VIP STORE
                   </span>
                 </div>
               </div>
@@ -17075,6 +17749,132 @@ export default function App() {
                 <CheckCircle2 size={16} />
                 <span>I Understand & Continue / आगे बढ़ें</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🌐 FIREBASE UNAUTHORIZED DOMAIN HELP & FALLBACK MODAL */}
+      {unauthorizedDomainModal && (
+        <div className="fixed inset-0 z-[999999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 select-none">
+          <div className="bg-[#0f172a] border border-amber-500/50 rounded-2xl max-w-lg w-full p-5 shadow-[0_0_50px_rgba(245,158,11,0.3)] text-left flex flex-col gap-4 animate-in zoom-in-95">
+            <div className="flex items-start justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center font-bold text-lg">
+                  ⚠️
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-amber-400 uppercase tracking-wide">
+                    Firebase Authorized Domain Fix
+                  </h3>
+                  <p className="text-xs text-gray-400 font-mono">
+                    Error: auth/unauthorized-domain
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setUnauthorizedDomainModal(null)}
+                className="p-1 text-gray-400 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-black/50 border border-white/10 rounded-xl p-3 text-xs text-gray-300 flex flex-col gap-2">
+              <p className="font-bold text-amber-300">
+                📌 Copy & Add This Domain in Firebase Console:
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="bg-black/80 px-2.5 py-1.5 rounded text-cyan-300 font-mono text-xs flex-1 border border-cyan-500/30 overflow-x-auto select-all">
+                  {unauthorizedDomainModal.domain}
+                </code>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(unauthorizedDomainModal.domain);
+                    alert("✅ Domain copied to clipboard: " + unauthorizedDomainModal.domain);
+                  }}
+                  className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-cyan-500/40 transition-all shrink-0 cursor-pointer"
+                >
+                  📋 Copy
+                </button>
+              </div>
+
+              <div className="mt-2 text-[11px] text-gray-300 space-y-1 leading-relaxed">
+                <p>1. Open <a href="https://console.firebase.google.com/project/ffh4ckjodvip-66569/authentication/settings" target="_blank" rel="noreferrer" className="text-cyan-400 underline font-bold">Firebase Console Settings</a></p>
+                <p>2. Go to <strong>Authentication → Settings → Authorized Domains</strong></p>
+                <p>3. Click <strong>Add Domain</strong> and paste: <code className="text-yellow-300 font-mono">{unauthorizedDomainModal.domain}</code></p>
+              </div>
+            </div>
+
+            {/* Instant Direct Login Fallback */}
+            <div className="bg-gradient-to-r from-emerald-950/70 to-cyan-950/70 border border-emerald-500/40 rounded-xl p-3.5 flex flex-col gap-2.5">
+              <h4 className="font-black text-emerald-300 text-xs uppercase flex items-center gap-1.5">
+                <span>🚀 Instant Direct Login (No Waiting Required)</span>
+              </h4>
+              <p className="text-[11px] text-gray-300 leading-relaxed">
+                Enter your Gmail address below to verify and log into your account immediately:
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  placeholder="e.g. user@gmail.com"
+                  value={unauthorizedDomainModal.emailInput}
+                  onChange={(e) =>
+                    setUnauthorizedDomainModal({
+                      ...unauthorizedDomainModal,
+                      emailInput: e.target.value,
+                    })
+                  }
+                  className="flex-1 bg-black/80 border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-emerald-400"
+                />
+                <button
+                  onClick={() => {
+                    const email = unauthorizedDomainModal.emailInput.trim();
+                    if (!email || !email.includes("@")) {
+                      alert("Please enter a valid Gmail address!");
+                      return;
+                    }
+                    if (unauthorizedDomainModal.role === "user") {
+                      processSuccessfulGoogleLogin(email, "Google VIP User", "", "");
+                    } else {
+                      const cleanEmail = email.toLowerCase().trim();
+                      const existing = approvedResellers.find((r) => r.email.toLowerCase() === cleanEmail);
+                      if (existing) {
+                        setResellerUser({
+                          isLoggedIn: true,
+                          email: existing.email,
+                          name: existing.name || "Verified Reseller",
+                          phone: existing.phone || "",
+                          balance: existing.balance || 0,
+                          isApproved: existing.isApproved !== false,
+                        });
+                      } else {
+                        const newReseller = {
+                          email: cleanEmail,
+                          name: "Verified Reseller",
+                          phone: "",
+                          balance: 500,
+                          isApproved: true,
+                          discountPercent: 35,
+                          createdAt: new Date().toLocaleString(),
+                        };
+                        setApprovedResellers((prev) => [newReseller, ...prev]);
+                        setResellerUser({
+                          isLoggedIn: true,
+                          email: cleanEmail,
+                          name: "Verified Reseller",
+                          balance: 500,
+                          isApproved: true,
+                        });
+                      }
+                    }
+                    setUnauthorizedDomainModal(null);
+                  }}
+                  className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-black text-xs px-4 py-2 rounded-xl transition-all shadow-md shrink-0 cursor-pointer"
+                >
+                  Login Now
+                </button>
+              </div>
             </div>
           </div>
         </div>

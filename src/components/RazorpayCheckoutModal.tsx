@@ -173,7 +173,7 @@ export const RazorpayCheckoutModal: React.FC<RazorpayCheckoutModalProps> = ({
         key: activeKey,
         amount: orderData.amount, // in paise
         currency: orderData.currency || "INR",
-        name: "FFH4X VIP Store & Panel",
+        name: "KSHATRAMODZ VIP Store & Panel",
         description: `Wallet Fund Credit of ₹${numericAmount}`,
         image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&h=120&fit=crop",
         order_id: orderData.order_id,
